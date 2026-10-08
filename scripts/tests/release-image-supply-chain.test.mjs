@@ -20,10 +20,9 @@ const sbomBinding = () => {
         verificationResult: {
           signature: {
             certificate: {
-              subjectAlternativeName: {
-                value:
-                  'https://github.com/Agroasys/Cotsel/.github/workflows/release-images.yml@refs/heads/main',
-              },
+              subjectAlternativeName:
+                'https://github.com/Agroasys/Cotsel/.github/workflows/release-images.yml@refs/heads/main',
+              issuer: 'https://token.actions.githubusercontent.com',
               sourceRepositoryURI: 'https://github.com/Agroasys/Cotsel',
               sourceRepositoryDigest: sourceCommit,
               sourceRepositoryRef: 'refs/heads/main',
@@ -58,6 +57,13 @@ test('SBOM binding rejects wrong source, digest, predicate, identity, and unveri
     },
     (b) => {
       b.verificationResults[0].verificationResult.statement.predicateType = 'other';
+    },
+    (b) => {
+      b.verificationResults[0].verificationResult.signature.certificate.subjectAlternativeName =
+        'other';
+    },
+    (b) => {
+      b.verificationResults[0].verificationResult.signature.certificate.issuer = 'other';
     },
     (b) => {
       b.verificationResults[0].verificationResult.signature.certificate.sourceRepositoryRef =

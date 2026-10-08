@@ -15,7 +15,8 @@ export function verifyImageSbomBinding({ sbom, verificationResults, imageDigest,
     const certificate = result?.signature?.certificate;
     const statement = result?.statement;
     return (
-      certificate?.subjectAlternativeName?.value === identity &&
+      certificate?.subjectAlternativeName === identity &&
+      certificate.issuer === 'https://token.actions.githubusercontent.com' &&
       certificate.sourceRepositoryURI === 'https://github.com/Agroasys/Cotsel' &&
       certificate.sourceRepositoryDigest === sourceCommit &&
       certificate.sourceRepositoryRef === 'refs/heads/main' &&
