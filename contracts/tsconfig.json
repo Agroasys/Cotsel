@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "target": "es2020",
+    "types": ["node", "mocha"],
     "module": "commonjs",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
