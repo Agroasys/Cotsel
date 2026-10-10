@@ -5,23 +5,44 @@ import { Pool, PoolClient } from 'pg';
 import { UserProfile, UserSession } from '../../types';
 import { normalizeSessionRow, SessionRow } from './sessionNormalization';
 
+export interface SessionInsert {
+  tokenHash: string;
+  parentTokenHash: string | null;
+  issuedAt: number;
+  expiresAt: number;
+  lineageStartedAt: number;
+}
+
 export async function insertSession(
   client: Pool | PoolClient,
-  sessionId: string,
   profile: UserProfile,
-  expiresAt: number,
+  session: SessionInsert,
 ): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
   await client.query(
-    `INSERT INTO user_sessions (session_id, user_id, wallet_address, role, issued_at, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [sessionId, profile.id, profile.walletAddress, profile.role, now, expiresAt],
+    `INSERT INTO user_sessions (
+       session_token_hash, parent_session_token_hash, user_id, wallet_address, role,
+       issued_at, expires_at, lineage_started_at
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      session.tokenHash,
+      session.parentTokenHash,
+      profile.id,
+      profile.walletAddress,
+      profile.role,
+      session.issuedAt,
+      session.expiresAt,
+      session.lineageStartedAt,
+    ],
   );
 }
 
-export async function findSessionById(pool: Pool, sessionId: string): Promise<UserSession | null> {
+export async function findSessionByTokenHash(
+  pool: Pool,
+  tokenHash: string,
+): Promise<UserSession | null> {
   const result = await pool.query<SessionRow>(
-    `SELECT user_sessions.session_id AS "sessionId",
+    `SELECT user_sessions.session_token_hash AS "sessionId",
             user_profiles.account_id AS "accountId",
             user_sessions.user_id::text AS "userId",
             user_sessions.wallet_address AS "walletAddress",
@@ -75,18 +96,100 @@ export async function findSessionById(pool: Pool, sessionId: string): Promise<Us
             revoked_at AS "revokedAt"
      FROM user_sessions
      JOIN user_profiles ON user_profiles.id = user_sessions.user_id
-     WHERE user_sessions.session_id = $1`,
-    [sessionId],
+     WHERE user_sessions.session_token_hash = $1`,
+    [tokenHash],
   );
   const row = result.rows[0];
   return row ? normalizeSessionRow(row) : null;
 }
 
-export async function revokeSession(pool: Pool, sessionId: string): Promise<void> {
-  await pool.query(`UPDATE user_sessions SET revoked_at = $1 WHERE session_id = $2`, [
-    Math.floor(Date.now() / 1000),
-    sessionId,
-  ]);
+export async function revokeSessionByTokenHash(pool: Pool, tokenHash: string): Promise<void> {
+  await pool.query(
+    `UPDATE user_sessions SET revoked_at = $1
+     WHERE session_token_hash = $2 AND revoked_at IS NULL`,
+    [Math.floor(Date.now() / 1000), tokenHash],
+  );
+}
+
+export interface SessionRotation {
+  parentTokenHash: string;
+  successorTokenHash: string;
+  now: number;
+  ttlSeconds: number;
+  absoluteLifetimeSeconds: number;
+}
+
+export type SessionRotationOutcome =
+  | { status: 'rotated'; expiresAt: number }
+  | { status: 'unavailable' }
+  | { status: 'lifetime_exhausted' };
+
+/**
+ * Revokes the parent session and inserts its single successor in one
+ * transaction. The parent row lock serialises concurrent refreshes so exactly
+ * one caller observes an unrevoked parent; the unique parent index is the
+ * storage backstop. The successor never outlives the lineage's absolute bound.
+ */
+export async function rotateSession(
+  pool: Pool,
+  profile: UserProfile,
+  rotation: SessionRotation,
+): Promise<SessionRotationOutcome> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const parent = await client.query<{
+      lineageStartedAt: number | string;
+      expiresAt: number | string;
+    }>(
+      `SELECT lineage_started_at AS "lineageStartedAt", expires_at AS "expiresAt"
+       FROM user_sessions
+       WHERE session_token_hash = $1
+         AND user_id = $2
+         AND revoked_at IS NULL
+         AND expires_at > $3
+       FOR UPDATE`,
+      [rotation.parentTokenHash, profile.id, rotation.now],
+    );
+    const row = parent.rows[0];
+    if (!row) {
+      await client.query('ROLLBACK');
+      return { status: 'unavailable' };
+    }
+
+    const lineageStartedAt = Number(row.lineageStartedAt);
+    const expiresAt = Math.min(
+      rotation.now + rotation.ttlSeconds,
+      lineageStartedAt + rotation.absoluteLifetimeSeconds,
+    );
+
+    if (expiresAt <= rotation.now) {
+      await client.query('ROLLBACK');
+      return { status: 'lifetime_exhausted' };
+    }
+
+    await client.query(`UPDATE user_sessions SET revoked_at = $1 WHERE session_token_hash = $2`, [
+      rotation.now,
+      rotation.parentTokenHash,
+    ]);
+    await insertSession(client, profile, {
+      tokenHash: rotation.successorTokenHash,
+      parentTokenHash: rotation.parentTokenHash,
+      issuedAt: rotation.now,
+      expiresAt,
+      lineageStartedAt,
+    });
+    await client.query('COMMIT');
+    return { status: 'rotated', expiresAt };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if ((error as { code?: string }).code === '23505') {
+      return { status: 'unavailable' };
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function pruneExpiredSessions(pool: Pool): Promise<void> {

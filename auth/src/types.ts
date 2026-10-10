@@ -135,6 +135,16 @@ export interface SessionIssueResult {
   expiresAt: number;
 }
 
+/**
+ * One lifetime policy for login, trusted exchange, and refresh. `ttlSeconds`
+ * bounds each issued session; `absoluteLifetimeSeconds` bounds the whole
+ * refresh lineage from its first issuance.
+ */
+export interface SessionLifetimePolicy {
+  ttlSeconds: number;
+  absoluteLifetimeSeconds: number;
+}
+
 export interface AuthConfig {
   nodeEnv: string;
   port: number;
@@ -145,6 +155,7 @@ export interface AuthConfig {
   dbPassword: string;
   dbSslMode: PostgresSslMode;
   sessionTtlSeconds: number;
+  sessionAbsoluteLifetimeSeconds: number;
   corsAllowedOrigins: string[];
   corsAllowNoOrigin: boolean;
   rateLimitEnabled: boolean;

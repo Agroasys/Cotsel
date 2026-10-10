@@ -133,6 +133,11 @@ export async function withPostgres(fn: (pool: Pool) => Promise<void>): Promise<v
         'utf8',
       );
       await pool.query(signerApprovalMigration);
+      const sessionLineageMigration = fs.readFileSync(
+        path.resolve(__dirname, '../../src/database/schema/004_session_token_hash_lineage.sql'),
+        'utf8',
+      );
+      await pool.query(sessionLineageMigration);
       await fn(pool);
     } finally {
       await pool.end();
@@ -176,7 +181,10 @@ export function signedHeaders(input: {
 export async function startAdminApp(pool: Pool) {
   const profiles = createPostgresProfileStore(pool);
   const sessions = createPostgresSessionStore(pool);
-  const sessionService = createSessionService(sessions, profiles);
+  const sessionService = createSessionService(sessions, profiles, {
+    ttlSeconds: 3600,
+    absoluteLifetimeSeconds: 86400,
+  });
   const nonceStore = createPostgresNonceStore({
     tableName: 'auth_admin_control_nonces',
     query: (sql, params) => pool.query(sql, params),

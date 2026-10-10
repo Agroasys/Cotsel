@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { hashSessionToken } from '../src/core/sessionStore';
 import { OPERATOR_CAPABILITIES } from '../src/types';
 import {
   dockerAvailable,
@@ -292,8 +293,8 @@ describe('admin controls persistence integration', () => {
             email: 'breakglass@example.com',
           });
           const issuedBreakGlassSession = await pool.query(
-            `SELECT role FROM user_sessions WHERE session_id = $1`,
-            [bgSession.sessionId],
+            `SELECT role FROM user_sessions WHERE session_token_hash = $1`,
+            [hashSessionToken(bgSession.sessionId)],
           );
           expect(issuedBreakGlassSession.rows[0].role).toBe('admin');
           await pool.query(
@@ -325,8 +326,8 @@ describe('admin controls persistence integration', () => {
             email: 'breakglass@example.com',
           });
           const issuedBaseSession = await pool.query(
-            `SELECT role FROM user_sessions WHERE session_id = $1`,
-            [postExpirySession.sessionId],
+            `SELECT role FROM user_sessions WHERE session_token_hash = $1`,
+            [hashSessionToken(postExpirySession.sessionId)],
           );
           expect(issuedBaseSession.rows[0].role).toBe('buyer');
 

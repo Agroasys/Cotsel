@@ -68,7 +68,10 @@ async function bootstrap(): Promise<void> {
   const profileStore = createPostgresProfileStore(pool);
   const sessionStore = createPostgresSessionStore(pool);
   const operatorSignerStore = createPostgresOperatorSignerStore(pool);
-  const sessionService = createSessionService(sessionStore, profileStore);
+  const sessionService = createSessionService(sessionStore, profileStore, {
+    ttlSeconds: config.sessionTtlSeconds,
+    absoluteLifetimeSeconds: config.sessionAbsoluteLifetimeSeconds,
+  });
   const trustedSessionExchangeNonceStore = createPostgresNonceStore({
     tableName: 'trusted_session_exchange_nonces',
     query: (sql, params) => pool.query(sql, params),

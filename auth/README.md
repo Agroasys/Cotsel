@@ -75,6 +75,19 @@ This is the primary production path.
 | `/api/auth/v1/session/revoke`            | POST   | Bearer session token          |
 | `/api/auth/v1/health`                    | GET    | None                          |
 
+- **Storage.** Only a SHA-256 verifier of each bearer token is persisted
+  (`user_sessions.session_token_hash`); a database export cannot authenticate.
+- **Refresh.** Revoking the presented session and issuing its successor happen in
+  one transaction under a row lock. Each session has at most one successor
+  (`parent_session_token_hash` is unique), so concurrent or replayed refreshes of
+  the same token yield exactly one active session.
+- **Lifetime.** `SESSION_TTL_SECONDS` bounds every issued session; an exchange
+  requesting a larger or non-positive `ttlSeconds` is refused with `400`.
+  `SESSION_ABSOLUTE_LIFETIME_SECONDS` bounds a whole refresh lineage from its
+  first issuance; once reached, refresh fails and a new exchange is required.
+- **Logging.** Routine session logs carry the internal `userId` and role only —
+  never tokens, token hashes, wallet addresses, emails, or upstream account IDs.
+
 ## Role Model
 
 | Role       | Identity source          | Notes                                         |

@@ -23,8 +23,10 @@ export {
   revokeBreakGlassAdmin,
 } from './queries/breakGlass';
 export {
-  findSessionById,
+  findSessionByTokenHash,
   insertSession,
   pruneExpiredSessions,
-  revokeSession,
+  revokeSessionByTokenHash,
+  rotateSession,
 } from './queries/sessions';
+export type { SessionInsert, SessionRotation, SessionRotationOutcome } from './queries/sessions';

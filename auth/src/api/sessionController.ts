@@ -86,7 +86,7 @@ export class SessionController {
         walletAddress === undefined || walletAddress === null
           ? null
           : assertWalletAddress(walletAddress, 'walletAddress');
-      ttlSeconds = parseOptionalSessionTtl(body.ttlSeconds);
+      ttlSeconds = parseOptionalSessionTtl(body.ttlSeconds, this.maxSessionTtlSeconds);
     } catch (error) {
       handleControllerError(
         res,
@@ -98,11 +98,6 @@ export class SessionController {
       return;
     }
 
-    const safeTtl =
-      ttlSeconds !== undefined
-        ? Math.max(1, Math.min(ttlSeconds, this.maxSessionTtlSeconds))
-        : undefined;
-
     try {
       const result = await this.sessionService.issueTrustedSession(
         {
@@ -112,14 +107,9 @@ export class SessionController {
           email: normalizedEmail,
           walletAddress: normalizedWallet,
         },
-        safeTtl,
+        ttlSeconds,
       );
-      Logger.info('Trusted session exchange successful', {
-        accountId: normalizedAccountId,
-        walletAddress: normalizedWallet,
-        email: normalizedEmail,
-        role,
-      });
+      Logger.info('Trusted session exchange successful', { role });
       res.status(201).json(success(result));
     } catch (error) {
       Logger.error('Trusted session exchange failed', error);
