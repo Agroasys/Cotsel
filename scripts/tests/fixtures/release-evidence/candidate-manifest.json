@@ -330,8 +330,8 @@
   "migrations": [
     {
       "component": "auth",
-      "headIdentity": "202609130003_operator_signer_two_person_activation",
-      "checksumSha256": "3f0a3b1657f48f7c837e5dd3d0ea66f178c3ab108f23940cfb646c98a3a795ea"
+      "headIdentity": "202610100004_session_token_hash_lineage",
+      "checksumSha256": "658520f5f552d043eae257752e53e7e98591962ca6adbe8cb11b538bb35c2e1a"
     },
     {
       "component": "gateway",
