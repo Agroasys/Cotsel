@@ -3,7 +3,7 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { createPostgresProfileStore } from '../src/core/profileStore';
 import { createPostgresSessionStore, hashSessionToken } from '../src/core/sessionStore';
 import { createSessionService } from '../src/core/sessionService';
@@ -31,6 +31,51 @@ async function issue(pool: Pool, accountId = 'agroasys-user:lineage-1') {
     email: 'lineage@example.com',
     walletAddress: null,
   });
+}
+
+async function lockSessionRow(pool: Pool, tokenHash: string): Promise<PoolClient> {
+  const holder = await pool.connect();
+  await holder.query('BEGIN');
+  await holder.query(`SELECT 1 FROM user_sessions WHERE session_token_hash = $1 FOR UPDATE`, [
+    tokenHash,
+  ]);
+  return holder;
+}
+
+async function waitForRowLockWaiter(pool: Pool): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const waiting = await pool.query(
+      `SELECT 1 FROM pg_stat_activity
+       WHERE wait_event_type = 'Lock' AND query LIKE '%FOR UPDATE%'`,
+    );
+    if (waiting.rows.length > 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error('refresh never waited on the parent row lock');
+}
+
+/**
+ * Starts a refresh while the parent is still valid, holds its row lock until
+ * `releaseAt` (epoch seconds) has passed, then settles the refresh.
+ */
+async function refreshAcrossLockWait(
+  pool: Pool,
+  sessionToken: string,
+  releaseAt: number,
+): Promise<PromiseSettledResult<unknown>> {
+  const holder = await lockSessionRow(pool, hashSessionToken(sessionToken));
+  try {
+    const refresh = createService(pool).refresh(sessionToken);
+    const settled = Promise.allSettled([refresh]).then(([outcome]) => outcome);
+    await waitForRowLockWaiter(pool);
+    await new Promise((resolve) => setTimeout(resolve, (releaseAt - Date.now() / 1000) * 1000));
+    await holder.query('COMMIT');
+    return await settled;
+  } finally {
+    holder.release();
+  }
 }
 
 describe('session lineage persistence integration', () => {
@@ -159,6 +204,57 @@ describe('session lineage persistence integration', () => {
         );
         await expect(service.refresh(exhausted.sessionId)).rejects.toThrow('lifetime is exhausted');
         await expect(service.resolve(exhausted.sessionId)).resolves.not.toBeNull();
+      });
+    },
+    120000,
+  );
+
+  integrationTest(
+    'a refresh that waits on the row lock past parent expiry is refused',
+    async () => {
+      await withPostgres(async (pool) => {
+        const session = await issue(pool);
+        const tokenHash = hashSessionToken(session.sessionId);
+        const parentExpiresAt = nowSeconds() + 2;
+        await pool.query(
+          `UPDATE user_sessions SET expires_at = $1::bigint WHERE session_token_hash = $2`,
+          [parentExpiresAt, tokenHash],
+        );
+
+        const outcome = await refreshAcrossLockWait(pool, session.sessionId, parentExpiresAt + 1);
+        expect(outcome.status).toBe('rejected');
+        expect((outcome as PromiseRejectedResult).reason.message).toContain(
+          'invalid, expired, or revoked',
+        );
+
+        const rows = await pool.query(`SELECT revoked_at FROM user_sessions`);
+        expect(rows.rows).toEqual([{ revoked_at: null }]);
+      });
+    },
+    120000,
+  );
+
+  integrationTest(
+    'a refresh that waits on the row lock past the lineage bound is refused',
+    async () => {
+      await withPostgres(async (pool) => {
+        const session = await issue(pool);
+        const lineageEndsAt = nowSeconds() + 2;
+        const lineageStart = lineageEndsAt - LIFETIME.absoluteLifetimeSeconds;
+        await pool.query(
+          `UPDATE user_sessions SET lineage_started_at = $1::bigint, issued_at = $1::bigint + 1
+           WHERE session_token_hash = $2`,
+          [lineageStart, hashSessionToken(session.sessionId)],
+        );
+
+        const outcome = await refreshAcrossLockWait(pool, session.sessionId, lineageEndsAt + 1);
+        expect(outcome.status).toBe('rejected');
+        expect((outcome as PromiseRejectedResult).reason.message).toContain(
+          'lifetime is exhausted',
+        );
+
+        const rows = await pool.query(`SELECT revoked_at FROM user_sessions`);
+        expect(rows.rows).toEqual([{ revoked_at: null }]);
       });
     },
     120000,

@@ -69,7 +69,7 @@ export function createPostgresSessionStore(pool: Pool): SessionStore {
       const outcome = await rotateSession(pool, profile, {
         parentTokenHash: hashSessionToken(sessionToken),
         successorTokenHash: hashSessionToken(sessionId),
-        now: nowSeconds(),
+        clock: nowSeconds,
         ttlSeconds: policy.ttlSeconds,
         absoluteLifetimeSeconds: policy.absoluteLifetimeSeconds,
       });

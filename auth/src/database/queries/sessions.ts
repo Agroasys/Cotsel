@@ -114,7 +114,8 @@ export async function revokeSessionByTokenHash(pool: Pool, tokenHash: string): P
 export interface SessionRotation {
   parentTokenHash: string;
   successorTokenHash: string;
-  now: number;
+  /** Read only once the parent row lock is held; see {@link rotateSession}. */
+  clock: () => number;
   ttlSeconds: number;
   absoluteLifetimeSeconds: number;
 }
@@ -129,6 +130,10 @@ export type SessionRotationOutcome =
  * transaction. The parent row lock serialises concurrent refreshes so exactly
  * one caller observes an unrevoked parent; the unique parent index is the
  * storage backstop. The successor never outlives the lineage's absolute bound.
+ *
+ * The clock is read after the lock is acquired: a refresh that waited on the
+ * pool or on a concurrent holder must not validate expiry, or stamp the
+ * successor, with a time sampled before the wait.
  */
 export async function rotateSession(
   pool: Pool,
@@ -147,35 +152,35 @@ export async function rotateSession(
        WHERE session_token_hash = $1
          AND user_id = $2
          AND revoked_at IS NULL
-         AND expires_at > $3
        FOR UPDATE`,
-      [rotation.parentTokenHash, profile.id, rotation.now],
+      [rotation.parentTokenHash, profile.id],
     );
     const row = parent.rows[0];
-    if (!row) {
+    const now = rotation.clock();
+    if (!row || Number(row.expiresAt) <= now) {
       await client.query('ROLLBACK');
       return { status: 'unavailable' };
     }
 
     const lineageStartedAt = Number(row.lineageStartedAt);
     const expiresAt = Math.min(
-      rotation.now + rotation.ttlSeconds,
+      now + rotation.ttlSeconds,
       lineageStartedAt + rotation.absoluteLifetimeSeconds,
     );
 
-    if (expiresAt <= rotation.now) {
+    if (expiresAt <= now) {
       await client.query('ROLLBACK');
       return { status: 'lifetime_exhausted' };
     }
 
     await client.query(`UPDATE user_sessions SET revoked_at = $1 WHERE session_token_hash = $2`, [
-      rotation.now,
+      now,
       rotation.parentTokenHash,
     ]);
     await insertSession(client, profile, {
       tokenHash: rotation.successorTokenHash,
       parentTokenHash: rotation.parentTokenHash,
-      issuedAt: rotation.now,
+      issuedAt: now,
       expiresAt,
       lineageStartedAt,
     });
