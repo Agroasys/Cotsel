@@ -21,6 +21,7 @@ It is **separate** from `shared-auth`, which handles service-to-service HMAC aut
 ├── Dockerfile
 ├── jest.config.js
 ├── package.json
+├── recovery                             # reviewed reverts; never run by an image
 ├── tsconfig.json
 ├── src
 │   ├── api
@@ -87,6 +88,9 @@ This is the primary production path.
   first issuance; once reached, refresh fails and a new exchange is required.
 - **Logging.** Routine session logs carry the internal `userId` and role only —
   never tokens, token hashes, wallet addresses, emails, or upstream account IDs.
+- **Deployment.** Migration `202610100004` stops the previous image from
+  starting, so it ships through a drained cutover with a tested revert. See
+  [auth session token hash cutover](../docs/runbooks/auth-session-token-hash-cutover.md).
 
 ## Role Model
 
