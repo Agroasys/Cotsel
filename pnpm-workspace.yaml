@@ -26,6 +26,9 @@ minimumReleaseAgeExclude:
   - brace-expansion@5.0.12
   # Security fix for GHSA-hrr3-gc8f-f4qj. Keep the exception version-specific.
   - fast-uri@3.1.8
+  # Security fixes for GHSA-8r5x-fm3f-whwj, GHSA-p8wg-vrv2-v86f, and
+  # GHSA-xw65-4hp5-5hc7. Keep the exception version-specific.
+  - handlebars@4.7.10
   # Security fixes for the axios advisories remediated in 1.20.0. Keep the
   # exception version-specific.
   - axios@1.20.0
@@ -72,6 +75,8 @@ overrides:
   # "Unknown type Query". One graphql version keeps the indexer GraphQL API working
   # without patching @subsquid/graphql-server.
   graphql: 15.10.2
+  # GHSA-8r5x-fm3f-whwj, GHSA-p8wg-vrv2-v86f, and GHSA-xw65-4hp5-5hc7 (ts-jest, solidity-coverage).
+  handlebars@<4.7.10: 4.7.10
   immutable: 4.3.9
   js-cookie: 3.0.7
   js-yaml@<3.15.2: 3.15.2

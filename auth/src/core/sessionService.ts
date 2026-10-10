@@ -1,7 +1,13 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { TrustedSessionIdentity, UserRole, UserSession, SessionIssueResult } from '../types';
+import {
+  TrustedSessionIdentity,
+  UserRole,
+  UserSession,
+  SessionIssueResult,
+  SessionLifetimePolicy,
+} from '../types';
 import { ProfileStore } from './profileStore';
 import { SessionStore } from './sessionStore';
 import {
@@ -33,10 +39,11 @@ export interface SessionService {
   ): Promise<SessionIssueResult>;
 
   /**
-   * Issues a new session in exchange for a valid, non-expired, non-revoked one.
-   * The old session is revoked atomically.
+   * Issues the single successor of a valid, non-expired, non-revoked session and
+   * revokes it in the same transaction. The successor never outlives the
+   * lineage's absolute lifetime.
    */
-  refresh(sessionId: string, ttlSeconds?: number): Promise<SessionIssueResult>;
+  refresh(sessionId: string): Promise<SessionIssueResult>;
 
   /**
    * Permanently revokes a session so it cannot be refreshed or resolved.
@@ -49,12 +56,37 @@ export interface SessionService {
   resolve(sessionId: string): Promise<UserSession | null>;
 }
 
+export function assertSessionLifetimePolicy(policy: SessionLifetimePolicy): void {
+  if (!Number.isSafeInteger(policy.ttlSeconds) || policy.ttlSeconds <= 0) {
+    throw new Error('Session ttlSeconds must be a positive integer');
+  }
+  if (
+    !Number.isSafeInteger(policy.absoluteLifetimeSeconds) ||
+    policy.absoluteLifetimeSeconds < policy.ttlSeconds
+  ) {
+    throw new Error('Session absoluteLifetimeSeconds must be an integer >= ttlSeconds');
+  }
+}
+
 export function createSessionService(
   sessions: SessionStore,
   profiles: ProfileStore,
+  lifetime: SessionLifetimePolicy,
 ): SessionService {
+  assertSessionLifetimePolicy(lifetime);
+
   function nowSeconds(): number {
     return Math.floor(Date.now() / 1000);
+  }
+
+  function resolveTtl(requested: number | undefined): number {
+    if (requested === undefined) {
+      return lifetime.ttlSeconds;
+    }
+    if (!Number.isSafeInteger(requested) || requested <= 0 || requested > lifetime.ttlSeconds) {
+      throw new Error(`ttlSeconds must be an integer between 1 and ${lifetime.ttlSeconds}`);
+    }
+    return requested;
   }
 
   async function resolveActive(sessionId: string): Promise<UserSession | null> {
@@ -66,7 +98,6 @@ export function createSessionService(
       await sessions.revoke(sessionId);
       incrementSessionRevoked();
       Logger.warn('Session revoked because profile is inactive', {
-        sessionId,
         userId: session.userId,
       });
       return null;
@@ -78,7 +109,6 @@ export function createSessionService(
           incrementAdminBreakGlassExpired();
           Logger.warn('Break-glass admin expired', {
             eventType: 'auth.break_glass_expired',
-            accountId: session.accountId,
             userId: session.userId,
           });
         }
@@ -86,7 +116,6 @@ export function createSessionService(
       await sessions.revoke(sessionId);
       incrementSessionRevoked();
       Logger.warn('Session revoked because effective authority changed', {
-        sessionId,
         userId: session.userId,
         issuedRole: session.issuedRole,
         effectiveRole: session.role,
@@ -97,44 +126,42 @@ export function createSessionService(
   }
 
   return {
-    async login(walletAddress, role, orgId, ttlSeconds = 3600) {
+    async login(walletAddress, role, orgId, ttlSeconds) {
       if (role === 'admin' || role === 'oracle') {
         throw new Error('Privileged roles must be provisioned server-side');
       }
+      const ttl = resolveTtl(ttlSeconds);
       const normalized = walletAddress.toLowerCase();
       const profile = await profiles.upsert(normalized, role, orgId);
       if (!profile.active) {
         throw new Error('User profile is deactivated');
       }
-      const result = await sessions.issue(profile, ttlSeconds);
+      const result = await sessions.issue(profile, ttl);
       incrementSessionIssued();
       Logger.info('Session issued', {
         userId: profile.id,
-        walletAddress: profile.walletAddress,
         role: profile.role,
       });
       return result;
     },
 
-    async issueTrustedSession(identity, ttlSeconds = 3600) {
+    async issueTrustedSession(identity, ttlSeconds) {
+      const ttl = resolveTtl(ttlSeconds);
       const profile = await profiles.upsertTrustedIdentity(identity);
       if (!profile.active) {
         throw new Error('User profile is deactivated');
       }
 
-      const result = await sessions.issue(profile, ttlSeconds);
+      const result = await sessions.issue(profile, ttl);
       incrementSessionIssued();
       Logger.info('Trusted session issued', {
-        accountId: profile.accountId,
         userId: profile.id,
-        walletAddress: profile.walletAddress,
-        email: profile.email,
         role: profile.role,
       });
       return result;
     },
 
-    async refresh(sessionId, ttlSeconds = 3600) {
+    async refresh(sessionId) {
       const existing = await resolveActive(sessionId);
       if (!existing) {
         throw new Error('Session is invalid, expired, or revoked');
@@ -144,20 +171,28 @@ export function createSessionService(
         throw new Error('User profile is inactive or not found');
       }
 
-      const result = await sessions.issue(profile, ttlSeconds);
-      await sessions.revoke(sessionId);
+      const rotation = await sessions.rotate(sessionId, profile, lifetime);
+      if (rotation.status === 'lifetime_exhausted') {
+        Logger.info('Session refresh refused because lineage lifetime is exhausted', {
+          userId: profile.id,
+        });
+        throw new Error('Session lifetime is exhausted; exchange a new session');
+      }
+      if (rotation.status !== 'rotated') {
+        throw new Error('Session is invalid, expired, or revoked');
+      }
       incrementSessionRefreshed();
       Logger.info('Session refreshed', {
         userId: profile.id,
-        walletAddress: profile.walletAddress,
+        role: profile.role,
       });
-      return result;
+      return rotation.session;
     },
 
     async revoke(sessionId) {
       await sessions.revoke(sessionId);
       incrementSessionRevoked();
-      Logger.info('Session revoked', { sessionId });
+      Logger.info('Session revoked');
     },
 
     async resolve(sessionId) {

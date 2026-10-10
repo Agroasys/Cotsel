@@ -17,12 +17,20 @@ export function assertWalletAddress(value: string, field: string): string {
   return value.toLowerCase();
 }
 
-export function parseOptionalSessionTtl(value: unknown): number | undefined {
+export function parseOptionalSessionTtl(value: unknown, maxSeconds: number): number | undefined {
   if (value === undefined) {
     return undefined;
   }
 
-  return requireInteger(value, 'ttlSeconds');
+  const ttlSeconds = requireInteger(value, 'ttlSeconds');
+  if (ttlSeconds <= 0 || ttlSeconds > maxSeconds) {
+    throw new HttpError(
+      400,
+      'BadRequest',
+      `ttlSeconds must be an integer between 1 and ${maxSeconds}`,
+    );
+  }
+  return ttlSeconds;
 }
 
 export function requireAuthRole(value: unknown): UserRole {

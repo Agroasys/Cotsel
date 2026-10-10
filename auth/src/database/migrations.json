@@ -22,6 +22,13 @@
       "file": "schema/003_operator_signer_two_person_activation.sql",
       "sha256": "685404d6e71f9bdcf7228027ec02ae5f6ae238bea62cc1df56ab4c820e65cbad",
       "schema_sha256": "a82780e200fe27fbd230d215236ef5ebf258f434bad25a48674f96c87deafaa2"
+    },
+    {
+      "version": "202610100004",
+      "name": "session_token_hash_lineage",
+      "file": "schema/004_session_token_hash_lineage.sql",
+      "sha256": "9a41dc4bf5162365fc677e8406501202ee17fabc483430b1583096bb476ca5d3",
+      "schema_sha256": "77a167f3a1089359f43ccdc1abfae41d735dd93b734ce581c3472d5c55b40710"
     }
   ]
 }

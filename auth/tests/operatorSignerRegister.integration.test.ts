@@ -8,7 +8,8 @@ import { Pool } from 'pg';
 import { createAdminService } from '../src/core/adminService';
 import { createPostgresOperatorSignerStore } from '../src/core/operatorSignerStore';
 import { createPostgresProfileStore } from '../src/core/profileStore';
-import { findSessionById } from '../src/database/queries/sessions';
+import { hashSessionToken } from '../src/core/sessionStore';
+import { findSessionByTokenHash } from '../src/database/queries/sessions';
 
 const POSTGRES_IMAGE = process.env.AUTH_TEST_POSTGRES_IMAGE || 'postgres:16-alpine';
 let dockerAvailable = true;
@@ -113,6 +114,12 @@ async function withPostgres(
           'utf8',
         ),
       );
+      await pool.query(
+        fs.readFileSync(
+          path.resolve(__dirname, '../src/database/schema/004_session_token_hash_lineage.sql'),
+          'utf8',
+        ),
+      );
       await fn(pool);
     } finally {
       await pool.end();
@@ -125,6 +132,8 @@ async function withPostgres(
     }
   }
 }
+
+const SESSION_ADMIN_HASH = hashSessionToken('session-admin-1');
 
 describe('operator signer register persistence', () => {
   const integrationTest = dockerAvailable ? test : test.skip;
@@ -199,10 +208,11 @@ describe('operator signer register persistence', () => {
         );
         await pool.query(
           `INSERT INTO user_sessions
-             (session_id, user_id, wallet_address, role, issued_at, expires_at)
-           VALUES ($1, $2, $3, 'admin', $4, $5)`,
+             (session_token_hash, user_id, wallet_address, role, issued_at, expires_at,
+              lineage_started_at)
+           VALUES ($1, $2, $3, 'admin', $4, $5, $4)`,
           [
-            'session-admin-1',
+            SESSION_ADMIN_HASH,
             profile.rows[0].id,
             '0x00000000000000000000000000000000000000aa',
             1_700_000_000,
@@ -241,7 +251,7 @@ describe('operator signer register persistence', () => {
         const created = await service.proposeSigner(input);
         expect(created).toMatchObject({ state: 'pending', active: false });
         await expect(service.proposeSigner(input)).resolves.toEqual(created);
-        await expect(findSessionById(pool, 'session-admin-1')).resolves.toEqual(
+        await expect(findSessionByTokenHash(pool, SESSION_ADMIN_HASH)).resolves.toEqual(
           expect.objectContaining({ signerAuthorizations: [] }),
         );
 
@@ -335,7 +345,7 @@ describe('operator signer register persistence', () => {
             reason: 'Attempt replay of signer approval.',
           }),
         ).rejects.toThrow('not pending');
-        const session = await findSessionById(pool, 'session-admin-1');
+        const session = await findSessionByTokenHash(pool, SESSION_ADMIN_HASH);
         expect(session?.signerAuthorizations).toEqual([
           expect.objectContaining({
             bindingId: created.bindingId,
@@ -378,7 +388,7 @@ describe('operator signer register persistence', () => {
             reason: 'Attempt activation after signer revocation.',
           }),
         ).rejects.toThrow('not pending');
-        await expect(findSessionById(pool, 'session-admin-1')).resolves.toEqual(
+        await expect(findSessionByTokenHash(pool, SESSION_ADMIN_HASH)).resolves.toEqual(
           expect.objectContaining({ signerAuthorizations: [] }),
         );
         await expect(
@@ -416,7 +426,7 @@ describe('operator signer register persistence', () => {
             }),
           ]),
         );
-        await expect(findSessionById(pool, 'session-admin-1')).resolves.toEqual(
+        await expect(findSessionByTokenHash(pool, SESSION_ADMIN_HASH)).resolves.toEqual(
           expect.objectContaining({ role: 'buyer', signerAuthorizations: [] }),
         );
 

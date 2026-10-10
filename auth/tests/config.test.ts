@@ -69,4 +69,29 @@ describe('auth config', () => {
       );
     });
   });
+
+  test('session lifetime policy defaults and bounds are enforced', () => {
+    withEnv({ SESSION_ABSOLUTE_LIFETIME_SECONDS: undefined }, () => {
+      const { loadConfig } = loadConfigModule();
+      const config = loadConfig();
+      expect(config.sessionTtlSeconds).toBe(3600);
+      expect(config.sessionAbsoluteLifetimeSeconds).toBe(86400);
+    });
+
+    for (const value of ['-1', '0', '59', '86401']) {
+      withEnv({ SESSION_TTL_SECONDS: value }, () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow('SESSION_TTL_SECONDS must be between 60 and 86400');
+      });
+    }
+
+    for (const value of ['1800', '604801']) {
+      withEnv({ SESSION_ABSOLUTE_LIFETIME_SECONDS: value }, () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow(
+          'SESSION_ABSOLUTE_LIFETIME_SECONDS must be between SESSION_TTL_SECONDS and 604800',
+        );
+      });
+    }
+  });
 });

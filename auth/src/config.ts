@@ -67,6 +67,8 @@ export function loadConfig(): AuthConfig {
   const adminControlMaxSkewSeconds = envNumber('AUTH_ADMIN_CONTROL_MAX_SKEW_SECONDS', 300);
   const adminControlNonceTtlSeconds = envNumber('AUTH_ADMIN_CONTROL_NONCE_TTL_SECONDS', 600);
   const adminBreakGlassMaxTtlSeconds = envNumber('AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS', 3600);
+  const sessionTtlSeconds = envNumber('SESSION_TTL_SECONDS', 3600);
+  const sessionAbsoluteLifetimeSeconds = envNumber('SESSION_ABSOLUTE_LIFETIME_SECONDS', 86400);
 
   if (trustedSessionExchangeEnabled) {
     assert(
@@ -93,6 +95,14 @@ export function loadConfig(): AuthConfig {
     'AUTH_ADMIN_CONTROL_NONCE_TTL_SECONDS must be greater than or equal to AUTH_ADMIN_CONTROL_MAX_SKEW_SECONDS',
   );
   assert(
+    sessionTtlSeconds >= 60 && sessionTtlSeconds <= 86400,
+    'SESSION_TTL_SECONDS must be between 60 and 86400',
+  );
+  assert(
+    sessionAbsoluteLifetimeSeconds >= sessionTtlSeconds && sessionAbsoluteLifetimeSeconds <= 604800,
+    'SESSION_ABSOLUTE_LIFETIME_SECONDS must be between SESSION_TTL_SECONDS and 604800',
+  );
+  assert(
     adminBreakGlassMaxTtlSeconds > 0 && adminBreakGlassMaxTtlSeconds <= 86400,
     'AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS must be between 1 and 86400',
   );
@@ -105,7 +115,8 @@ export function loadConfig(): AuthConfig {
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
     dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
-    sessionTtlSeconds: envNumber('SESSION_TTL_SECONDS', 3600),
+    sessionTtlSeconds,
+    sessionAbsoluteLifetimeSeconds,
     corsAllowedOrigins: parseAllowedOrigins(process.env.AUTH_CORS_ALLOWED_ORIGINS),
     corsAllowNoOrigin: envBoolean('AUTH_CORS_ALLOW_NO_ORIGIN', false),
     rateLimitEnabled: envBoolean('AUTH_RATE_LIMIT_ENABLED', true),

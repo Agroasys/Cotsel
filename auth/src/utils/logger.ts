@@ -4,8 +4,6 @@
 
 interface LogMeta {
   userId?: string | null;
-  walletAddress?: string | null;
-  sessionId?: string | null;
   requestId?: string | null;
   role?: string | null;
   [key: string]: unknown;
@@ -18,8 +16,6 @@ function baseContext(meta?: LogMeta): Record<string, unknown> {
     service: SERVICE_NAME,
     env: process.env.NODE_ENV ?? 'development',
     userId: meta?.userId ?? null,
-    walletAddress: meta?.walletAddress ?? null,
-    sessionId: meta?.sessionId ?? null,
     requestId: meta?.requestId ?? null,
     role: meta?.role ?? null,
     ...meta,
