@@ -81,10 +81,12 @@ export function parseExchangeKeyPolicies(
     });
   }
 
-  const missing = keyIds.filter((keyId) => !policies.has(keyId));
-  if (missing.length > 0) {
+  // Report a count only: key IDs come from the secret-bearing keys JSON and
+  // must not reach the startup error log.
+  const missing = keyIds.filter((keyId) => !policies.has(keyId)).length;
+  if (missing > 0) {
     throw new Error(
-      `TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON has no policy for exchange key(s): ${missing.join(', ')}`,
+      `TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON has no policy for ${missing} configured exchange key(s)`,
     );
   }
   return policies;

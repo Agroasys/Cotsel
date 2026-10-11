@@ -163,7 +163,10 @@ describe('parseExchangeKeyPolicies', () => {
   test.each([
     { raw: 'not json', message: 'must be valid JSON' },
     { raw: '[]', message: 'must be an object keyed by key ID' },
-    { raw: '{"backend":{"roles":["admin"]}}', message: 'no policy for exchange key(s): other' },
+    {
+      raw: '{"backend":{"roles":["admin"]}}',
+      message: 'no policy for 1 configured exchange key(s)',
+    },
     {
       raw: '{"backend":{"roles":["admin"]},"other":{"roles":["buyer"]},"ghost":{"roles":["buyer"]}}',
       message: 'ghost names no configured exchange key',

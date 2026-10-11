@@ -127,6 +127,27 @@ describe('auth rate-limit wiring', () => {
     }
   });
 
+  test('trusted session exchange uses its own throttle', async () => {
+    const { app, close } = await buildApp();
+    const exchange = (baseUrl: string) =>
+      request(baseUrl, '/api/auth/v1/session/exchange/agroasys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: 'agroasys-user:1', role: 'buyer' }),
+      });
+
+    try {
+      await withServer(app, async (baseUrl) => {
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+          expect((await exchange(baseUrl)).status).toBe(200);
+        }
+        expect((await exchange(baseUrl)).status).toBe(429);
+      });
+    } finally {
+      await close();
+    }
+  });
+
   test('admin-control routes use the privileged admin throttle', async () => {
     const { app, close } = await buildApp();
 
