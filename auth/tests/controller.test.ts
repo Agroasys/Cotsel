@@ -5,7 +5,9 @@
 import { Request, Response } from 'express';
 import { SessionController } from '../src/api/controller';
 import { SessionService } from '../src/core/sessionService';
+import { ExchangeAuthorityError } from '../src/core/exchangeAuthority';
 import { UserSession } from '../src/types';
+import { ANY_ROLE_AUTHORITY } from './helpers/exchangeAuthority';
 
 const WALLET = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 type ExchangeTrustedSessionRequest = Parameters<SessionController['exchangeTrustedSession']>[0];
@@ -54,8 +56,18 @@ function makeSession(overrides: Partial<UserSession> = {}): UserSession {
 
 function makeExchangeRequest(
   body: ExchangeTrustedSessionRequest['body'],
+  apiKeyId: string | null = ANY_ROLE_AUTHORITY.keyId,
 ): ExchangeTrustedSessionRequest {
-  return { body } as ExchangeTrustedSessionRequest;
+  return {
+    body,
+    serviceAuth: apiKeyId ? { apiKeyId, scheme: 'api_key' } : undefined,
+  } as ExchangeTrustedSessionRequest;
+}
+
+function exchangeController(svc: SessionService): SessionController {
+  return new SessionController(svc, 86400, (keyId) =>
+    keyId === ANY_ROLE_AUTHORITY.keyId ? ANY_ROLE_AUTHORITY : undefined,
+  );
 }
 
 beforeEach(() => {
@@ -65,7 +77,7 @@ beforeEach(() => {
 describe('SessionController.exchangeTrustedSession', () => {
   test('returns 201 when trusted identity payload is valid', async () => {
     const svc = mockSessionService();
-    const ctrl = new SessionController(svc);
+    const ctrl = exchangeController(svc);
     const req = makeExchangeRequest({
       accountId: 'agroasys-user:42',
       role: 'admin',
@@ -85,13 +97,14 @@ describe('SessionController.exchangeTrustedSession', () => {
         email: 'ops.admin@example.com',
         walletAddress: WALLET,
       },
+      ANY_ROLE_AUTHORITY,
       undefined,
     );
   });
 
   test('allows trusted exchange without wallet address', async () => {
     const svc = mockSessionService();
-    const ctrl = new SessionController(svc);
+    const ctrl = exchangeController(svc);
     const req = makeExchangeRequest({
       accountId: 'agroasys-user:42',
       role: 'admin',
@@ -106,13 +119,14 @@ describe('SessionController.exchangeTrustedSession', () => {
         accountId: 'agroasys-user:42',
         walletAddress: null,
       }),
+      ANY_ROLE_AUTHORITY,
       undefined,
     );
   });
 
   test('returns 400 when accountId is missing', async () => {
     const svc = mockSessionService();
-    const ctrl = new SessionController(svc);
+    const ctrl = exchangeController(svc);
     const req = makeExchangeRequest({ role: 'admin' });
     const res = mockRes();
 
@@ -124,7 +138,7 @@ describe('SessionController.exchangeTrustedSession', () => {
 
   test('returns 400 when email is invalid', async () => {
     const svc = mockSessionService();
-    const ctrl = new SessionController(svc);
+    const ctrl = exchangeController(svc);
     const req = makeExchangeRequest({
       accountId: 'acct-1',
       role: 'admin',
@@ -136,6 +150,46 @@ describe('SessionController.exchangeTrustedSession', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(svc.issueTrustedSession).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { name: 'no authenticated key', apiKeyId: null },
+    { name: 'a key without a policy', apiKeyId: 'unlisted-key' },
+  ])('returns 403 for $name', async ({ apiKeyId }) => {
+    const svc = mockSessionService();
+    const ctrl = exchangeController(svc);
+    const req = makeExchangeRequest({ accountId: 'agroasys-user:42', role: 'buyer' }, apiKeyId);
+    const res = mockRes();
+
+    await ctrl.exchangeTrustedSession(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(svc.issueTrustedSession).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 with the refusal when the key lacks the authority', async () => {
+    const svc = mockSessionService({
+      issueTrustedSession: jest
+        .fn()
+        .mockRejectedValue(
+          new ExchangeAuthorityError(
+            'Administrator authority must be provisioned through the admin control plane',
+          ),
+        ),
+    });
+    const ctrl = exchangeController(svc);
+    const req = makeExchangeRequest({ accountId: 'agroasys-user:42', role: 'admin' });
+    const res = mockRes();
+
+    await ctrl.exchangeTrustedSession(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'Forbidden',
+        message: 'Administrator authority must be provisioned through the admin control plane',
+      }),
+    );
   });
 });
 

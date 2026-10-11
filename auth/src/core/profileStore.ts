@@ -3,6 +3,7 @@
  */
 import { Pool } from 'pg';
 import { AdminActor, TrustedSessionIdentity, UserProfile, UserRole } from '../types';
+import type { ExchangeAuthority } from './exchangeAuthority';
 import {
   upsertProfile,
   upsertTrustedProfile,
@@ -23,7 +24,11 @@ import {
 
 export interface ProfileStore {
   upsert(walletAddress: string, role: UserRole, orgId?: string): Promise<UserProfile>;
-  upsertTrustedIdentity(identity: TrustedSessionIdentity): Promise<UserProfile>;
+  /** Throws `ExchangeAuthorityError` when `authority` does not cover the identity. */
+  upsertTrustedIdentity(
+    identity: TrustedSessionIdentity,
+    authority: ExchangeAuthority,
+  ): Promise<UserProfile>;
   findByWallet(walletAddress: string): Promise<UserProfile | null>;
   findByAccountId(accountId: string): Promise<UserProfile | null>;
   findById(id: string): Promise<UserProfile | null>;
@@ -64,14 +69,18 @@ export function createPostgresProfileStore(pool: Pool): ProfileStore {
     upsert(walletAddress, role, orgId) {
       return upsertProfile(pool, walletAddress.toLowerCase(), role, orgId ?? null);
     },
-    upsertTrustedIdentity(identity) {
-      return upsertTrustedProfile(pool, {
-        accountId: identity.accountId,
-        role: identity.role,
-        orgId: identity.orgId ?? null,
-        email: identity.email?.trim().toLowerCase() ?? null,
-        walletAddress: identity.walletAddress?.toLowerCase() ?? null,
-      });
+    upsertTrustedIdentity(identity, authority) {
+      return upsertTrustedProfile(
+        pool,
+        {
+          accountId: identity.accountId,
+          role: identity.role,
+          orgId: identity.orgId ?? null,
+          email: identity.email?.trim().toLowerCase() ?? null,
+          walletAddress: identity.walletAddress?.toLowerCase() ?? null,
+        },
+        authority,
+      );
     },
     findByWallet(walletAddress) {
       return findProfileByWallet(pool, walletAddress.toLowerCase());

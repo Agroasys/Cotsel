@@ -272,6 +272,11 @@ if true; then
     exit 1
   fi
 
+  if [[ "${TRUSTED_SESSION_EXCHANGE_ENABLED:-false}" == "true" && -z "${TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON:-}" ]]; then
+    echo "TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON is required when TRUSTED_SESSION_EXCHANGE_ENABLED=true" >&2
+    exit 1
+  fi
+
   if [[ "${AUTH_ADMIN_CONTROL_ENABLED:-false}" == "true" ]]; then
     if [[ -z "${AUTH_ADMIN_CONTROL_API_KEYS_JSON:-}" ]]; then
       echo "AUTH_ADMIN_CONTROL_API_KEYS_JSON is required when AUTH_ADMIN_CONTROL_ENABLED=true" >&2

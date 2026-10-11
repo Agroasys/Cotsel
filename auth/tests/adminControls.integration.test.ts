@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { hashSessionToken } from '../src/core/sessionStore';
+import { ANY_ROLE_AUTHORITY } from './helpers/exchangeAuthority';
 import { OPERATOR_CAPABILITIES } from '../src/types';
 import {
   dockerAvailable,
@@ -93,11 +94,14 @@ describe('admin controls persistence integration', () => {
           );
           expect(provisioned.rows[0]).toMatchObject({ role: 'admin', active: true });
 
-          const session = await app.sessionService.issueTrustedSession({
-            accountId: 'agroasys-user:admin-1',
-            role: 'admin',
-            email: 'admin@example.com',
-          });
+          const session = await app.sessionService.issueTrustedSession(
+            {
+              accountId: 'agroasys-user:admin-1',
+              role: 'admin',
+              email: 'admin@example.com',
+            },
+            ANY_ROLE_AUTHORITY,
+          );
 
           const downgradeBody = JSON.stringify({
             accountId: 'agroasys-user:admin-1',
@@ -287,11 +291,14 @@ describe('admin controls persistence integration', () => {
             break_glass_role: 'admin',
           });
 
-          const bgSession = await app.sessionService.issueTrustedSession({
-            accountId: 'agroasys-user:bg-1',
-            role: 'buyer',
-            email: 'breakglass@example.com',
-          });
+          const bgSession = await app.sessionService.issueTrustedSession(
+            {
+              accountId: 'agroasys-user:bg-1',
+              role: 'buyer',
+              email: 'breakglass@example.com',
+            },
+            ANY_ROLE_AUTHORITY,
+          );
           const issuedBreakGlassSession = await pool.query(
             `SELECT role FROM user_sessions WHERE session_token_hash = $1`,
             [hashSessionToken(bgSession.sessionId)],
@@ -320,11 +327,14 @@ describe('admin controls persistence integration', () => {
           });
           expect(review.status).toBe(200);
 
-          const postExpirySession = await app.sessionService.issueTrustedSession({
-            accountId: 'agroasys-user:bg-1',
-            role: 'buyer',
-            email: 'breakglass@example.com',
-          });
+          const postExpirySession = await app.sessionService.issueTrustedSession(
+            {
+              accountId: 'agroasys-user:bg-1',
+              role: 'buyer',
+              email: 'breakglass@example.com',
+            },
+            ANY_ROLE_AUTHORITY,
+          );
           const issuedBaseSession = await pool.query(
             `SELECT role FROM user_sessions WHERE session_token_hash = $1`,
             [hashSessionToken(postExpirySession.sessionId)],
@@ -378,12 +388,18 @@ describe('admin controls persistence integration', () => {
       await withPostgres(async (pool) => {
         const app = await startAdminApp(pool);
         try {
-          const session = await app.sessionService.issueTrustedSession({
-            accountId: 'agroasys-user:trusted-admin-only',
-            role: 'admin',
-            email: 'trusted-admin-only@example.com',
-            walletAddress: '0x00000000000000000000000000000000000000bb',
-          });
+          await pool.query(`INSERT INTO user_profiles (account_id, role) VALUES ($1, 'admin')`, [
+            'agroasys-user:trusted-admin-only',
+          ]);
+          const session = await app.sessionService.issueTrustedSession(
+            {
+              accountId: 'agroasys-user:trusted-admin-only',
+              role: 'admin',
+              email: 'trusted-admin-only@example.com',
+              walletAddress: '0x00000000000000000000000000000000000000bb',
+            },
+            ANY_ROLE_AUTHORITY,
+          );
 
           const resolved = await app.sessionService.resolve(session.sessionId);
           expect(resolved?.role).toBe('admin');
@@ -405,12 +421,15 @@ describe('admin controls persistence integration', () => {
       await withPostgres(async (pool) => {
         const app = await startAdminApp(pool);
         try {
-          const session = await app.sessionService.issueTrustedSession({
-            accountId: 'agroasys-user:buyer-only',
-            role: 'buyer',
-            email: 'buyer-only@example.com',
-            walletAddress: '0x00000000000000000000000000000000000000cc',
-          });
+          const session = await app.sessionService.issueTrustedSession(
+            {
+              accountId: 'agroasys-user:buyer-only',
+              role: 'buyer',
+              email: 'buyer-only@example.com',
+              walletAddress: '0x00000000000000000000000000000000000000cc',
+            },
+            ANY_ROLE_AUTHORITY,
+          );
 
           const resolved = await app.sessionService.resolve(session.sessionId);
           expect(resolved?.role).toBe('buyer');

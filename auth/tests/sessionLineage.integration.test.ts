@@ -8,6 +8,7 @@ import { createPostgresProfileStore } from '../src/core/profileStore';
 import { createPostgresSessionStore, hashSessionToken } from '../src/core/sessionStore';
 import { createSessionService } from '../src/core/sessionService';
 import { dockerAvailable, withPostgres } from './helpers/adminControlsIntegrationHarness';
+import { ANY_ROLE_AUTHORITY } from './helpers/exchangeAuthority';
 
 const LIFETIME = { ttlSeconds: 3600, absoluteLifetimeSeconds: 86400 };
 const SCHEMA_ROOT = path.resolve(__dirname, '../src/database');
@@ -25,12 +26,15 @@ function createService(pool: Pool) {
 }
 
 async function issue(pool: Pool, accountId = 'agroasys-user:lineage-1') {
-  return createService(pool).issueTrustedSession({
-    accountId,
-    role: 'buyer',
-    email: 'lineage@example.com',
-    walletAddress: null,
-  });
+  return createService(pool).issueTrustedSession(
+    {
+      accountId,
+      role: 'buyer',
+      email: 'lineage@example.com',
+      walletAddress: null,
+    },
+    ANY_ROLE_AUTHORITY,
+  );
 }
 
 async function lockSessionRow(pool: Pool, tokenHash: string): Promise<PoolClient> {

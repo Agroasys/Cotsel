@@ -4,6 +4,7 @@
 import { Pool, PoolClient } from 'pg';
 import { normalizeSessionRow, upsertTrustedProfile } from '../src/database/queries';
 import { UserProfile } from '../src/types';
+import { ANY_ROLE_AUTHORITY } from './helpers/exchangeAuthority';
 
 function buildProfile(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
@@ -186,13 +187,17 @@ describe('upsertTrustedProfile', () => {
       .mockResolvedValueOnce({ rows: [] });
     const pool = buildMockPool(query);
 
-    const profile = await upsertTrustedProfile(pool, {
-      accountId: 'acct-canonical',
-      role: 'admin',
-      orgId: 'org-1',
-      email: 'ops@example.com',
-      walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
-    });
+    const profile = await upsertTrustedProfile(
+      pool,
+      {
+        accountId: 'acct-canonical',
+        role: 'admin',
+        orgId: 'org-1',
+        email: 'ops@example.com',
+        walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+      },
+      ANY_ROLE_AUTHORITY,
+    );
 
     expect(profile).toEqual(relinkedProfile);
     expect(query).toHaveBeenNthCalledWith(4, expect.stringContaining('UPDATE user_profiles'), [
@@ -200,56 +205,106 @@ describe('upsertTrustedProfile', () => {
       'acct-canonical',
       '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
       'ops@example.com',
-      'admin',
+      null,
       'org-1',
     ]);
     expect(query).toHaveBeenLastCalledWith('COMMIT');
   });
 
-  test('merges a legacy wallet profile into the canonical account profile and reassigns sessions', async () => {
-    const accountProfile = buildProfile({
-      id: 'profile-canonical',
-      accountId: 'acct-canonical',
-      walletAddress: null,
-      email: 'ops@example.com',
-    });
-    const legacyWalletProfile = buildProfile({
-      id: 'profile-legacy',
-      accountId: 'f62ccf55-b3d8-4b35-a0d0-f8f1daaeb6cb',
-    });
-    const mergedProfile = buildProfile({
-      id: 'profile-canonical',
-      accountId: 'acct-canonical',
-    });
+  test.each([{ targetRole: 'buyer' as const }, { targetRole: 'admin' as const }])(
+    'merges a legacy wallet profile into a $targetRole account and reassigns its sessions',
+    async ({ targetRole }) => {
+      const accountProfile = buildProfile({
+        id: 'profile-canonical',
+        accountId: 'acct-canonical',
+        walletAddress: null,
+        role: targetRole,
+        baseRole: targetRole,
+      });
+      const legacyWalletProfile = buildProfile({
+        id: 'profile-legacy',
+        accountId: 'f62ccf55-b3d8-4b35-a0d0-f8f1daaeb6cb',
+        role: 'buyer',
+        baseRole: 'buyer',
+      });
+      const mergedProfile = buildProfile({ id: 'profile-canonical', accountId: 'acct-canonical' });
+      const query = jest
+        .fn()
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [accountProfile] })
+        .mockResolvedValueOnce({ rows: [legacyWalletProfile] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [mergedProfile] })
+        .mockResolvedValueOnce({ rows: [] });
+      const pool = buildMockPool(query);
+
+      const profile = await upsertTrustedProfile(
+        pool,
+        {
+          accountId: 'acct-canonical',
+          role: targetRole,
+          orgId: 'org-1',
+          email: 'ops@example.com',
+          walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+        },
+        ANY_ROLE_AUTHORITY,
+      );
+
+      expect(profile).toEqual(mergedProfile);
+      expect(query).toHaveBeenNthCalledWith(4, expect.stringContaining('UPDATE user_sessions'), [
+        'profile-canonical',
+        '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+        'profile-legacy',
+      ]);
+      expect(query).toHaveBeenNthCalledWith(
+        5,
+        expect.stringContaining('DELETE FROM user_profiles'),
+        ['profile-legacy'],
+      );
+      expect(query).toHaveBeenLastCalledWith('COMMIT');
+    },
+  );
+
+  test('refuses to merge away a legacy wallet profile that holds administrator authority', async () => {
     const query = jest
       .fn()
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [accountProfile] })
-      .mockResolvedValueOnce({ rows: [legacyWalletProfile] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [mergedProfile] })
+      .mockResolvedValueOnce({
+        rows: [
+          buildProfile({
+            id: 'profile-canonical',
+            accountId: 'acct-canonical',
+            walletAddress: null,
+          }),
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          buildProfile({ id: 'profile-legacy', accountId: 'f62ccf55-b3d8-4b35-a0d0-f8f1daaeb6cb' }),
+        ],
+      })
       .mockResolvedValueOnce({ rows: [] });
     const pool = buildMockPool(query);
 
-    const profile = await upsertTrustedProfile(pool, {
-      accountId: 'acct-canonical',
-      role: 'admin',
-      orgId: 'org-1',
-      email: 'ops@example.com',
-      walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
-    });
-
-    expect(profile).toEqual(mergedProfile);
-    expect(query).toHaveBeenNthCalledWith(4, expect.stringContaining('UPDATE user_sessions'), [
-      'profile-canonical',
-      '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
-      'profile-legacy',
-    ]);
-    expect(query).toHaveBeenNthCalledWith(5, expect.stringContaining('DELETE FROM user_profiles'), [
-      'profile-legacy',
-    ]);
-    expect(query).toHaveBeenLastCalledWith('COMMIT');
+    await expect(
+      upsertTrustedProfile(
+        pool,
+        {
+          accountId: 'acct-canonical',
+          role: 'admin',
+          orgId: null,
+          email: null,
+          walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+        },
+        ANY_ROLE_AUTHORITY,
+      ),
+    ).rejects.toThrow('cannot merge a profile that holds administrator authority');
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE user_sessions'),
+      expect.anything(),
+    );
+    expect(query).toHaveBeenLastCalledWith('ROLLBACK');
   });
 
   test('rejects a trusted session wallet already linked to a different non-legacy account', async () => {
@@ -264,13 +319,17 @@ describe('upsertTrustedProfile', () => {
     const pool = buildMockPool(query);
 
     await expect(
-      upsertTrustedProfile(pool, {
-        accountId: 'acct-canonical',
-        role: 'admin',
-        orgId: 'org-1',
-        email: 'ops@example.com',
-        walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
-      }),
+      upsertTrustedProfile(
+        pool,
+        {
+          accountId: 'acct-canonical',
+          role: 'admin',
+          orgId: 'org-1',
+          email: 'ops@example.com',
+          walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+        },
+        ANY_ROLE_AUTHORITY,
+      ),
     ).rejects.toThrow('walletAddress is already linked to a different account');
 
     expect(query).toHaveBeenLastCalledWith('ROLLBACK');

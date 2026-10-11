@@ -10,6 +10,14 @@ reactivation, durable role changes, and durable admin revocation. Normal
 operator dashboard session issuance remains owned by `agroasys-backend` through
 the signed `POST /session/exchange/agroasys` route.
 
+Session exchange never creates, promotes, or demotes administrator authority.
+An exchange requesting `admin` succeeds only when this runbook has already
+provisioned the account as a durable admin (or an active break-glass grant
+covers it) and the exchange key's policy in
+`TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON` includes `admin`. Otherwise it
+returns `403`. Provision each operator here before their first dashboard
+session; demotion here revokes their active sessions.
+
 ## Authority
 
 - Initiator: Cotsel production operator, security engineer, or release manager

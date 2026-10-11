@@ -8,6 +8,7 @@ import {
   SessionIssueResult,
   SessionLifetimePolicy,
 } from '../types';
+import { ExchangeAuthority, resolveExchangeOrgId } from './exchangeAuthority';
 import { ProfileStore } from './profileStore';
 import { SessionStore } from './sessionStore';
 import {
@@ -31,10 +32,13 @@ export interface SessionService {
   ): Promise<SessionIssueResult>;
 
   /**
-   * Issues a session for a trusted upstream account identity.
+   * Issues a session for a trusted upstream account identity, within the
+   * authority of the exchange key that asserted it. Administrator authority is
+   * never created or changed here; it must already be provisioned.
    */
   issueTrustedSession(
     identity: TrustedSessionIdentity,
+    authority: ExchangeAuthority,
     ttlSeconds?: number,
   ): Promise<SessionIssueResult>;
 
@@ -145,9 +149,10 @@ export function createSessionService(
       return result;
     },
 
-    async issueTrustedSession(identity, ttlSeconds) {
+    async issueTrustedSession(identity, authority, ttlSeconds) {
       const ttl = resolveTtl(ttlSeconds);
-      const profile = await profiles.upsertTrustedIdentity(identity);
+      const orgId = resolveExchangeOrgId(authority, identity.orgId ?? null);
+      const profile = await profiles.upsertTrustedIdentity({ ...identity, orgId }, authority);
       if (!profile.active) {
         throw new Error('User profile is deactivated');
       }
@@ -157,6 +162,7 @@ export function createSessionService(
       Logger.info('Trusted session issued', {
         userId: profile.id,
         role: profile.role,
+        exchangeKeyId: authority.keyId,
       });
       return result;
     },

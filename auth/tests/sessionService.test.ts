@@ -5,6 +5,7 @@ import { createSessionService } from '../src/core/sessionService';
 import { ProfileStore } from '../src/core/profileStore';
 import { SessionRotationResult, SessionStore } from '../src/core/sessionStore';
 import { UserProfile, UserRole, UserSession, SessionIssueResult } from '../src/types';
+import { ANY_ROLE_AUTHORITY } from './helpers/exchangeAuthority';
 
 //  Helpers
 
@@ -251,21 +252,48 @@ describe('sessionService.issueTrustedSession', () => {
     const { sessionStore, profileStore } = makeStores(profile);
     const svc = createSessionService(sessionStore, profileStore, LIFETIME);
 
-    const result = await svc.issueTrustedSession({
-      accountId: 'agroasys-user:42',
-      role: 'admin',
-      email: 'ops@example.com',
-      walletAddress: null,
-    });
+    const result = await svc.issueTrustedSession(
+      {
+        accountId: 'agroasys-user:42',
+        role: 'admin',
+        email: 'ops@example.com',
+        walletAddress: null,
+      },
+      ANY_ROLE_AUTHORITY,
+    );
 
     expect(result.sessionId).toBe('session-abc');
-    expect(profileStore.upsertTrustedIdentity).toHaveBeenCalledWith({
-      accountId: 'agroasys-user:42',
-      role: 'admin',
-      email: 'ops@example.com',
-      walletAddress: null,
-    });
+    expect(profileStore.upsertTrustedIdentity).toHaveBeenCalledWith(
+      {
+        accountId: 'agroasys-user:42',
+        role: 'admin',
+        email: 'ops@example.com',
+        walletAddress: null,
+        orgId: null,
+      },
+      ANY_ROLE_AUTHORITY,
+    );
     expect(sessionStore.issue).toHaveBeenCalledTimes(1);
+  });
+
+  test('binds the session to the exchange key organization', async () => {
+    const { sessionStore, profileStore } = makeStores(makeProfile());
+    const svc = createSessionService(sessionStore, profileStore, LIFETIME);
+    const orgBound = { ...ANY_ROLE_AUTHORITY, orgId: 'org-agroasys' };
+
+    await svc.issueTrustedSession({ accountId: 'agroasys-user:42', role: 'buyer' }, orgBound);
+    expect(profileStore.upsertTrustedIdentity).toHaveBeenLastCalledWith(
+      expect.objectContaining({ orgId: 'org-agroasys' }),
+      orgBound,
+    );
+
+    await expect(
+      svc.issueTrustedSession(
+        { accountId: 'agroasys-user:42', role: 'buyer', orgId: 'org-other' },
+        orgBound,
+      ),
+    ).rejects.toThrow('not authorized for this organization');
+    expect(profileStore.upsertTrustedIdentity).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -286,7 +314,11 @@ describe('session lifetime policy', () => {
     const svc = createSessionService(sessionStore, profileStore, LIFETIME);
 
     await expect(
-      svc.issueTrustedSession({ accountId: 'agroasys-user:42', role: 'buyer' }, 3601),
+      svc.issueTrustedSession(
+        { accountId: 'agroasys-user:42', role: 'buyer' },
+        ANY_ROLE_AUTHORITY,
+        3601,
+      ),
     ).rejects.toThrow('ttlSeconds must be an integer between 1 and 3600');
     expect(profileStore.upsertTrustedIdentity).not.toHaveBeenCalled();
     expect(sessionStore.issue).not.toHaveBeenCalled();

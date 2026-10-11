@@ -86,6 +86,13 @@ This is the primary production path.
   requesting a larger or non-positive `ttlSeconds` is refused with `400`.
   `SESSION_ABSOLUTE_LIFETIME_SECONDS` bounds a whole refresh lineage from its
   first issuance; once reached, refresh fails and a new exchange is required.
+- **Exchange authority.** Each exchange key has an explicit role ceiling, and
+  optionally one organization, in `TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON`.
+  A request outside the ceiling, or for `oracle`, is refused with `403`.
+  Exchange never creates or changes administrator authority: `admin` is issued
+  only to accounts already provisioned through the admin control plane (see
+  [auth admin provisioning](../docs/runbooks/auth-admin-provisioning.md)), and
+  a provisioned admin cannot be demoted through exchange.
 - **Logging.** Routine session logs carry the internal `userId` and role only —
   never tokens, token hashes, wallet addresses, emails, or upstream account IDs.
 - **Deployment.** Migration `202610100004` stops the previous image from

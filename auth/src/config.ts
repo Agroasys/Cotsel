@@ -61,6 +61,8 @@ export function loadConfig(): AuthConfig {
   );
   const trustedSessionExchangeApiKeysJson =
     process.env.TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON?.trim() ?? '';
+  const trustedSessionExchangeKeyPoliciesJson =
+    process.env.TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON?.trim() ?? '';
   const adminControlEnabled = envBoolean('AUTH_ADMIN_CONTROL_ENABLED', false);
   const adminControlApiKeysJson = process.env.AUTH_ADMIN_CONTROL_API_KEYS_JSON?.trim() ?? '';
   const adminControlAllowedApiKeyIds = csvEnv('AUTH_ADMIN_CONTROL_ALLOWED_API_KEY_IDS');
@@ -74,6 +76,10 @@ export function loadConfig(): AuthConfig {
     assert(
       trustedSessionExchangeApiKeysJson,
       'TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is required when TRUSTED_SESSION_EXCHANGE_ENABLED=true',
+    );
+    assert(
+      trustedSessionExchangeKeyPoliciesJson,
+      'TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON is required when TRUSTED_SESSION_EXCHANGE_ENABLED=true',
     );
   }
   assert(
@@ -124,6 +130,7 @@ export function loadConfig(): AuthConfig {
     rateLimitFailOpen: envBoolean('AUTH_RATE_LIMIT_FAIL_OPEN', false),
     trustedSessionExchangeEnabled,
     trustedSessionExchangeApiKeysJson,
+    trustedSessionExchangeKeyPoliciesJson,
     trustedSessionExchangeMaxSkewSeconds,
     trustedSessionExchangeNonceTtlSeconds,
     adminControlEnabled,

@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Pool } from 'pg';
+import { authorizeExchangeRole, ExchangeAuthority } from '../../core/exchangeAuthority';
 import { UserProfile, UserRole } from '../../types';
 import {
   USER_PROFILE_FIELDS,
@@ -30,6 +31,11 @@ export async function upsertProfile(
   return result.rows[0];
 }
 
+/**
+ * Creates or updates the profile behind a trusted session exchange. Authority
+ * is decided under the profile row locks, so a concurrent control-plane change
+ * cannot interleave between the check and the write.
+ */
 export async function upsertTrustedProfile(
   pool: Pool,
   input: {
@@ -39,7 +45,12 @@ export async function upsertTrustedProfile(
     email: string | null;
     walletAddress: string | null;
   },
+  authority: ExchangeAuthority,
 ): Promise<UserProfile> {
+  const authorize = (target: UserProfile | null, absorbed?: UserProfile) => ({
+    ...input,
+    role: authorizeExchangeRole({ authority, requestedRole: input.role, target, absorbed }),
+  });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -56,6 +67,7 @@ export async function upsertTrustedProfile(
       if (accountMatch.walletAddress && accountMatch.walletAddress !== input.walletAddress) {
         throw new Error('trusted account already has a different linked wallet');
       }
+      const merged = authorize(accountMatch, walletMatch);
 
       await client.query(
         `UPDATE user_sessions
@@ -65,13 +77,17 @@ export async function upsertTrustedProfile(
         [accountMatch.id, input.walletAddress, walletMatch.id],
       );
       await client.query(`DELETE FROM user_profiles WHERE id = $1`, [walletMatch.id]);
-      const mergedProfile = await updateTrustedProfileRow(client, accountMatch.id, input);
+      const mergedProfile = await updateTrustedProfileRow(client, accountMatch.id, merged);
       await client.query('COMMIT');
       return mergedProfile;
     }
 
     if (accountMatch) {
-      const updatedProfile = await updateTrustedProfileRow(client, accountMatch.id, input);
+      const updatedProfile = await updateTrustedProfileRow(
+        client,
+        accountMatch.id,
+        authorize(accountMatch),
+      );
       await client.query('COMMIT');
       return updatedProfile;
     }
@@ -84,12 +100,21 @@ export async function upsertTrustedProfile(
         throw new Error('walletAddress is already linked to a different account');
       }
 
-      const relinkedProfile = await updateTrustedProfileRow(client, walletMatch.id, input);
+      const relinkedProfile = await updateTrustedProfileRow(
+        client,
+        walletMatch.id,
+        authorize(walletMatch),
+      );
       await client.query('COMMIT');
       return relinkedProfile;
     }
 
-    const insertedProfile = await insertTrustedProfileRow(client, input);
+    // A null target admits only non-administrator roles, so a role is always set.
+    const inserted = authorize(null);
+    const insertedProfile = await insertTrustedProfileRow(client, {
+      ...inserted,
+      role: inserted.role as UserRole,
+    });
     await client.query('COMMIT');
     return insertedProfile;
   } catch (error) {

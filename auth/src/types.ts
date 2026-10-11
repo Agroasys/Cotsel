@@ -163,6 +163,7 @@ export interface AuthConfig {
   rateLimitFailOpen: boolean;
   trustedSessionExchangeEnabled: boolean;
   trustedSessionExchangeApiKeysJson: string;
+  trustedSessionExchangeKeyPoliciesJson: string;
   trustedSessionExchangeMaxSkewSeconds: number;
   trustedSessionExchangeNonceTtlSeconds: number;
   adminControlEnabled: boolean;

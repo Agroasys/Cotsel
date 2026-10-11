@@ -68,12 +68,13 @@ export async function findTrustedProfileByWalletAddress(
   return result.rows[0] ?? null;
 }
 
+/** A null `role` leaves the stored base role unchanged. */
 export async function updateTrustedProfileRow(
   client: PoolClient,
   profileId: string,
   input: {
     accountId: string;
-    role: UserRole;
+    role: UserRole | null;
     orgId: string | null;
     email: string | null;
     walletAddress: string | null;
@@ -84,7 +85,7 @@ export async function updateTrustedProfileRow(
      SET account_id = $2,
          wallet_address = COALESCE($3, user_profiles.wallet_address),
          email = COALESCE($4, user_profiles.email),
-         role = $5,
+         role = COALESCE($5, user_profiles.role),
          org_id = COALESCE($6, user_profiles.org_id),
          updated_at = NOW()
      WHERE id = $1
