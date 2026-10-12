@@ -78,10 +78,10 @@
     "@eslint/js": "^10.0.1",
     "bn.js": "5.2.5",
     "defu": "6.1.7",
-    "eslint": "^10.11.0",
+    "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
     "ethers": "6.17.0",
-    "globals": "^17.12.0",
+    "globals": "^17.13.0",
     "husky": "^9.1.7",
     "jest-mock": "30.5.2",
     "lint-staged": "^17.6.0",
@@ -89,9 +89,9 @@
     "pg": "8.23.1",
     "prettier": "3.9.9",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.71.0",
+    "typescript-eslint": "^8.71.1",
     "undici": "8.11.2",
-    "viem": "2.57.1"
+    "viem": "2.57.3"
   },
   "lint-staged": {
     "*.{js,cjs,mjs,ts}": [
