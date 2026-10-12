@@ -41,6 +41,21 @@ if ! grep -q 'TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is required when TRUSTED_SE
   exit 1
 fi
 
+set_env_value "$session_fixture" TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON '[{"id":"agroasys-backend","secret":"exchange-secret","active":true}]'
+if (
+  cd "$tmp_dir" &&
+  cp "$session_fixture" .env.runtime &&
+  bash "$SCRIPT" runtime >/tmp/validate-env-runtime-session.out 2>/tmp/validate-env-runtime-session.err
+); then
+  echo "expected validate-env.sh to fail when session exchange keys have no authority policy" >&2
+  exit 1
+fi
+if ! grep -q 'TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON is required when TRUSTED_SESSION_EXCHANGE_ENABLED=true' /tmp/validate-env-runtime-session.err; then
+  echo "expected trusted session exchange key policy error output" >&2
+  cat /tmp/validate-env-runtime-session.err >&2
+  exit 1
+fi
+
 settlement_fixture="$tmp_dir/settlement.env.runtime"
 make_runtime_fixture "$settlement_fixture"
 set_env_value "$settlement_fixture" GATEWAY_SETTLEMENT_INGRESS_ENABLED true

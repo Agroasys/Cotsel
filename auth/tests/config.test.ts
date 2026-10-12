@@ -94,4 +94,24 @@ describe('auth config', () => {
       });
     }
   });
+
+  test('trusted exchange requires an authority policy for its keys', () => {
+    const exchange = {
+      TRUSTED_SESSION_EXCHANGE_ENABLED: 'true',
+      TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON:
+        '[{"id":"agroasys-backend","secret":"secret","active":true}]',
+    };
+    withEnv({ ...exchange, TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON: undefined }, () => {
+      const { loadConfig } = loadConfigModule();
+      expect(() => loadConfig()).toThrow(
+        'TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON is required when TRUSTED_SESSION_EXCHANGE_ENABLED=true',
+      );
+    });
+
+    const policies = '{"agroasys-backend":{"roles":["admin"]}}';
+    withEnv({ ...exchange, TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON: policies }, () => {
+      const { loadConfig } = loadConfigModule();
+      expect(loadConfig().trustedSessionExchangeKeyPoliciesJson).toBe(policies);
+    });
+  });
 });

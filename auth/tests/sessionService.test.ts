@@ -5,6 +5,7 @@ import { createSessionService } from '../src/core/sessionService';
 import { ProfileStore } from '../src/core/profileStore';
 import { SessionRotationResult, SessionStore } from '../src/core/sessionStore';
 import { UserProfile, UserRole, UserSession, SessionIssueResult } from '../src/types';
+import { ANY_ROLE_AUTHORITY } from './helpers/exchangeAuthority';
 
 //  Helpers
 
@@ -243,6 +244,17 @@ describe('sessionService.resolve', () => {
 
     expect(await svc.resolve('session-abc')).toBeNull();
   });
+
+  test('revokes a session whose admin authority has no audited provenance', async () => {
+    const { sessionStore, profileStore } = makeStores(makeProfile());
+    sessionStore.lookup.mockResolvedValue(
+      makeActiveSession({ role: 'admin', issuedRole: 'admin', unauditedAdmin: true }),
+    );
+    const svc = createSessionService(sessionStore, profileStore, LIFETIME);
+
+    expect(await svc.resolve('session-abc')).toBeNull();
+    expect(sessionStore.revoke).toHaveBeenCalledWith('session-abc');
+  });
 });
 
 describe('sessionService.issueTrustedSession', () => {
@@ -251,20 +263,26 @@ describe('sessionService.issueTrustedSession', () => {
     const { sessionStore, profileStore } = makeStores(profile);
     const svc = createSessionService(sessionStore, profileStore, LIFETIME);
 
-    const result = await svc.issueTrustedSession({
-      accountId: 'agroasys-user:42',
-      role: 'admin',
-      email: 'ops@example.com',
-      walletAddress: null,
-    });
+    const result = await svc.issueTrustedSession(
+      {
+        accountId: 'agroasys-user:42',
+        role: 'admin',
+        email: 'ops@example.com',
+        walletAddress: null,
+      },
+      ANY_ROLE_AUTHORITY,
+    );
 
     expect(result.sessionId).toBe('session-abc');
-    expect(profileStore.upsertTrustedIdentity).toHaveBeenCalledWith({
-      accountId: 'agroasys-user:42',
-      role: 'admin',
-      email: 'ops@example.com',
-      walletAddress: null,
-    });
+    expect(profileStore.upsertTrustedIdentity).toHaveBeenCalledWith(
+      {
+        accountId: 'agroasys-user:42',
+        role: 'admin',
+        email: 'ops@example.com',
+        walletAddress: null,
+      },
+      ANY_ROLE_AUTHORITY,
+    );
     expect(sessionStore.issue).toHaveBeenCalledTimes(1);
   });
 });
@@ -286,7 +304,11 @@ describe('session lifetime policy', () => {
     const svc = createSessionService(sessionStore, profileStore, LIFETIME);
 
     await expect(
-      svc.issueTrustedSession({ accountId: 'agroasys-user:42', role: 'buyer' }, 3601),
+      svc.issueTrustedSession(
+        { accountId: 'agroasys-user:42', role: 'buyer' },
+        ANY_ROLE_AUTHORITY,
+        3601,
+      ),
     ).rejects.toThrow('ttlSeconds must be an integer between 1 and 3600');
     expect(profileStore.upsertTrustedIdentity).not.toHaveBeenCalled();
     expect(sessionStore.issue).not.toHaveBeenCalled();

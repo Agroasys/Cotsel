@@ -47,6 +47,11 @@ export interface UserProfile {
   email: string | null;
   role: UserRole;
   baseRole: UserRole;
+  /**
+   * True when a durable `admin` base role has audited control-plane
+   * provenance. Absent or false means the base role confers no admin authority.
+   */
+  adminProvisioned?: boolean;
   orgId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -73,6 +78,8 @@ export interface UserSession {
   signerAuthorizations: OperatorSignerAuthorization[];
   issuedRole?: UserRole;
   active?: boolean;
+  /** The profile's durable `admin` base role lacks audited provenance. */
+  unauditedAdmin?: boolean;
   breakGlass?: BreakGlassSessionContext;
   issuedAt: number;
   expiresAt: number;
@@ -163,6 +170,7 @@ export interface AuthConfig {
   rateLimitFailOpen: boolean;
   trustedSessionExchangeEnabled: boolean;
   trustedSessionExchangeApiKeysJson: string;
+  trustedSessionExchangeKeyPoliciesJson: string;
   trustedSessionExchangeMaxSkewSeconds: number;
   trustedSessionExchangeNonceTtlSeconds: number;
   adminControlEnabled: boolean;

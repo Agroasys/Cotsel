@@ -4,6 +4,21 @@
 import { Pool, PoolClient } from 'pg';
 import { UserProfile, UserRole } from '../../types';
 
+/**
+ * True when the latest audited control-plane role decision for the profile in
+ * `user_profiles` granted durable admin. The admin control plane records one
+ * in the same transaction as every provisioning or role change; nothing else
+ * does, so an `admin` row without it has no audited provenance.
+ */
+export const AUDITED_ADMIN_SQL = `COALESCE((
+    SELECT audit_event.new_role = 'admin'
+    FROM auth_admin_audit_events AS audit_event
+    WHERE audit_event.account_id = user_profiles.account_id
+      AND audit_event.action IN ('profile_provisioned', 'profile_role_updated')
+    ORDER BY audit_event.created_at DESC
+    LIMIT 1
+  ), FALSE)`;
+
 export const USER_PROFILE_FIELDS = `
   id,
   account_id AS "accountId",
@@ -18,6 +33,7 @@ export const USER_PROFILE_FIELDS = `
     ELSE role
   END AS role,
   role AS "baseRole",
+  CASE WHEN role = 'admin' THEN ${AUDITED_ADMIN_SQL} ELSE FALSE END AS "adminProvisioned",
   org_id AS "orgId",
   created_at AS "createdAt",
   updated_at AS "updatedAt",
@@ -68,12 +84,13 @@ export async function findTrustedProfileByWalletAddress(
   return result.rows[0] ?? null;
 }
 
+/** A null `role` leaves the stored base role unchanged. */
 export async function updateTrustedProfileRow(
   client: PoolClient,
   profileId: string,
   input: {
     accountId: string;
-    role: UserRole;
+    role: UserRole | null;
     orgId: string | null;
     email: string | null;
     walletAddress: string | null;
@@ -84,7 +101,7 @@ export async function updateTrustedProfileRow(
      SET account_id = $2,
          wallet_address = COALESCE($3, user_profiles.wallet_address),
          email = COALESCE($4, user_profiles.email),
-         role = $5,
+         role = COALESCE($5, user_profiles.role),
          org_id = COALESCE($6, user_profiles.org_id),
          updated_at = NOW()
      WHERE id = $1

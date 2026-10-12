@@ -8,6 +8,7 @@ import {
   SessionIssueResult,
   SessionLifetimePolicy,
 } from '../types';
+import { ExchangeAuthority } from './exchangeAuthority';
 import { ProfileStore } from './profileStore';
 import { SessionStore } from './sessionStore';
 import {
@@ -31,10 +32,13 @@ export interface SessionService {
   ): Promise<SessionIssueResult>;
 
   /**
-   * Issues a session for a trusted upstream account identity.
+   * Issues a session for a trusted upstream account identity, within the
+   * authority of the exchange key that asserted it. Administrator authority is
+   * never created or changed here; it must already be provisioned.
    */
   issueTrustedSession(
     identity: TrustedSessionIdentity,
+    authority: ExchangeAuthority,
     ttlSeconds?: number,
   ): Promise<SessionIssueResult>;
 
@@ -94,6 +98,15 @@ export function createSessionService(
     if (!session) return null;
     if (session.revokedAt !== null) return null;
     if (session.expiresAt <= nowSeconds()) return null;
+    if (session.unauditedAdmin) {
+      await sessions.revoke(sessionId);
+      incrementSessionRevoked();
+      Logger.warn('Session revoked because administrator authority has no audited provenance', {
+        eventType: 'auth.unaudited_admin_session_revoked',
+        userId: session.userId,
+      });
+      return null;
+    }
     if (session.active === false) {
       await sessions.revoke(sessionId);
       incrementSessionRevoked();
@@ -145,9 +158,9 @@ export function createSessionService(
       return result;
     },
 
-    async issueTrustedSession(identity, ttlSeconds) {
+    async issueTrustedSession(identity, authority, ttlSeconds) {
       const ttl = resolveTtl(ttlSeconds);
-      const profile = await profiles.upsertTrustedIdentity(identity);
+      const profile = await profiles.upsertTrustedIdentity(identity, authority);
       if (!profile.active) {
         throw new Error('User profile is deactivated');
       }
@@ -157,6 +170,7 @@ export function createSessionService(
       Logger.info('Trusted session issued', {
         userId: profile.id,
         role: profile.role,
+        exchangeKeyId: authority.keyId,
       });
       return result;
     },

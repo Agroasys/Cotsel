@@ -20,6 +20,7 @@ import { createAdminService } from './core/adminService';
 import { createAdminControlApiKeyLookup } from './core/adminControlIdentity';
 import { createPostgresOperatorSignerStore } from './core/operatorSignerStore';
 import { SessionController } from './api/controller';
+import { createExchangeAuthorityLookup } from './core/exchangeAuthority';
 import { AdminController } from './api/adminController';
 import { createRouter } from './api/routes';
 import { authRateLimitPolicy } from './httpSecurity';
@@ -158,7 +159,16 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  const sessionController = new SessionController(sessionService, config.sessionTtlSeconds);
+  const sessionController = new SessionController(
+    sessionService,
+    config.sessionTtlSeconds,
+    config.trustedSessionExchangeEnabled
+      ? createExchangeAuthorityLookup(
+          config.trustedSessionExchangeApiKeysJson,
+          config.trustedSessionExchangeKeyPoliciesJson,
+        )
+      : undefined,
+  );
   const adminController = config.adminControlEnabled
     ? new AdminController(
         createAdminService(profileStore, config.adminBreakGlassMaxTtlSeconds, operatorSignerStore),

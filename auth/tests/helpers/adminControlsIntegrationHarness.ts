@@ -14,6 +14,7 @@ import {
 } from '@agroasys/shared-auth/serviceAuth';
 import { createPostgresNonceStore } from '@agroasys/shared-auth/nonceStore';
 import { createAdminService } from '../../src/core/adminService';
+import { createExchangeAuthorityLookup } from '../../src/core/exchangeAuthority';
 import { createPostgresProfileStore } from '../../src/core/profileStore';
 import { createPostgresSessionStore } from '../../src/core/sessionStore';
 import { createSessionService } from '../../src/core/sessionService';
@@ -151,12 +152,35 @@ export async function withPostgres(fn: (pool: Pool) => Promise<void>): Promise<v
   }
 }
 
+/** Trusted-exchange keys wired by {@link startAdminApp}, with their role ceilings. */
+export const EXCHANGE_KEYS = {
+  member: {
+    id: 'exchange-member',
+    secret: 'exchange-member-secret',
+    roles: ['buyer', 'supplier'],
+    orgId: null,
+  },
+  operator: {
+    id: 'exchange-operator',
+    secret: 'exchange-operator-secret',
+    roles: ['admin'],
+    orgId: null,
+  },
+  pinned: {
+    id: 'exchange-pinned',
+    secret: 'exchange-pinned-secret',
+    roles: ['buyer', 'supplier', 'admin'],
+    orgId: 'org-a',
+  },
+} as const;
+
 export function signedHeaders(input: {
   method: string;
   path: string;
   body: string;
   nonce: string;
   timestamp?: string;
+  apiKey?: { id: string; secret: string };
 }): Record<string, string> {
   const timestamp = input.timestamp ?? String(Math.floor(Date.now() / 1000));
   const bodySha256 = Buffer.from(input.body).toString('utf8');
@@ -171,10 +195,10 @@ export function signedHeaders(input: {
   return {
     Accept: 'application/json',
     'Content-Type': 'application/json',
-    'X-Api-Key': API_KEY_ID,
+    'X-Api-Key': input.apiKey?.id ?? API_KEY_ID,
     'X-Timestamp': timestamp,
     'X-Nonce': input.nonce,
-    'X-Signature': signServiceAuthCanonicalString(API_SECRET, canonical),
+    'X-Signature': signServiceAuthCanonicalString(input.apiKey?.secret ?? API_SECRET, canonical),
   };
 }
 
@@ -204,12 +228,38 @@ export async function startAdminApp(pool: Pool) {
         : undefined,
     consumeNonce: nonceStore.consume,
   });
-  const router = createRouter(new SessionController(sessionService), sessionService, {
-    adminController: new AdminController(
-      createAdminService(profiles, 3600, createPostgresOperatorSignerStore(pool)),
-    ),
-    adminControlMiddleware: adminMiddleware,
+  const exchangeKeys = Object.values(EXCHANGE_KEYS);
+  const exchangeNonceStore = createPostgresNonceStore({
+    tableName: 'trusted_session_exchange_nonces',
+    query: (sql, params) => pool.query(sql, params),
   });
+  const trustedSessionExchangeMiddleware = createServiceAuthMiddleware({
+    enabled: true,
+    maxSkewSeconds: 300,
+    nonceTtlSeconds: 600,
+    lookupApiKey: (key) => {
+      const match = exchangeKeys.find((candidate) => candidate.id === key);
+      return match ? { id: match.id, secret: match.secret, active: true } : undefined;
+    },
+    consumeNonce: exchangeNonceStore.consume,
+  });
+  const exchangeAuthorityFor = createExchangeAuthorityLookup(
+    JSON.stringify(exchangeKeys.map(({ id, secret }) => ({ id, secret, active: true }))),
+    JSON.stringify(
+      Object.fromEntries(exchangeKeys.map(({ id, roles, orgId }) => [id, { roles, orgId }])),
+    ),
+  );
+  const router = createRouter(
+    new SessionController(sessionService, 86400, exchangeAuthorityFor),
+    sessionService,
+    {
+      adminController: new AdminController(
+        createAdminService(profiles, 3600, createPostgresOperatorSignerStore(pool)),
+      ),
+      adminControlMiddleware: adminMiddleware,
+      trustedSessionExchangeMiddleware,
+    },
+  );
   const app = express();
   app.use(
     express.json({
