@@ -2,12 +2,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
-  authorizeExchangeRole,
+  authorizeExchange,
   createExchangeAuthorityLookup,
   ExchangeAuthority,
   ExchangeAuthorityError,
   parseExchangeKeyPolicies,
-  resolveExchangeOrgId,
 } from '../src/core/exchangeAuthority';
 import { UserProfile, UserRole } from '../src/types';
 
@@ -21,8 +20,17 @@ const OPERATOR_KEY: ExchangeAuthority = {
   roles: ['admin'],
   orgId: null,
 };
+const PINNED_KEY: ExchangeAuthority = {
+  keyId: 'pinned-exchange',
+  roles: ['buyer', 'supplier', 'admin'],
+  orgId: 'org-a',
+};
 
-function profile(baseRole: UserRole, breakGlassAdmin = false): UserProfile {
+function profile(
+  baseRole: UserRole,
+  options: { breakGlassAdmin?: boolean; audited?: boolean; orgId?: string | null } = {},
+): UserProfile {
+  const { breakGlassAdmin = false, audited = baseRole === 'admin', orgId = null } = options;
   return {
     id: 'profile-1',
     accountId: 'agroasys-user:1',
@@ -30,7 +38,8 @@ function profile(baseRole: UserRole, breakGlassAdmin = false): UserProfile {
     email: null,
     role: breakGlassAdmin ? 'admin' : baseRole,
     baseRole,
-    orgId: null,
+    adminProvisioned: baseRole === 'admin' && audited,
+    orgId,
     createdAt: new Date(0),
     updatedAt: new Date(0),
     active: true,
@@ -46,7 +55,27 @@ function profile(baseRole: UserRole, breakGlassAdmin = false): UserProfile {
   };
 }
 
-describe('authorizeExchangeRole', () => {
+function decide(
+  authority: ExchangeAuthority,
+  requestedRole: UserRole,
+  target: UserProfile | null,
+  extra: { requestedOrgId?: string | null; absorbed?: UserProfile } = {},
+) {
+  return authorizeExchange({
+    authority,
+    requestedRole,
+    requestedOrgId: extra.requestedOrgId ?? null,
+    target,
+    absorbed: extra.absorbed,
+  });
+}
+
+function expectRefused(attempt: () => unknown, message: string): void {
+  expect(attempt).toThrow(ExchangeAuthorityError);
+  expect(attempt).toThrow(message);
+}
+
+describe('authorizeExchange roles', () => {
   test.each([
     { name: 'a new member', authority: MEMBER_KEY, role: 'buyer', target: null, stored: 'buyer' },
     {
@@ -57,7 +86,7 @@ describe('authorizeExchangeRole', () => {
       stored: 'supplier',
     },
     {
-      name: 'a provisioned admin',
+      name: 'an audited admin',
       authority: OPERATOR_KEY,
       role: 'admin',
       target: profile('admin'),
@@ -67,11 +96,11 @@ describe('authorizeExchangeRole', () => {
       name: 'an active break-glass admin',
       authority: OPERATOR_KEY,
       role: 'admin',
-      target: profile('buyer', true),
+      target: profile('buyer', { breakGlassAdmin: true }),
       stored: null,
     },
   ] as const)('admits $name', ({ authority, role, target, stored }) => {
-    expect(authorizeExchangeRole({ authority, requestedRole: role, target })).toBe(stored);
+    expect(decide(authority, role, target).role).toBe(stored);
   });
 
   test.each([
@@ -97,6 +126,13 @@ describe('authorizeExchangeRole', () => {
       message: 'must be provisioned through the admin control plane',
     },
     {
+      name: 'an admin row without audited provenance',
+      authority: OPERATOR_KEY,
+      role: 'admin',
+      target: profile('admin', { audited: false }),
+      message: 'must be provisioned through the admin control plane',
+    },
+    {
       name: 'demoting a provisioned admin',
       authority: { ...MEMBER_KEY, roles: ['buyer', 'supplier', 'admin'] },
       role: 'buyer',
@@ -107,43 +143,94 @@ describe('authorizeExchangeRole', () => {
       name: 'a member key reaching break-glass admin',
       authority: MEMBER_KEY,
       role: 'buyer',
-      target: profile('buyer', true),
+      target: profile('buyer', { breakGlassAdmin: true }),
       message: 'may not issue the admin role',
     },
   ] as const)('refuses $name', ({ authority, role, target, message }) => {
-    const attempt = () =>
-      authorizeExchangeRole({
-        authority: authority as ExchangeAuthority,
-        requestedRole: role,
-        target,
-      });
-    expect(attempt).toThrow(ExchangeAuthorityError);
-    expect(attempt).toThrow(message);
+    expectRefused(() => decide(authority as ExchangeAuthority, role, target), message);
   });
 
   test('refuses to absorb a profile holding administrator authority', () => {
-    expect(() =>
-      authorizeExchangeRole({
-        authority: OPERATOR_KEY,
-        requestedRole: 'admin',
-        target: profile('admin'),
-        absorbed: profile('supplier', true),
-      }),
-    ).toThrow('cannot merge a profile that holds administrator authority');
+    expectRefused(
+      () =>
+        decide(OPERATOR_KEY, 'admin', profile('admin'), {
+          absorbed: profile('supplier', { breakGlassAdmin: true }),
+        }),
+      'cannot merge a profile that holds administrator authority',
+    );
   });
 });
 
-describe('resolveExchangeOrgId', () => {
-  test('passes the asserted organization through an unbound key', () => {
-    expect(resolveExchangeOrgId(MEMBER_KEY, 'org-1')).toBe('org-1');
-    expect(resolveExchangeOrgId(MEMBER_KEY, null)).toBeNull();
+describe('authorizeExchange organizations', () => {
+  test('passes the requested organization through an unbound key', () => {
+    expect(decide(MEMBER_KEY, 'buyer', null, { requestedOrgId: 'org-1' }).orgId).toBe('org-1');
+    expect(decide(MEMBER_KEY, 'buyer', null).orgId).toBeNull();
   });
 
-  test('pins a bound key to its organization', () => {
-    const bound = { ...MEMBER_KEY, orgId: 'org-1' };
-    expect(resolveExchangeOrgId(bound, null)).toBe('org-1');
-    expect(resolveExchangeOrgId(bound, 'org-1')).toBe('org-1');
-    expect(() => resolveExchangeOrgId(bound, 'org-2')).toThrow(ExchangeAuthorityError);
+  test('pins new and org-less member profiles to the key organization', () => {
+    expect(decide(PINNED_KEY, 'buyer', null).orgId).toBe('org-a');
+    expect(decide(PINNED_KEY, 'buyer', profile('buyer')).orgId).toBe('org-a');
+    expect(decide(PINNED_KEY, 'buyer', profile('buyer', { orgId: 'org-a' })).orgId).toBe('org-a');
+  });
+
+  test('leaves an audited admin organization untouched', () => {
+    expect(decide(PINNED_KEY, 'admin', profile('admin', { orgId: 'org-a' }))).toEqual({
+      role: null,
+      orgId: null,
+    });
+  });
+
+  test.each([
+    {
+      name: 'a request naming another organization',
+      target: profile('buyer', { orgId: 'org-a' }),
+      role: 'buyer',
+      requestedOrgId: 'org-b',
+      message: 'not authorized for this organization',
+    },
+    {
+      name: 'an omitted organization for another organization admin',
+      target: profile('admin', { orgId: 'org-b' }),
+      role: 'admin',
+      requestedOrgId: null,
+      message: 'not authorized for this organization',
+    },
+    {
+      name: 'an existing member in another organization',
+      target: profile('supplier', { orgId: 'org-b' }),
+      role: 'supplier',
+      requestedOrgId: null,
+      message: 'not authorized for this organization',
+    },
+    {
+      name: 'an org-less admin it would re-home',
+      target: profile('admin'),
+      role: 'admin',
+      requestedOrgId: null,
+      message: 'only through the admin control plane',
+    },
+  ] as const)('a pinned key refuses $name', ({ target, role, requestedOrgId, message }) => {
+    expectRefused(() => decide(PINNED_KEY, role, target, { requestedOrgId }), message);
+  });
+
+  test('a pinned key refuses to absorb a legacy profile from another organization', () => {
+    expectRefused(
+      () =>
+        decide(PINNED_KEY, 'buyer', profile('buyer', { orgId: 'org-a' }), {
+          absorbed: profile('buyer', { orgId: 'org-b' }),
+        }),
+      'not authorized for this organization',
+    );
+  });
+
+  test('an unbound key cannot move an admin to another organization', () => {
+    expectRefused(
+      () =>
+        decide(OPERATOR_KEY, 'admin', profile('admin', { orgId: 'org-b' }), {
+          requestedOrgId: 'org-c',
+        }),
+      'only through the admin control plane',
+    );
   });
 });
 

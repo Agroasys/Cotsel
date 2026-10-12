@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Pool } from 'pg';
+import { hashSessionToken } from '../src/core/sessionStore';
 import {
   dockerAvailable,
   EXCHANGE_KEYS,
@@ -40,8 +41,23 @@ async function post(
   return { status: response.status, json: await response.json() };
 }
 
-const exchange = (app: App, apiKey: ExchangeKey, accountId: string, role: string) =>
-  post(app, EXCHANGE_PATH, { accountId, role }, apiKey);
+const exchange = (
+  app: App,
+  apiKey: ExchangeKey,
+  accountId: string,
+  role: string,
+  extra: Record<string, unknown> = {},
+) => post(app, EXCHANGE_PATH, { accountId, role, ...extra }, apiKey);
+
+async function profileState(pool: Pool, accountId: string) {
+  const result = await pool.query<{ role: string; org_id: string | null; sessions: number }>(
+    `SELECT role, org_id,
+            (SELECT COUNT(*)::int FROM user_sessions WHERE user_id = user_profiles.id) AS sessions
+     FROM user_profiles WHERE account_id = $1`,
+    [accountId],
+  );
+  return result.rows[0];
+}
 
 async function storedRole(pool: Pool, accountId: string): Promise<string | undefined> {
   const result = await pool.query<{ role: string }>(
@@ -114,6 +130,130 @@ describe('trusted exchange authority integration', () => {
           expect(demoted.status).toBe(201);
           await expect(app.sessionService.resolve(adminSessionId)).resolves.toBeNull();
           expect((await exchange(app, operator, 'agroasys-user:ops-1', 'admin')).status).toBe(403);
+        } finally {
+          await app.close();
+        }
+      });
+    },
+    120000,
+  );
+
+  integrationTest(
+    'an admin created by the previous exchange is refused until provisioned',
+    async () => {
+      await withPostgres(async (pool) => {
+        const app = await startAdminApp(pool);
+        try {
+          const { operator } = EXCHANGE_KEYS;
+          const accountId = 'agroasys-user:legacy-admin';
+          // The state the previous exchange left: an admin row and session with
+          // no control-plane audit event.
+          const legacy = await pool.query<{ id: string }>(
+            `INSERT INTO user_profiles (account_id, role) VALUES ($1, 'admin') RETURNING id`,
+            [accountId],
+          );
+          const now = Math.floor(Date.now() / 1000);
+          await pool.query(
+            `INSERT INTO user_sessions (
+               session_token_hash, user_id, role, issued_at, expires_at, lineage_started_at
+             ) VALUES ($1, $2, 'admin', $3::bigint, $3::bigint + 3600, $3::bigint)`,
+            [hashSessionToken('legacy-admin-session'), legacy.rows[0].id, now],
+          );
+
+          await expect(app.sessionService.resolve('legacy-admin-session')).resolves.toBeNull();
+          const revoked = await pool.query(
+            `SELECT revoked_at FROM user_sessions WHERE session_token_hash = $1`,
+            [hashSessionToken('legacy-admin-session')],
+          );
+          expect(revoked.rows[0].revoked_at).not.toBeNull();
+
+          const refused = await exchange(app, operator, accountId, 'admin');
+          expect(refused.status).toBe(403);
+          expect(refused.json.message).toContain('admin control plane');
+          expect(await profileState(pool, accountId)).toEqual({
+            role: 'admin',
+            org_id: null,
+            sessions: 1,
+          });
+
+          const provisioned = await post(app, PROVISION_PATH, {
+            accountId,
+            role: 'admin',
+            reason: 'SEC-1102 audit legacy exchange-created administrator',
+          });
+          expect(provisioned.status).toBe(201);
+          const admitted = await exchange(app, operator, accountId, 'admin');
+          expect(admitted.status).toBe(201);
+          await expect(
+            app.sessionService.resolve(admitted.json.data!.sessionId),
+          ).resolves.toMatchObject({ role: 'admin' });
+        } finally {
+          await app.close();
+        }
+      });
+    },
+    120000,
+  );
+
+  integrationTest(
+    'an organization-bound key cannot reach another organization',
+    async () => {
+      await withPostgres(async (pool) => {
+        const app = await startAdminApp(pool);
+        try {
+          const { pinned } = EXCHANGE_KEYS;
+          for (const [accountId, orgId] of [
+            ['agroasys-user:org-b-admin', 'org-b'],
+            ['agroasys-user:org-a-admin', 'org-a'],
+          ]) {
+            const provisioned = await post(app, PROVISION_PATH, {
+              accountId,
+              role: 'admin',
+              orgId,
+              reason: `SEC-1103 provision ${orgId} administrator`,
+            });
+            expect(provisioned.status).toBe(201);
+          }
+
+          for (const extra of [{}, { orgId: 'org-b' }]) {
+            const refused = await exchange(
+              app,
+              pinned,
+              'agroasys-user:org-b-admin',
+              'admin',
+              extra,
+            );
+            expect(refused.status).toBe(403);
+            expect(refused.json.message).toContain('not authorized for this organization');
+          }
+          expect(await profileState(pool, 'agroasys-user:org-b-admin')).toEqual({
+            role: 'admin',
+            org_id: 'org-b',
+            sessions: 0,
+          });
+
+          expect((await exchange(app, pinned, 'agroasys-user:org-a-admin', 'admin')).status).toBe(
+            201,
+          );
+
+          // A legacy wallet-only profile in another organization cannot be
+          // relinked or merged through the bound key.
+          const wallet = '0x00000000000000000000000000000000000000dd';
+          await pool.query(
+            `INSERT INTO user_profiles (account_id, wallet_address, role, org_id)
+             VALUES (gen_random_uuid()::text, $1, 'buyer', 'org-b')`,
+            [wallet],
+          );
+          const relink = await exchange(app, pinned, 'agroasys-user:wallet-owner', 'buyer', {
+            walletAddress: wallet,
+          });
+          expect(relink.status).toBe(403);
+          expect(await profileState(pool, 'agroasys-user:wallet-owner')).toBeUndefined();
+          const legacy = await pool.query(
+            `SELECT org_id FROM user_profiles WHERE wallet_address = $1`,
+            [wallet],
+          );
+          expect(legacy.rows).toEqual([{ org_id: 'org-b' }]);
         } finally {
           await app.close();
         }

@@ -244,6 +244,17 @@ describe('sessionService.resolve', () => {
 
     expect(await svc.resolve('session-abc')).toBeNull();
   });
+
+  test('revokes a session whose admin authority has no audited provenance', async () => {
+    const { sessionStore, profileStore } = makeStores(makeProfile());
+    sessionStore.lookup.mockResolvedValue(
+      makeActiveSession({ role: 'admin', issuedRole: 'admin', unauditedAdmin: true }),
+    );
+    const svc = createSessionService(sessionStore, profileStore, LIFETIME);
+
+    expect(await svc.resolve('session-abc')).toBeNull();
+    expect(sessionStore.revoke).toHaveBeenCalledWith('session-abc');
+  });
 });
 
 describe('sessionService.issueTrustedSession', () => {
@@ -269,31 +280,10 @@ describe('sessionService.issueTrustedSession', () => {
         role: 'admin',
         email: 'ops@example.com',
         walletAddress: null,
-        orgId: null,
       },
       ANY_ROLE_AUTHORITY,
     );
     expect(sessionStore.issue).toHaveBeenCalledTimes(1);
-  });
-
-  test('binds the session to the exchange key organization', async () => {
-    const { sessionStore, profileStore } = makeStores(makeProfile());
-    const svc = createSessionService(sessionStore, profileStore, LIFETIME);
-    const orgBound = { ...ANY_ROLE_AUTHORITY, orgId: 'org-agroasys' };
-
-    await svc.issueTrustedSession({ accountId: 'agroasys-user:42', role: 'buyer' }, orgBound);
-    expect(profileStore.upsertTrustedIdentity).toHaveBeenLastCalledWith(
-      expect.objectContaining({ orgId: 'org-agroasys' }),
-      orgBound,
-    );
-
-    await expect(
-      svc.issueTrustedSession(
-        { accountId: 'agroasys-user:42', role: 'buyer', orgId: 'org-other' },
-        orgBound,
-      ),
-    ).rejects.toThrow('not authorized for this organization');
-    expect(profileStore.upsertTrustedIdentity).toHaveBeenCalledTimes(1);
   });
 });
 

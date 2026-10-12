@@ -113,6 +113,7 @@ export function normalizeSessionRow(row: SessionRow): UserSession {
     role: row.role,
     issuedRole: row.issuedRole,
     active: row.active,
+    unauditedAdmin: row.unauditedAdmin,
     capabilities: deriveOperatorCapabilities(row.role),
     signerAuthorizations: row.role === 'admin' ? [...(row.signerAuthorizations ?? [])] : [],
     breakGlass: normalizeBreakGlassContext(row),

@@ -14,6 +14,7 @@ function buildProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     email: 'ops@example.com',
     role: 'admin',
     baseRole: 'admin',
+    adminProvisioned: true,
     orgId: 'org-1',
     createdAt: new Date('2026-04-05T00:00:00.000Z'),
     updatedAt: new Date('2026-04-05T00:00:00.000Z'),
@@ -206,7 +207,7 @@ describe('upsertTrustedProfile', () => {
       '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
       'ops@example.com',
       null,
-      'org-1',
+      null,
     ]);
     expect(query).toHaveBeenLastCalledWith('COMMIT');
   });

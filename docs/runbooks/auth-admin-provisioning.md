@@ -10,13 +10,39 @@ reactivation, durable role changes, and durable admin revocation. Normal
 operator dashboard session issuance remains owned by `agroasys-backend` through
 the signed `POST /session/exchange/agroasys` route.
 
-Session exchange never creates, promotes, or demotes administrator authority.
-An exchange requesting `admin` succeeds only when this runbook has already
-provisioned the account as a durable admin (or an active break-glass grant
-covers it) and the exchange key's policy in
-`TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON` includes `admin`. Otherwise it
-returns `403`. Provision each operator here before their first dashboard
-session; demotion here revokes their active sessions.
+Session exchange never creates, promotes, demotes, or re-homes administrator
+authority. An exchange requesting `admin` succeeds only when the account's
+latest provisioning or role-change event from this runbook granted `admin` (or
+an active break-glass grant covers it), the exchange key's policy in
+`TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON` includes `admin`, and any
+organization the key is bound to matches the account's. Otherwise it returns
+`403`. Provision each operator here before their first dashboard session;
+demotion here revokes their active sessions.
+
+### Upgrade: administrators created by earlier exchange
+
+Earlier releases let session exchange write the `admin` role directly, without
+an audit event. After upgrading, those accounts have no audited provenance:
+exchange refuses them and their existing sessions are revoked on next use. List
+them through the approved production database access path:
+
+```sql
+SELECT profile.account_id
+FROM user_profiles AS profile
+WHERE profile.role = 'admin'
+  AND COALESCE((
+    SELECT event.new_role = 'admin'
+    FROM auth_admin_audit_events AS event
+    WHERE event.account_id = profile.account_id
+      AND event.action IN ('profile_provisioned', 'profile_role_updated')
+    ORDER BY event.created_at DESC
+    LIMIT 1
+  ), FALSE) = FALSE;
+```
+
+Re-provision each account that should keep administrator authority through this
+runbook, with its approved ticket. Provision any other listed account with its
+correct non-admin role.
 
 ## Authority
 

@@ -108,8 +108,8 @@ export function createExchangeAuthorityLookup(
   };
 }
 
-/** Applies the key's organization binding to the asserted organization. */
-export function resolveExchangeOrgId(
+/** Applies the key's organization binding to the organization in the request. */
+function resolveRequestedOrgId(
   authority: ExchangeAuthority,
   requestedOrgId: string | null,
 ): string | null {
@@ -122,34 +122,80 @@ export function resolveExchangeOrgId(
   return authority.orgId;
 }
 
-function hasAdminAuthority(profile: UserProfile): boolean {
-  return profile.role === 'admin';
+/**
+ * Durable administrator authority counts only when the latest audited
+ * control-plane role decision granted it (`adminProvisioned`). An `admin` row
+ * without that provenance, such as one written by the previous exchange,
+ * confers nothing. Active break-glass elevation is itself control-plane only.
+ */
+export function hasAdminAuthority(profile: UserProfile): boolean {
+  if (profile.role !== 'admin') {
+    return false;
+  }
+  return profile.baseRole !== 'admin' || profile.adminProvisioned === true;
+}
+
+/**
+ * Checks one existing profile the exchange would update or absorb against the
+ * key's organization binding. Administrator organization changes belong to
+ * the audited control plane.
+ */
+function assertOrganization(
+  authority: ExchangeAuthority,
+  profile: UserProfile,
+  orgId: string | null,
+): void {
+  if (authority.orgId !== null && profile.orgId !== null && profile.orgId !== authority.orgId) {
+    throw new ExchangeAuthorityError('Exchange key is not authorized for this organization');
+  }
+  if (
+    (profile.baseRole === 'admin' || hasAdminAuthority(profile)) &&
+    orgId !== null &&
+    orgId !== profile.orgId
+  ) {
+    throw new ExchangeAuthorityError(
+      'Administrator organization can be changed only through the admin control plane',
+    );
+  }
+}
+
+export interface ExchangeProfileWrite {
+  /** Base role to persist, or null to leave the stored role unchanged. */
+  role: UserRole | null;
+  /** Organization to persist, or null to leave the stored organization unchanged. */
+  orgId: string | null;
 }
 
 /**
  * Decides whether a trusted exchange may issue `requestedRole` for `target`,
- * and which durable base role to store. The exchange never creates, widens,
- * or narrows administrator authority: that is provisioned only through the
- * audited admin control plane. `target` is the profile the exchange will
- * update, or null when it will insert one; `absorbed` is a legacy wallet
- * profile the exchange would merge into `target` and delete.
- *
- * Returns the base role to persist, or null to leave the stored role as is.
+ * and what it may write. The exchange never creates, widens, narrows, or
+ * re-homes administrator authority: that belongs to the audited admin control
+ * plane. `target` is the locked profile the exchange will update, or null when
+ * it will insert one; `absorbed` is a locked legacy wallet profile it would
+ * merge into `target` and delete. Call it before any write.
  */
-export function authorizeExchangeRole(input: {
+export function authorizeExchange(input: {
   authority: ExchangeAuthority;
   requestedRole: UserRole;
+  requestedOrgId: string | null;
   target: UserProfile | null;
   absorbed?: UserProfile | null;
-}): UserRole | null {
+}): ExchangeProfileWrite {
   const { authority, requestedRole, target, absorbed } = input;
   if (!authority.roles.includes(requestedRole)) {
     throw new ExchangeAuthorityError(`Exchange key may not issue the ${requestedRole} role`);
   }
-  if (absorbed && (absorbed.baseRole === 'admin' || hasAdminAuthority(absorbed))) {
-    throw new ExchangeAuthorityError(
-      'Session exchange cannot merge a profile that holds administrator authority',
-    );
+  const orgId = resolveRequestedOrgId(authority, input.requestedOrgId);
+  if (absorbed) {
+    if (absorbed.baseRole === 'admin' || hasAdminAuthority(absorbed)) {
+      throw new ExchangeAuthorityError(
+        'Session exchange cannot merge a profile that holds administrator authority',
+      );
+    }
+    assertOrganization(authority, absorbed, orgId);
+  }
+  if (target) {
+    assertOrganization(authority, target, orgId);
   }
 
   if (requestedRole === 'admin') {
@@ -158,7 +204,7 @@ export function authorizeExchangeRole(input: {
         'Administrator authority must be provisioned through the admin control plane',
       );
     }
-    return null;
+    return { role: null, orgId: null };
   }
 
   if (target?.baseRole === 'admin') {
@@ -171,5 +217,5 @@ export function authorizeExchangeRole(input: {
   if (target && hasAdminAuthority(target) && !authority.roles.includes('admin')) {
     throw new ExchangeAuthorityError('Exchange key may not issue the admin role');
   }
-  return requestedRole;
+  return { role: requestedRole, orgId };
 }

@@ -3,6 +3,7 @@
  */
 import { Pool, PoolClient } from 'pg';
 import { UserProfile, UserSession } from '../../types';
+import { AUDITED_ADMIN_SQL } from './profileRows';
 import { normalizeSessionRow, SessionRow } from './sessionNormalization';
 
 export interface SessionInsert {
@@ -57,6 +58,10 @@ export async function findSessionByTokenHash(
             END AS role,
             user_sessions.role AS "issuedRole",
             user_profiles.active AS active,
+            CASE
+              WHEN user_profiles.role = 'admin' THEN NOT ${AUDITED_ADMIN_SQL}
+              ELSE FALSE
+            END AS "unauditedAdmin",
             user_profiles.break_glass_role AS "breakGlassRole",
             user_profiles.break_glass_expires_at AS "breakGlassExpiresAt",
             user_profiles.break_glass_granted_at AS "breakGlassGrantedAt",

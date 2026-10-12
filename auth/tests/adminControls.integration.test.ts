@@ -388,9 +388,23 @@ describe('admin controls persistence integration', () => {
       await withPostgres(async (pool) => {
         const app = await startAdminApp(pool);
         try {
-          await pool.query(`INSERT INTO user_profiles (account_id, role) VALUES ($1, 'admin')`, [
-            'agroasys-user:trusted-admin-only',
-          ]);
+          const provisionPath = '/api/auth/v1/admin/profiles/provision';
+          const provisionBody = JSON.stringify({
+            accountId: 'agroasys-user:trusted-admin-only',
+            role: 'admin',
+            reason: 'SEC-1002 provision admin before capability proof',
+          });
+          const provisioned = await fetch(`${app.baseUrl}${provisionPath}`, {
+            method: 'POST',
+            headers: signedHeaders({
+              method: 'POST',
+              path: provisionPath,
+              body: provisionBody,
+              nonce: 'nonce-provision-trusted-admin-only',
+            }),
+            body: provisionBody,
+          });
+          expect(provisioned.status).toBe(201);
           const session = await app.sessionService.issueTrustedSession(
             {
               accountId: 'agroasys-user:trusted-admin-only',

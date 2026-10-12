@@ -154,8 +154,24 @@ export async function withPostgres(fn: (pool: Pool) => Promise<void>): Promise<v
 
 /** Trusted-exchange keys wired by {@link startAdminApp}, with their role ceilings. */
 export const EXCHANGE_KEYS = {
-  member: { id: 'exchange-member', secret: 'exchange-member-secret', roles: ['buyer', 'supplier'] },
-  operator: { id: 'exchange-operator', secret: 'exchange-operator-secret', roles: ['admin'] },
+  member: {
+    id: 'exchange-member',
+    secret: 'exchange-member-secret',
+    roles: ['buyer', 'supplier'],
+    orgId: null,
+  },
+  operator: {
+    id: 'exchange-operator',
+    secret: 'exchange-operator-secret',
+    roles: ['admin'],
+    orgId: null,
+  },
+  pinned: {
+    id: 'exchange-pinned',
+    secret: 'exchange-pinned-secret',
+    roles: ['buyer', 'supplier', 'admin'],
+    orgId: 'org-a',
+  },
 } as const;
 
 export function signedHeaders(input: {
@@ -229,7 +245,9 @@ export async function startAdminApp(pool: Pool) {
   });
   const exchangeAuthorityFor = createExchangeAuthorityLookup(
     JSON.stringify(exchangeKeys.map(({ id, secret }) => ({ id, secret, active: true }))),
-    JSON.stringify(Object.fromEntries(exchangeKeys.map(({ id, roles }) => [id, { roles }]))),
+    JSON.stringify(
+      Object.fromEntries(exchangeKeys.map(({ id, roles, orgId }) => [id, { roles, orgId }])),
+    ),
   );
   const router = createRouter(
     new SessionController(sessionService, 86400, exchangeAuthorityFor),

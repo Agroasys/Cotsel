@@ -4,6 +4,21 @@
 import { Pool, PoolClient } from 'pg';
 import { UserProfile, UserRole } from '../../types';
 
+/**
+ * True when the latest audited control-plane role decision for the profile in
+ * `user_profiles` granted durable admin. The admin control plane records one
+ * in the same transaction as every provisioning or role change; nothing else
+ * does, so an `admin` row without it has no audited provenance.
+ */
+export const AUDITED_ADMIN_SQL = `COALESCE((
+    SELECT audit_event.new_role = 'admin'
+    FROM auth_admin_audit_events AS audit_event
+    WHERE audit_event.account_id = user_profiles.account_id
+      AND audit_event.action IN ('profile_provisioned', 'profile_role_updated')
+    ORDER BY audit_event.created_at DESC
+    LIMIT 1
+  ), FALSE)`;
+
 export const USER_PROFILE_FIELDS = `
   id,
   account_id AS "accountId",
@@ -18,6 +33,7 @@ export const USER_PROFILE_FIELDS = `
     ELSE role
   END AS role,
   role AS "baseRole",
+  CASE WHEN role = 'admin' THEN ${AUDITED_ADMIN_SQL} ELSE FALSE END AS "adminProvisioned",
   org_id AS "orgId",
   created_at AS "createdAt",
   updated_at AS "updatedAt",

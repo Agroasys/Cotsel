@@ -8,7 +8,7 @@ import {
   SessionIssueResult,
   SessionLifetimePolicy,
 } from '../types';
-import { ExchangeAuthority, resolveExchangeOrgId } from './exchangeAuthority';
+import { ExchangeAuthority } from './exchangeAuthority';
 import { ProfileStore } from './profileStore';
 import { SessionStore } from './sessionStore';
 import {
@@ -98,6 +98,15 @@ export function createSessionService(
     if (!session) return null;
     if (session.revokedAt !== null) return null;
     if (session.expiresAt <= nowSeconds()) return null;
+    if (session.unauditedAdmin) {
+      await sessions.revoke(sessionId);
+      incrementSessionRevoked();
+      Logger.warn('Session revoked because administrator authority has no audited provenance', {
+        eventType: 'auth.unaudited_admin_session_revoked',
+        userId: session.userId,
+      });
+      return null;
+    }
     if (session.active === false) {
       await sessions.revoke(sessionId);
       incrementSessionRevoked();
@@ -151,8 +160,7 @@ export function createSessionService(
 
     async issueTrustedSession(identity, authority, ttlSeconds) {
       const ttl = resolveTtl(ttlSeconds);
-      const orgId = resolveExchangeOrgId(authority, identity.orgId ?? null);
-      const profile = await profiles.upsertTrustedIdentity({ ...identity, orgId }, authority);
+      const profile = await profiles.upsertTrustedIdentity(identity, authority);
       if (!profile.active) {
         throw new Error('User profile is deactivated');
       }

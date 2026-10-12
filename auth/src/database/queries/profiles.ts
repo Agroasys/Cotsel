@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Pool } from 'pg';
-import { authorizeExchangeRole, ExchangeAuthority } from '../../core/exchangeAuthority';
+import { authorizeExchange, ExchangeAuthority } from '../../core/exchangeAuthority';
 import { UserProfile, UserRole } from '../../types';
 import {
   USER_PROFILE_FIELDS,
@@ -49,7 +49,13 @@ export async function upsertTrustedProfile(
 ): Promise<UserProfile> {
   const authorize = (target: UserProfile | null, absorbed?: UserProfile) => ({
     ...input,
-    role: authorizeExchangeRole({ authority, requestedRole: input.role, target, absorbed }),
+    ...authorizeExchange({
+      authority,
+      requestedRole: input.role,
+      requestedOrgId: input.orgId,
+      target,
+      absorbed,
+    }),
   });
   const client = await pool.connect();
   try {
