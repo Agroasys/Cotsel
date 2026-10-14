@@ -63,11 +63,13 @@ Use admin-control routes for staging rehearsal provisioning. Manual SQL was used
 
 Required admin-control calls:
 
-1. `POST /admin/profiles/provision`
-   - `accountId`: rehearsal operator account, for example `demo-admin-001`
-   - `role`: `admin`
-   - `walletAddress`: the address verified on the named custodian's hardware
-     device
+1. `POST /admin/profiles/provision`, then a two-person admin grant
+   - provision `accountId` (for example `demo-admin-001`) with a non-admin
+     `role` and `walletAddress`: the address verified on the named custodian's
+     hardware device
+   - one human proposes `POST /admin/authority-changes/propose` with
+     `change: "grant"` for the same account and environment; a second human
+     approves it (see [auth admin provisioning](auth-admin-provisioning.md))
 2. `POST /admin/signers/provision`
    - `accountId`: same rehearsal operator account
    - `walletAddress`: the same hardware-wallet address

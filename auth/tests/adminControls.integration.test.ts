@@ -5,9 +5,13 @@ import { hashSessionToken } from '../src/core/sessionStore';
 import { ANY_ROLE_AUTHORITY } from './helpers/exchangeAuthority';
 import { OPERATOR_CAPABILITIES } from '../src/types';
 import {
+  ADMIN_CONTROL_APPROVER,
   dockerAvailable,
+  grantAdminAuthority,
+  postAdminControl,
   signedHeaders,
   startAdminApp,
+  TEST_ENVIRONMENT,
   withPostgres,
 } from './helpers/adminControlsIntegrationHarness';
 
@@ -64,15 +68,35 @@ describe('admin controls persistence integration', () => {
           });
           expect(deniedSignerApproval.status).toBe(401);
 
-          const first = await fetch(`${app.baseUrl}${provisionPath}`, {
+          // Provisioning cannot confer administrator authority.
+          const refusedAdmin = await fetch(`${app.baseUrl}${provisionPath}`, {
             method: 'POST',
             headers: signedHeaders({
               method: 'POST',
               path: provisionPath,
               body: provisionBody,
-              nonce: 'nonce-provision-1',
+              nonce: 'nonce-provision-admin-refused',
             }),
             body: provisionBody,
+          });
+          expect(refusedAdmin.status).toBe(403);
+
+          const buyerBody = JSON.stringify({
+            accountId: 'agroasys-user:admin-1',
+            role: 'buyer',
+            email: 'admin@example.com',
+            orgId: 'ops',
+            reason: 'SEC-1000 profile provisioning before administrator grant',
+          });
+          const first = await fetch(`${app.baseUrl}${provisionPath}`, {
+            method: 'POST',
+            headers: signedHeaders({
+              method: 'POST',
+              path: provisionPath,
+              body: buyerBody,
+              nonce: 'nonce-provision-1',
+            }),
+            body: buyerBody,
           });
           expect(first.status).toBe(201);
 
@@ -81,13 +105,14 @@ describe('admin controls persistence integration', () => {
             headers: signedHeaders({
               method: 'POST',
               path: provisionPath,
-              body: provisionBody,
+              body: buyerBody,
               nonce: 'nonce-provision-1',
             }),
-            body: provisionBody,
+            body: buyerBody,
           });
           expect(replay.status).toBe(401);
 
+          await grantAdminAuthority(app.baseUrl, 'agroasys-user:admin-1', { orgId: 'ops' });
           const provisioned = await pool.query(
             `SELECT role, active FROM user_profiles WHERE account_id = $1`,
             ['agroasys-user:admin-1'],
@@ -103,6 +128,7 @@ describe('admin controls persistence integration', () => {
             ANY_ROLE_AUTHORITY,
           );
 
+          // A single human cannot demote an active administrator through provisioning.
           const downgradeBody = JSON.stringify({
             accountId: 'agroasys-user:admin-1',
             role: 'buyer',
@@ -118,26 +144,36 @@ describe('admin controls persistence integration', () => {
             }),
             body: downgradeBody,
           });
-          expect(downgrade.status).toBe(201);
+          expect(downgrade.status).toBe(403);
+          await expect(app.sessionService.resolve(session.sessionId)).resolves.not.toBeNull();
+
+          const revocation = await postAdminControl(
+            app.baseUrl,
+            '/api/auth/v1/admin/authority-changes/propose',
+            {
+              accountId: 'agroasys-user:admin-1',
+              change: 'revoke',
+              environment: TEST_ENVIRONMENT,
+              resultingRole: 'buyer',
+              approvalTicket: 'SEC-1001',
+              reason: 'SEC-1001 durable admin revoked after integration proof',
+            },
+          );
+          expect(revocation.status).toBe(201);
+          const revoked = await postAdminControl(
+            app.baseUrl,
+            '/api/auth/v1/admin/authority-changes/approve',
+            {
+              changeId: revocation.json.data!.changeId,
+              evidenceDigest: revocation.json.data!.evidenceDigest,
+              reason: 'Second human approves administrator revocation',
+            },
+            ADMIN_CONTROL_APPROVER,
+          );
+          expect(revoked.status).toBe(200);
           await expect(app.sessionService.resolve(session.sessionId)).resolves.toBeNull();
 
-          const durableAdminBody = JSON.stringify({
-            accountId: 'agroasys-user:admin-2',
-            role: 'admin',
-            email: 'admin-2@example.com',
-            reason: 'SEC-1003 durable admin provisioning before break-glass rejection proof',
-          });
-          const durableAdmin = await fetch(`${app.baseUrl}${provisionPath}`, {
-            method: 'POST',
-            headers: signedHeaders({
-              method: 'POST',
-              path: provisionPath,
-              body: durableAdminBody,
-              nonce: 'nonce-provision-admin-2',
-            }),
-            body: durableAdminBody,
-          });
-          expect(durableAdmin.status).toBe(201);
+          await grantAdminAuthority(app.baseUrl, 'agroasys-user:admin-2');
 
           const grantPath = '/api/auth/v1/admin/break-glass/grant';
           const reviewPath = '/api/auth/v1/admin/break-glass/review';
@@ -366,7 +402,8 @@ describe('admin controls persistence integration', () => {
           expect(audit.rows.map((row) => row.action)).toEqual(
             expect.arrayContaining([
               'profile_provisioned',
-              'profile_role_updated',
+              'admin_authority_change_proposed',
+              'admin_authority_change_applied',
               'break_glass_granted',
               'break_glass_expired',
               'break_glass_reviewed',
@@ -388,23 +425,7 @@ describe('admin controls persistence integration', () => {
       await withPostgres(async (pool) => {
         const app = await startAdminApp(pool);
         try {
-          const provisionPath = '/api/auth/v1/admin/profiles/provision';
-          const provisionBody = JSON.stringify({
-            accountId: 'agroasys-user:trusted-admin-only',
-            role: 'admin',
-            reason: 'SEC-1002 provision admin before capability proof',
-          });
-          const provisioned = await fetch(`${app.baseUrl}${provisionPath}`, {
-            method: 'POST',
-            headers: signedHeaders({
-              method: 'POST',
-              path: provisionPath,
-              body: provisionBody,
-              nonce: 'nonce-provision-trusted-admin-only',
-            }),
-            body: provisionBody,
-          });
-          expect(provisioned.status).toBe(201);
+          await grantAdminAuthority(app.baseUrl, 'agroasys-user:trusted-admin-only');
           const session = await app.sessionService.issueTrustedSession(
             {
               accountId: 'agroasys-user:trusted-admin-only',

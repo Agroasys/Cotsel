@@ -29,6 +29,13 @@
       "file": "schema/004_session_token_hash_lineage.sql",
       "sha256": "9a41dc4bf5162365fc677e8406501202ee17fabc483430b1583096bb476ca5d3",
       "schema_sha256": "77a167f3a1089359f43ccdc1abfae41d735dd93b734ce581c3472d5c55b40710"
+    },
+    {
+      "version": "202610140005",
+      "name": "admin_authority_changes",
+      "file": "schema/005_admin_authority_changes.sql",
+      "sha256": "23b3197a2fe8a5ae501b3375a0166ba1f4aad6d3da0b69a8d5ef91c636f24a4f",
+      "schema_sha256": "ad29eaba3fbb954e1171e5612f240fbc55358abe223bb938f7f2adc45110c93f"
     }
   ]
 }

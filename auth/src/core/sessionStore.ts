@@ -49,7 +49,11 @@ function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
 }
 
-export function createPostgresSessionStore(pool: Pool): SessionStore {
+/**
+ * `environment` is the Cotsel environment this service runs in; only admin
+ * grants bound to it back an administrator session.
+ */
+export function createPostgresSessionStore(pool: Pool, environment: string): SessionStore {
   return {
     async issue(profile, ttlSeconds) {
       const sessionId = newSessionToken();
@@ -79,7 +83,11 @@ export function createPostgresSessionStore(pool: Pool): SessionStore {
       return { status: 'rotated', session: { sessionId, expiresAt: outcome.expiresAt } };
     },
     async lookup(sessionToken) {
-      const session = await findSessionByTokenHash(pool, hashSessionToken(sessionToken));
+      const session = await findSessionByTokenHash(
+        pool,
+        hashSessionToken(sessionToken),
+        environment,
+      );
       // The row carries only the verifier; callers keep addressing the session
       // by the bearer token they presented.
       return session ? { ...session, sessionId: sessionToken } : null;

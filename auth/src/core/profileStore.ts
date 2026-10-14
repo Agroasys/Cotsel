@@ -64,7 +64,11 @@ export interface ProfileStore {
   deactivateWithAudit(accountId: string, actor: AdminActor, reason: string): Promise<UserProfile>;
 }
 
-export function createPostgresProfileStore(pool: Pool): ProfileStore {
+/**
+ * `environment` is the Cotsel environment this service runs in; only admin
+ * grants bound to it back administrator authority at session exchange.
+ */
+export function createPostgresProfileStore(pool: Pool, environment: string): ProfileStore {
   return {
     upsert(walletAddress, role, orgId) {
       return upsertProfile(pool, walletAddress.toLowerCase(), role, orgId ?? null);
@@ -80,6 +84,7 @@ export function createPostgresProfileStore(pool: Pool): ProfileStore {
           walletAddress: identity.walletAddress?.toLowerCase() ?? null,
         },
         authority,
+        environment,
       );
     },
     findByWallet(walletAddress) {

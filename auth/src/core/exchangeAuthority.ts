@@ -123,10 +123,10 @@ function resolveRequestedOrgId(
 }
 
 /**
- * Durable administrator authority counts only when the latest audited
- * control-plane role decision granted it (`adminProvisioned`). An `admin` row
- * without that provenance, such as one written by the previous exchange,
- * confers nothing. Active break-glass elevation is itself control-plane only.
+ * Durable administrator authority counts only while an active, unexpired
+ * two-person grant backs it in this environment (`adminProvisioned`). An
+ * `admin` row without one confers nothing. Active break-glass elevation is
+ * itself control-plane only.
  */
 export function hasAdminAuthority(profile: UserProfile): boolean {
   if (profile.role !== 'admin') {

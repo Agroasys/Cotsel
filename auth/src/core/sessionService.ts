@@ -98,11 +98,11 @@ export function createSessionService(
     if (!session) return null;
     if (session.revokedAt !== null) return null;
     if (session.expiresAt <= nowSeconds()) return null;
-    if (session.unauditedAdmin) {
+    if (session.adminGrantMissing) {
       await sessions.revoke(sessionId);
       incrementSessionRevoked();
-      Logger.warn('Session revoked because administrator authority has no audited provenance', {
-        eventType: 'auth.unaudited_admin_session_revoked',
+      Logger.warn('Session revoked because administrator authority has no active grant', {
+        eventType: 'auth.admin_grant_missing_session_revoked',
         userId: session.userId,
       });
       return null;

@@ -19,6 +19,7 @@ import { createSessionService } from './core/sessionService';
 import { createAdminService } from './core/adminService';
 import { createAdminControlApiKeyLookup } from './core/adminControlIdentity';
 import { createPostgresOperatorSignerStore } from './core/operatorSignerStore';
+import { createPostgresAdminAuthorityStore } from './core/adminAuthorityStore';
 import { SessionController } from './api/controller';
 import { createExchangeAuthorityLookup } from './core/exchangeAuthority';
 import { AdminController } from './api/adminController';
@@ -66,8 +67,8 @@ async function bootstrap(): Promise<void> {
   await initializeDatabase();
 
   //  Stores & service
-  const profileStore = createPostgresProfileStore(pool);
-  const sessionStore = createPostgresSessionStore(pool);
+  const profileStore = createPostgresProfileStore(pool, config.environment);
+  const sessionStore = createPostgresSessionStore(pool, config.environment);
   const operatorSignerStore = createPostgresOperatorSignerStore(pool);
   const sessionService = createSessionService(sessionStore, profileStore, {
     ttlSeconds: config.sessionTtlSeconds,
@@ -171,7 +172,10 @@ async function bootstrap(): Promise<void> {
   );
   const adminController = config.adminControlEnabled
     ? new AdminController(
-        createAdminService(profileStore, config.adminBreakGlassMaxTtlSeconds, operatorSignerStore),
+        createAdminService(profileStore, config.adminBreakGlassMaxTtlSeconds, operatorSignerStore, {
+          store: createPostgresAdminAuthorityStore(pool, config.environment),
+          maxGrantTtlSeconds: config.adminGrantMaxTtlSeconds,
+        }),
       )
     : undefined;
   const router = createRouter(sessionController, sessionService, {
