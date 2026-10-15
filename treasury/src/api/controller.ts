@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import {
   failure,
   HttpError,
+  isCallerFacingError,
   optionalEnum,
   optionalInteger,
   optionalNullableString,
@@ -22,7 +23,7 @@ import {
 } from '../core/ledgerExport';
 import { loadLedgerExportPage } from '../core/ledgerExportService';
 import { actorFor, optionalActorFor } from './actorBinding';
-import { mapValidationError } from './errorMapping';
+import { sendMappedError, sendTreasuryInternalFailure } from './errorMapping';
 import { resolveRealizationBinding } from './realizationBinding';
 import { SweepBatchGate } from './sweepBatchGate';
 import type {
@@ -325,7 +326,7 @@ export class TreasuryController {
   private readonly sweepExecutionMatcher = new SweepExecutionMatcherService();
   private readonly sweepGate = new SweepBatchGate(this.eligibility);
 
-  async ingest(_req: Request, res: Response): Promise<void> {
+  async ingest(req: Request, res: Response): Promise<void> {
     try {
       const run = await this.ingestion.runOnce('API');
 
@@ -352,6 +353,22 @@ export class TreasuryController {
         return;
       }
 
+      // A thrown run carries raw RPC or indexer text, so only its correlation ID is returned.
+      if (run.outcome === 'FAILED') {
+        sendTreasuryInternalFailure(
+          req,
+          res,
+          new Error(run.error ?? 'unknown'),
+          'Ingestion failed',
+          {
+            statusCode: 503,
+            code: 'SettlementUnavailable',
+            message: 'Ingestion did not complete',
+          },
+        );
+        return;
+      }
+
       if (run.outcome !== 'COMPLETED') {
         // A refusal is not a successful empty run. An operator reading 200 here
         // would record "ingestion completed, nothing new" for a run that never
@@ -361,7 +378,7 @@ export class TreasuryController {
           .json(
             failure(
               'SettlementUnavailable',
-              run.result?.blockedReason ?? run.error ?? 'Ingestion did not complete',
+              run.result?.blockedReason ?? 'Ingestion did not complete',
             ),
           );
         return;
@@ -369,11 +386,7 @@ export class TreasuryController {
 
       res.status(200).json(success({ runKey: run.runKey, ...run.result }));
     } catch (error: unknown) {
-      res
-        .status(500)
-        .json(
-          failure('InternalError', error instanceof Error ? error.message : 'Ingestion failed'),
-        );
+      sendTreasuryInternalFailure(req, res, error, 'Ingestion failed');
     }
   }
 
@@ -395,8 +408,7 @@ export class TreasuryController {
 
       res.status(200).json(success(data));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to list entries');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to list entries');
     }
   }
 
@@ -406,7 +418,7 @@ export class TreasuryController {
    * each revocation observed. The reorganization drill reads this before and
    * after the orphaning to show eligibility was removed rather than assumed.
    */
-  async getChainCanonicalitySummary(_req: Request, res: Response): Promise<void> {
+  async getChainCanonicalitySummary(req: Request, res: Response): Promise<void> {
     try {
       const [counts, stableBlockNumber, reorgEvents] = await Promise.all([
         countLedgerEntriesByCanonicality(),
@@ -422,33 +434,17 @@ export class TreasuryController {
         }),
       );
     } catch (error: unknown) {
-      res
-        .status(500)
-        .json(
-          failure(
-            'InternalError',
-            error instanceof Error ? error.message : 'Failed to read chain canonicality summary',
-          ),
-        );
+      sendTreasuryInternalFailure(req, res, error, 'Failed to read chain canonicality summary');
     }
   }
 
-  async getReconciliationControlSummary(_req: Request, res: Response): Promise<void> {
+  async getReconciliationControlSummary(req: Request, res: Response): Promise<void> {
     try {
       const tradeIds = await listDistinctLedgerTradeIds();
       const summary = await this.reconciliationGate.summarizeTrades(tradeIds);
       res.status(200).json(success(serializeReconciliationControlSummary(summary)));
     } catch (error: unknown) {
-      res
-        .status(500)
-        .json(
-          failure(
-            'InternalError',
-            error instanceof Error
-              ? error.message
-              : 'Failed to read reconciliation control summary',
-          ),
-        );
+      sendTreasuryInternalFailure(req, res, error, 'Failed to read reconciliation control summary');
     }
   }
 
@@ -461,8 +457,7 @@ export class TreasuryController {
       const periods = await listAccountingPeriods({ status, limit, offset });
       res.status(200).json(success(periods));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to list accounting periods');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to list accounting periods');
     }
   }
 
@@ -478,8 +473,7 @@ export class TreasuryController {
       );
       res.status(200).json(success(packet.rollforward));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to build accounting period rollforward');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to build accounting period rollforward');
     }
   }
 
@@ -503,8 +497,7 @@ export class TreasuryController {
 
       res.status(200).json(success(packet));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to build accounting period close packet');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to build accounting period close packet');
     }
   }
 
@@ -538,8 +531,7 @@ export class TreasuryController {
 
       res.status(200).json(success(projections));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to list entry accounting state');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to list entry accounting state');
     }
   }
 
@@ -559,8 +551,7 @@ export class TreasuryController {
 
       res.status(201).json(success(period));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to create accounting period');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to create accounting period');
     }
   }
 
@@ -581,8 +572,7 @@ export class TreasuryController {
 
       res.status(200).json(success(period));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to request accounting period close');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to request accounting period close');
     }
   }
 
@@ -620,8 +610,7 @@ export class TreasuryController {
 
       res.status(200).json(success(period));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to close accounting period');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to close accounting period');
     }
   }
 
@@ -638,8 +627,7 @@ export class TreasuryController {
       const batches = await listSweepBatches({ accountingPeriodId, status, limit, offset });
       res.status(200).json(success(batches));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to list sweep batches');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to list sweep batches');
     }
   }
 
@@ -666,8 +654,7 @@ export class TreasuryController {
 
       res.status(201).json(success(batch));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to create sweep batch');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to create sweep batch');
     }
   }
 
@@ -682,8 +669,7 @@ export class TreasuryController {
 
       res.status(200).json(success(detail));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to read sweep batch');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to read sweep batch');
     }
   }
 
@@ -693,8 +679,7 @@ export class TreasuryController {
       const trace = await loadTreasuryBatchTraceReport(batchId);
       res.status(200).json(success(trace));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to build sweep batch trace');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to build sweep batch trace');
     }
   }
 
@@ -716,8 +701,7 @@ export class TreasuryController {
 
       res.status(201).json(success(result));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to allocate sweep batch entry');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to allocate sweep batch entry');
     }
   }
 
@@ -764,8 +748,7 @@ export class TreasuryController {
 
       res.status(200).json(success(batch));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to request sweep batch approval');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to request sweep batch approval');
     }
   }
 
@@ -798,8 +781,7 @@ export class TreasuryController {
 
       res.status(200).json(success(batch));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to approve sweep batch');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to approve sweep batch');
     }
   }
 
@@ -831,7 +813,7 @@ export class TreasuryController {
           metadata: optionalRecord(body.metadata, 'metadata'),
         });
       } catch (error) {
-        if (error instanceof Error) {
+        if (isCallerFacingError(error)) {
           throw new HttpError(409, 'ExecutionMatchFailed', error.message);
         }
         throw error;
@@ -839,8 +821,7 @@ export class TreasuryController {
 
       res.status(200).json(success(batch));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to mark sweep batch executed');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to mark sweep batch executed');
     }
   }
 
@@ -889,8 +870,7 @@ export class TreasuryController {
 
       res.status(200).json(success(handoff));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to record external handoff');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to record external handoff');
     }
   }
 
@@ -939,8 +919,7 @@ export class TreasuryController {
 
       res.status(200).json(success(batch));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to close sweep batch');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to close sweep batch');
     }
   }
 
@@ -955,8 +934,7 @@ export class TreasuryController {
 
       res.status(200).json(success(projection));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to read entry accounting state');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to read entry accounting state');
     }
   }
 
@@ -988,8 +966,7 @@ export class TreasuryController {
 
       res.status(201).json(success(realization));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to create revenue realization');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to create revenue realization');
     }
   }
 
@@ -1010,8 +987,7 @@ export class TreasuryController {
         }),
       );
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to read treasury partner handoff');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to read treasury partner handoff');
     }
   }
 
@@ -1073,8 +1049,7 @@ export class TreasuryController {
         return;
       }
 
-      const response = mapValidationError(error, 'Failed to persist treasury partner handoff');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to persist treasury partner handoff');
     }
   }
 
@@ -1147,11 +1122,7 @@ export class TreasuryController {
         return;
       }
 
-      const response = mapValidationError(
-        error,
-        'Failed to persist treasury partner handoff evidence',
-      );
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to persist treasury partner handoff evidence');
     }
   }
 
@@ -1215,8 +1186,7 @@ export class TreasuryController {
       });
       res.status(200).json(success(event));
     } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to append payout state');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to append payout state');
     }
   }
 
@@ -1262,8 +1232,7 @@ export class TreasuryController {
         return;
       }
 
-      const response = mapValidationError(error, 'Failed to persist fiat deposit reference');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to persist fiat deposit reference');
     }
   }
 
@@ -1317,8 +1286,7 @@ export class TreasuryController {
         return;
       }
 
-      const response = mapValidationError(error, 'Failed to persist bank payout confirmation');
-      res.status(response.statusCode).json(response.body);
+      sendMappedError(req, res, error, 'Failed to persist bank payout confirmation');
     }
   }
 
@@ -1365,14 +1333,7 @@ export class TreasuryController {
         return;
       }
 
-      res
-        .status(500)
-        .json(
-          failure(
-            'InternalError',
-            error instanceof Error ? error.message : 'Failed to export entries',
-          ),
-        );
+      sendTreasuryInternalFailure(req, res, error, 'Failed to export entries');
     }
   }
 }

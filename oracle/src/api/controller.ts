@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import {
   HttpError,
   failure,
+  sendInternalFailure,
   requireEnum,
   requireObject,
   requireString,
@@ -94,32 +95,34 @@ function sendOracleExecutionResult(
   res.status(resolveExecutionStatusCode(result)).json(buildOracleExecutionResponse(result));
 }
 
-function buildOracleErrorResponse(error: unknown): ErrorResponse {
+/**
+ * WP-10 I-06. Request and domain refusals keep their message. Anything else is
+ * answered with a stable code and a correlation ID; the raw error is only logged.
+ */
+function sendOracleError(
+  req: Pick<Request, 'headers' | 'path'>,
+  res: Response,
+  error: unknown,
+): void {
   if (error instanceof HttpError) {
-    return failure(error.code, error.message);
+    res.status(error.statusCode).json(failure(error.code, error.message));
+    return;
   }
 
   if (error instanceof ValidationError) {
-    return failure('ValidationError', error.message);
+    res.status(400).json(failure('ValidationError', error.message));
+    return;
   }
 
-  if (error instanceof Error) {
-    return failure(error.name || 'InternalError', error.message);
-  }
-
-  return failure('InternalError', 'An unexpected oracle error occurred');
-}
-
-function resolveStatusCode(error: unknown): number {
-  if (error instanceof HttpError) {
-    return error.statusCode;
-  }
-
-  if (error instanceof ValidationError) {
-    return 400;
-  }
-
-  return 500;
+  sendInternalFailure(req, res, error, {
+    log: (correlationId, cause) =>
+      Logger.error('Oracle request failed', {
+        correlationId,
+        route: req.path,
+        errorName: cause instanceof Error ? cause.name : typeof cause,
+        error: cause instanceof Error ? cause.message : String(cause),
+      }),
+  });
 }
 
 function parseTriggerBody(body: unknown): { tradeId: string; requestId: string } {
@@ -247,7 +250,7 @@ export class OracleController {
       } as unknown as OracleResponse);
     } catch (error: unknown) {
       Logger.error('Controller error in listTriggers', error);
-      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+      sendOracleError(req, res, error);
     }
   }
 
@@ -267,7 +270,7 @@ export class OracleController {
       sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in releaseStage1', error);
-      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+      sendOracleError(req, res, error);
     }
   }
 
@@ -287,7 +290,7 @@ export class OracleController {
       sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in confirmArrival', error);
-      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+      sendOracleError(req, res, error);
     }
   }
 
@@ -344,7 +347,7 @@ export class OracleController {
       sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in finalizeTrade', error);
-      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+      sendOracleError(req, res, error);
     }
   }
 
@@ -368,7 +371,7 @@ export class OracleController {
       sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error(`Controller error in ${operation}`, error);
-      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+      sendOracleError(req, res, error);
     }
   }
 
@@ -395,7 +398,7 @@ export class OracleController {
       sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in redriveTrigger', error);
-      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+      sendOracleError(req, res, error);
     }
   }
 
@@ -410,7 +413,7 @@ export class OracleController {
       sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in approveTrigger', error);
-      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+      sendOracleError(req, res, error);
     }
   }
 
@@ -425,7 +428,7 @@ export class OracleController {
       sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in rejectTrigger', error);
-      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+      sendOracleError(req, res, error);
     }
   }
 }

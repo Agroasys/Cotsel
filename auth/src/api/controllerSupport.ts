@@ -1,8 +1,16 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Response } from 'express';
-import { HttpError, failure, requireEnum, requireInteger } from '@agroasys/shared-http';
+import { Request, Response } from 'express';
+import {
+  HttpError,
+  failure,
+  isCallerFacingError,
+  requireEnum,
+  requireInteger,
+  sendInternalFailure,
+} from '@agroasys/shared-http';
+import { Logger } from '../utils/logger';
 import { ApiErrorResponse, ApiSuccessResponse, UserRole } from '../types';
 
 export const VALID_ROLES: UserRole[] = ['buyer', 'supplier', 'admin'];
@@ -37,7 +45,13 @@ export function requireAuthRole(value: unknown): UserRole {
   return requireEnum(value, VALID_ROLES, 'role');
 }
 
+/**
+ * WP-10 I-06. Refusals keep their code and message. Driver, network and other
+ * internal failures are answered with a stable code and a correlation ID, and
+ * the raw error is only logged.
+ */
 export function handleControllerError(
+  req: Pick<Request, 'headers'>,
   res: Response<ApiSuccessResponse | ApiErrorResponse>,
   error: unknown,
   defaultCode: string,
@@ -49,7 +63,18 @@ export function handleControllerError(
     return;
   }
 
-  res
-    .status(defaultStatusCode)
-    .json(failure(defaultCode, error instanceof Error ? error.message : defaultMessage));
+  if (isCallerFacingError(error)) {
+    res.status(defaultStatusCode).json(failure(defaultCode, error.message || defaultMessage));
+    return;
+  }
+
+  sendInternalFailure(req, res, error, {
+    log: (correlationId, cause) =>
+      Logger.error('Auth request failed', {
+        correlationId,
+        operation: defaultCode,
+        errorName: cause instanceof Error ? cause.name : typeof cause,
+        error: cause instanceof Error ? cause.message : String(cause),
+      }),
+  });
 }

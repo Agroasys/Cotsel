@@ -79,7 +79,7 @@ export async function recordGaslessExecutionFailure(
     requestId: input.requestId,
     sourceApiKeyId: input.sourceApiKeyId,
   });
-  throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Gasless execution failed', {
+  throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Gasless execution failed', undefined, {
     reason: message,
   });
 }

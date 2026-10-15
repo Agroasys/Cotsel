@@ -4,7 +4,7 @@
 import { AbstractProvider, Contract } from 'ethers';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import { GatewayConfig } from '../config/env';
-import { GatewayError } from '../errors';
+import { diagnosticReason, GatewayError } from '../errors';
 import { Logger } from '../logging/logger';
 import { withTimeout } from './downstreamTimeout';
 
@@ -227,6 +227,16 @@ async function collectActiveProposalIds(
   return active;
 }
 
+function chainReadFailure(
+  message: string,
+  error: unknown,
+  details?: Record<string, unknown>,
+): GatewayError {
+  return new GatewayError(503, 'UPSTREAM_UNAVAILABLE', message, details, {
+    cause: diagnosticReason(error),
+  });
+}
+
 export class GovernanceStatusService implements GovernanceMutationPreflightReader {
   constructor(
     private readonly provider: AbstractProvider,
@@ -358,14 +368,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         throw error;
       }
 
-      throw new GatewayError(
-        503,
-        'UPSTREAM_UNAVAILABLE',
-        'Failed to read governance status from chain',
-        {
-          cause: error instanceof Error ? error.message : String(error),
-        },
-      );
+      throw chainReadFailure('Failed to read governance status from chain', error);
     }
   }
 
@@ -384,9 +387,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         executed: proposal.executed,
       };
     } catch (error) {
-      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read unpause proposal state', {
-        cause: error instanceof Error ? error.message : String(error),
-      });
+      throw chainReadFailure('Failed to read unpause proposal state', error);
     }
   }
 
@@ -427,10 +428,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         targetAddress: proposal.newOracle,
       };
     } catch (error) {
-      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read oracle proposal state', {
-        cause: error instanceof Error ? error.message : String(error),
-        proposalId,
-      });
+      throw chainReadFailure('Failed to read oracle proposal state', error, { proposalId });
     }
   }
 
@@ -479,15 +477,9 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         targetAddress: proposal.newPayoutReceiver,
       };
     } catch (error) {
-      throw new GatewayError(
-        503,
-        'UPSTREAM_UNAVAILABLE',
-        'Failed to read treasury payout receiver proposal state',
-        {
-          cause: error instanceof Error ? error.message : String(error),
-          proposalId,
-        },
-      );
+      throw chainReadFailure('Failed to read treasury payout receiver proposal state', error, {
+        proposalId,
+      });
     }
   }
 
@@ -502,14 +494,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         this.contract.claimableUsdc(treasuryAddress),
       );
     } catch (error) {
-      throw new GatewayError(
-        503,
-        'UPSTREAM_UNAVAILABLE',
-        'Failed to read treasury claimable balance',
-        {
-          cause: error instanceof Error ? error.message : String(error),
-        },
-      );
+      throw chainReadFailure('Failed to read treasury claimable balance', error);
     }
   }
 
@@ -520,10 +505,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         this.contract.unpauseHasApproved(walletAddress),
       );
     } catch (error) {
-      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read unpause approval state', {
-        cause: error instanceof Error ? error.message : String(error),
-        walletAddress,
-      });
+      throw chainReadFailure('Failed to read unpause approval state', error, { walletAddress });
     }
   }
 
@@ -534,8 +516,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         this.contract.oracleUpdateHasApproved(BigInt(proposalId), walletAddress),
       );
     } catch (error) {
-      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read oracle approval state', {
-        cause: error instanceof Error ? error.message : String(error),
+      throw chainReadFailure('Failed to read oracle approval state', error, {
         proposalId,
         walletAddress,
       });
@@ -552,16 +533,10 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         this.contract.treasuryPayoutAddressUpdateHasApproved(BigInt(proposalId), walletAddress),
       );
     } catch (error) {
-      throw new GatewayError(
-        503,
-        'UPSTREAM_UNAVAILABLE',
-        'Failed to read treasury payout receiver approval state',
-        {
-          cause: error instanceof Error ? error.message : String(error),
-          proposalId,
-          walletAddress,
-        },
-      );
+      throw chainReadFailure('Failed to read treasury payout receiver approval state', error, {
+        proposalId,
+        walletAddress,
+      });
     }
   }
 

@@ -17,6 +17,7 @@ import {
   classifyError,
   determineNextStatus,
   getErrorMessage,
+  publicFailureMessage,
   ValidationError,
 } from '../utils/errors';
 import { Logger } from '../utils/logger';
@@ -317,7 +318,7 @@ export class TriggerManager {
         requestId: trigger.request_id,
         status: trigger.status,
         idempotent: false,
-        message: trigger.last_error || 'Trigger failed with terminal error',
+        message: publicFailureMessage(trigger.error_type, trigger.last_error),
       };
     }
 
@@ -495,8 +496,8 @@ export class TriggerManager {
           isTerminal: oracleError.isTerminal,
           message: oracleError.message,
         });
-
         const nextStatus = determineNextStatus(oracleError, attempt, this.maxAttempts);
+        const publicReason = publicFailureMessage(oracleError.errorType, oracleError.message);
 
         await updateTrigger(trigger.idempotency_key, {
           status: nextStatus,
@@ -519,7 +520,7 @@ export class TriggerManager {
             requestId: trigger.request_id,
             status: nextStatus,
             idempotent: false,
-            message: oracleError.message,
+            message: publicReason,
           };
         }
 
@@ -539,7 +540,7 @@ export class TriggerManager {
             requestId: trigger.request_id,
             status: nextStatus,
             idempotent: false,
-            message: exhaustedMessage,
+            message: `Exhausted ${this.maxAttempts} attempts: ${publicReason}. Use re-drive endpoint to retry.`,
           };
         }
 

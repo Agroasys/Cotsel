@@ -53,6 +53,19 @@ export class TradeContainedError extends OracleError {
   }
 }
 
+/**
+ * WP-10 I-06. Text a trigger result may carry back to its caller. Domain
+ * refusals keep their message; network and contract failures can carry RPC
+ * URLs, request bodies, or signer output, so their detail stays in the
+ * trigger's `last_error` and the logs.
+ */
+export function publicFailureMessage(errorType: ErrorType | null, detail: string | null): string {
+  if (errorType === ErrorType.VALIDATION && detail) {
+    return detail;
+  }
+  return `Oracle ${(errorType ?? 'unknown').toLowerCase()} failure; detail is recorded on the trigger`;
+}
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;

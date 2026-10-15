@@ -139,7 +139,7 @@ describe('RicardianController.createHash', () => {
     );
   });
 
-  test('returns 500 without code for generic persistence error', async () => {
+  test('returns a stable code and correlation ID without the raw error for unexpected failures', async () => {
     mockedBuildRicardianHash.mockReturnValue({
       requestId: 'req-1',
       documentRef: 'doc://ok',
@@ -149,7 +149,9 @@ describe('RicardianController.createHash', () => {
       metadata: {},
     });
 
-    mockedCreateDocument.mockRejectedValue(new Error('unexpected db error'));
+    mockedCreateDocument.mockRejectedValue(
+      new Error('relation "ricardian_hashes" does not exist at postgres://svc:pw@10.0.0.9/db'),
+    );
 
     const req = asHashRequest({
       tenantId: 'platform-main',
@@ -165,9 +167,14 @@ describe('RicardianController.createHash', () => {
       expect.objectContaining({
         success: false,
         error: 'InternalError',
-        message: 'unexpected db error',
+        message: 'An unexpected error occurred',
+        correlationId: expect.any(String),
       }),
     );
+    const body = JSON.stringify(res.json.mock.calls[0][0]);
+    for (const leaked of ['ricardian_hashes', 'postgres://', '10.0.0.9', 'pw@']) {
+      expect(body).not.toContain(leaked);
+    }
   });
 });
 
@@ -240,7 +247,9 @@ describe('RicardianController.getHash', () => {
 
   test('returns 500 with DOCUMENT_RETRIEVAL_FAILURE code for DocumentRetrievalError', async () => {
     const hash = 'c'.repeat(64);
-    mockedGetDocument.mockRejectedValueOnce(new DocumentRetrievalError('db down'));
+    mockedGetDocument.mockRejectedValueOnce(
+      new DocumentRetrievalError('db down', new Error('timeout to 10.0.0.9:5432')),
+    );
 
     const req = { params: { hash } } as unknown as Request<{ hash: string }>;
     const res = createMockResponse();
@@ -249,8 +258,15 @@ describe('RicardianController.getHash', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false, code: 'DOCUMENT_RETRIEVAL_FAILURE' }),
+      expect.objectContaining({
+        success: false,
+        error: 'DocumentStoreError',
+        message: 'Ricardian document store is unavailable',
+        code: 'DOCUMENT_RETRIEVAL_FAILURE',
+        correlationId: expect.any(String),
+      }),
     );
+    expect(JSON.stringify(res.json.mock.calls[0][0])).not.toContain('db down');
   });
 
   test('returns 500 with DOCUMENT_INTEGRITY_FAILURE code for DocumentIntegrityError', async () => {

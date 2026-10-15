@@ -63,7 +63,7 @@ export class SessionController {
       res.json(success(result));
     } catch (error) {
       Logger.error('Session refresh failed', error);
-      handleControllerError(res, error, 'Unauthorized', 401, 'Refresh failed');
+      handleControllerError(req, res, error, 'Unauthorized', 401, 'Refresh failed');
     }
   }
 
@@ -99,6 +99,7 @@ export class SessionController {
       ttlSeconds = parseOptionalSessionTtl(body.ttlSeconds, this.maxSessionTtlSeconds);
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'BadRequest',
@@ -118,6 +119,7 @@ export class SessionController {
         reason: 'no_key_policy',
       });
       handleControllerError(
+        req,
         res,
         new HttpError(403, 'Forbidden', 'Exchange key has no session authority policy'),
         'Forbidden',
@@ -152,7 +154,16 @@ export class SessionController {
       } else {
         Logger.error('Trusted session exchange failed', error);
       }
-      handleControllerError(res, error, 'Forbidden', 403, 'Trusted session exchange failed');
+      handleControllerError(
+        req,
+        res,
+        error instanceof ExchangeAuthorityError
+          ? new HttpError(403, 'Forbidden', error.message)
+          : error,
+        'Forbidden',
+        403,
+        'Trusted session exchange failed',
+      );
     }
   }
 
