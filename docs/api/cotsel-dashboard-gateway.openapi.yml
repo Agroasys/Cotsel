@@ -105,10 +105,14 @@ paths:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1dashboard-settlement~1gasless-executions~1create-trade
   /settlement/gasless-executions/user-action:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1settlement~1gasless-executions~1user-action
+  /wallet/usdc/gasless-transfers/{transferId}/outcomes:
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1wallet~1usdc~1gasless-transfers~1{transferId}~1outcomes
   /wallet/usdc/gasless-transfers:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1wallet~1usdc~1gasless-transfers
   /settlement/handoffs/{handoffId}/execution-events:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1settlement~1handoffs~1{handoffId}~1execution-events
+  /settlement/transactions/{transactionHash}/finality:
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1settlement~1transactions~1{transactionHash}~1finality
   /governance/status:
     $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1status
   /governance/actions:
@@ -332,6 +336,7 @@ components:
     SettlementRicardianDocumentRegistration: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-03.yml#/components/schemas/SettlementRicardianDocumentRegistration}
     SettlementRicardianDocumentRegistrationResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-03.yml#/components/schemas/SettlementRicardianDocumentRegistrationResponse}
     GaslessFinancialOutcomeRecoveryResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-04.yml#/components/schemas/GaslessFinancialOutcomeRecoveryResponse}
+    WalletUsdcExecutionObservationResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-04.yml#/components/schemas/WalletUsdcExecutionObservationResponse}
     ReconciliationRecord: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-01.yml#/components/schemas/ReconciliationRecord}
     ReconciliationPagination: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-01.yml#/components/schemas/ReconciliationPagination}
     ReconciliationListPayload: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-01.yml#/components/schemas/ReconciliationListPayload}
@@ -433,3 +438,7 @@ components:
     ComplianceTradeAttestationStatus: {$ref: ./cotsel-dashboard-gateway/components/schemas-compliance-01.yml#/components/schemas/ComplianceTradeAttestationStatus}
     ComplianceTradeAttestationStatusResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-compliance-01.yml#/components/schemas/ComplianceTradeAttestationStatusResponse}
     ComplianceOperationalControlRequest: {$ref: ./cotsel-dashboard-gateway/components/schemas-compliance-01.yml#/components/schemas/ComplianceOperationalControlRequest}
+    SettlementExecutionBinding: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-execution-binding.yml#/components/schemas/SettlementExecutionBinding}
+    SettlementFinalityEvidence: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-execution-binding.yml#/components/schemas/SettlementFinalityEvidence}
+    SettlementCreateTradeBinding: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-execution-binding.yml#/components/schemas/SettlementCreateTradeBinding}
+    SettlementFundedBinding: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-execution-binding.yml#/components/schemas/SettlementFundedBinding}

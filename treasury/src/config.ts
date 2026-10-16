@@ -53,6 +53,8 @@ export interface TreasuryConfig {
   rpcQuorum?: number;
   rpcStallTimeoutMs?: number;
   chainId?: number;
+  escrowAddress?: string;
+  usdcAddress?: string;
   explorerBaseUrl?: string | null;
   reconciliationDb: {
     host: string;
@@ -225,6 +227,8 @@ export function loadConfig(): TreasuryConfig {
         rpcFallbackUrls: parseUrlList(process.env.RPC_FALLBACK_URLS),
         chainId: optionalEnv('CHAIN_ID') ? envNumber('CHAIN_ID') : null,
         explorerBaseUrl: optionalEnv('EXPLORER_BASE_URL'),
+        escrowAddress: optionalEnv('TREASURY_ESCROW_ADDRESS'),
+        usdcAddress: optionalEnv('TREASURY_USDC_ADDRESS'),
       })
     : null;
   const reconciliationDbName = optionalEnv('RECONCILIATION_DB_NAME');
@@ -340,6 +344,8 @@ export function loadConfig(): TreasuryConfig {
       ? envNumber('RPC_STALL_TIMEOUT_MS')
       : undefined,
     chainId: runtime?.chainId,
+    escrowAddress: runtime?.escrowAddress ?? undefined,
+    usdcAddress: runtime?.usdcAddress ?? undefined,
     explorerBaseUrl: runtime?.explorerBaseUrl ?? null,
     reconciliationDb: reconciliationDbName
       ? {

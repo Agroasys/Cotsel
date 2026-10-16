@@ -1,3 +1,4 @@
+import { controlledSweepFinality } from './helpers/sweepFinality';
 const mockPoolQuery = jest.fn();
 const mockClientQuery = jest.fn();
 const mockClientRelease = jest.fn();
@@ -23,6 +24,8 @@ import {
 describe('treasury accounting control queries', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockClientQuery.mockReset();
+    mockPoolQuery.mockReset();
     mockPoolConnect.mockResolvedValue({
       query: mockClientQuery,
       release: mockClientRelease,
@@ -304,6 +307,9 @@ describe('treasury accounting control queries', () => {
           {
             id: 10,
             status: 'EXECUTED',
+            matched_sweep_tx_hash: '0xclaim',
+            matched_sweep_block_number: '101',
+            metadata: { settlementFinalizedEvidence: controlledSweepFinality() },
             created_by: 'operator-1',
             approval_requested_by: 'operator-1',
             approved_by: 'approver-2',
@@ -324,6 +330,7 @@ describe('treasury accounting control queries', () => {
     const result = await updateSweepBatchStatus({
       batchId: 10,
       status: 'HANDED_OFF',
+      finalizedSweepEvidence: controlledSweepFinality(),
       actor: 'handoff-operator-4',
     });
 

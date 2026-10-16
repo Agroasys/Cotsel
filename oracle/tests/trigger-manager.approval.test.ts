@@ -1,13 +1,18 @@
+import { fundedBindingFixture } from './helpers/fundedBinding';
 import { TriggerManager } from '../src/core/trigger-manager';
 import { TriggerStatus, TriggerType, Trigger, ErrorType } from '../src/types/trigger';
 import { ValidationError } from '../src/utils/errors';
 
 jest.mock('@agroasys/sdk', () => ({
+  ...jest.requireActual('@agroasys/sdk'),
   TradeStatus: { LOCKED: 0, IN_TRANSIT: 1, ARRIVAL_CONFIRMED: 2, FROZEN: 3, CLOSED: 4 },
 }));
 
 jest.mock('../src/database/queries', () => ({
   createTrigger: jest.fn(),
+  claimTriggerDispatch: jest.fn().mockResolvedValue(true),
+  getUnresolvedSignerDispatch: jest.fn().mockResolvedValue(null),
+  resolveSignerDispatch: jest.fn().mockResolvedValue(undefined),
   getTriggerByIdempotencyKey: jest.fn(),
   getLatestTriggerByActionKey: jest.fn(),
   updateTrigger: jest.fn(),
@@ -64,6 +69,7 @@ function buildTrigger(overrides: Partial<Trigger> = {}): Trigger {
     idempotency_key: 'RELEASE_STAGE_1:1:req-1',
     trade_id: '1',
     trigger_type: TriggerType.RELEASE_STAGE_1,
+    funded_binding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
     request_hash: null,
     attempt_count: 0,
     status: TriggerStatus.PENDING_APPROVAL,
@@ -92,6 +98,11 @@ function buildTrigger(overrides: Partial<Trigger> = {}): Trigger {
 
 function buildManager(): TriggerManager {
   const sdkClient: TriggerManagerSdkClient = {
+    getDispatchSignerScope: jest
+      .fn()
+      .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+    verifyDispatchFinality: jest.fn(),
+    assertFundedBinding: jest.fn().mockResolvedValue(undefined),
     getTrade: jest.fn(),
     releaseFundsStage1: jest.fn(),
     confirmInspectionAvailable: jest.fn(),
@@ -106,6 +117,11 @@ describe('TriggerManager — manual approval gate', () => {
 
   it('sets PENDING_APPROVAL and returns early when manualApprovalEnabled=true', async () => {
     const sdkClient: TriggerManagerSdkClient = {
+      getDispatchSignerScope: jest
+        .fn()
+        .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+      verifyDispatchFinality: jest.fn(),
+      assertFundedBinding: jest.fn().mockResolvedValue(undefined),
       getTrade: jest.fn().mockResolvedValue({
         tradeId: '1',
         status: 0,
@@ -134,6 +150,7 @@ describe('TriggerManager — manual approval gate', () => {
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
     });
 
     expect(result.status).toBe(TriggerStatus.PENDING_APPROVAL);
@@ -149,6 +166,11 @@ describe('TriggerManager — manual approval gate', () => {
     (mockGetLatestTriggerByActionKey as jest.Mock).mockResolvedValue(exhausted);
 
     const sdkClient: TriggerManagerSdkClient = {
+      getDispatchSignerScope: jest
+        .fn()
+        .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+      verifyDispatchFinality: jest.fn(),
+      assertFundedBinding: jest.fn().mockResolvedValue(undefined),
       getTrade: jest.fn().mockResolvedValue({
         tradeId: '1',
         status: 0,
@@ -176,6 +198,7 @@ describe('TriggerManager — manual approval gate', () => {
       tradeId: '1',
       requestId: 'req-redrive',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
       isRedrive: true,
     });
 
@@ -194,6 +217,11 @@ describe('TriggerManager — manual approval gate', () => {
     (mockUpdateTrigger as jest.Mock).mockResolvedValue(undefined);
 
     const sdkClient: TriggerManagerSdkClient = {
+      getDispatchSignerScope: jest
+        .fn()
+        .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+      verifyDispatchFinality: jest.fn(),
+      assertFundedBinding: jest.fn().mockResolvedValue(undefined),
       getTrade: jest.fn().mockResolvedValue({
         tradeId: '1',
         status: 0,
@@ -231,6 +259,11 @@ describe('TriggerManager — manual approval gate', () => {
     (mockGetTriggerByIdempotencyKey as jest.Mock).mockResolvedValue(approved);
 
     const sdkClient: TriggerManagerSdkClient = {
+      getDispatchSignerScope: jest
+        .fn()
+        .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+      verifyDispatchFinality: jest.fn(),
+      assertFundedBinding: jest.fn().mockResolvedValue(undefined),
       getTrade: jest.fn(),
       releaseFundsStage1: jest.fn(),
       confirmInspectionAvailable: jest.fn(),

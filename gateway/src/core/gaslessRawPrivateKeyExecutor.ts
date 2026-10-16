@@ -1,3 +1,4 @@
+import { createGaslessFinalityVerifier } from './gaslessChainFinality';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -45,6 +46,7 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     chainId: config.chainId,
     quorum: config.rpcQuorum,
   });
+  const finality = createGaslessFinalityVerifier(config);
   const signer = new Wallet(config.gaslessExecutorPrivateKey, provider);
   const escrow = AgroasysEscrow__factory.connect(config.escrowAddress, signer);
   const usdc = new Contract(config.usdcAddress, USDC_AUTHORIZATION_ABI, signer);
@@ -95,7 +97,20 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
         'Gasless transaction confirmation requires reconciliation',
       );
     }
+    let finalizedEvidence;
+    try {
+      finalizedEvidence = await finality.verifyReceipt(config.chainId, tx.hash, receipt);
+    } catch {
+      finalizedEvidence = null;
+    }
+    if (!finalizedEvidence)
+      throw new GaslessTransactionOutcomePendingError(
+        tx.hash,
+        'confirmation_pending',
+        'Gasless transaction awaits finalized chain evidence',
+      );
     const outcome = {
+      finalityEvidence: finalizedEvidence,
       blockNumber: BigInt(receipt.blockNumber).toString(),
       blockHash: receipt.blockHash,
       gasUsed: BigInt(receipt.gasUsed ?? 0n).toString(),
@@ -114,6 +129,7 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
 
     return {
       txHash: tx.hash,
+      finalityEvidence: finalizedEvidence,
       blockNumber: BigInt(receipt.blockNumber).toString(),
       gasUsed: gasUsed.toString(),
       effectiveGasPriceWei: effectiveGasPriceWei.toString(),
@@ -262,6 +278,7 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
       operation: string;
       resourceType: 'settlement_handoff' | 'platform_transfer';
       resourceId: string;
+      sourceApiKeyId?: string | null;
       destinationAddress: string;
       data: string;
     },
@@ -289,6 +306,7 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
         resourceType: input.resourceType,
         resourceId: input.resourceId,
         operation: input.operation,
+        sourceApiKeyId: input.sourceApiKeyId ?? null,
       },
       transactionOutcomeRecorder,
       (signed) => provider.broadcastTransaction(signed),
@@ -370,6 +388,7 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
           operation: input.action,
           resourceType: 'platform_transfer',
           resourceId: input.platformTransferId,
+          sourceApiKeyId: input.sourceApiKeyId ?? null,
           destinationAddress: config.usdcAddress,
           data: usdcInterface.encodeFunctionData(
             'transferWithAuthorization',

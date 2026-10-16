@@ -37,6 +37,17 @@ process.env.API_KEYS_JSON = JSON.stringify([
 process.env.TREASURY_INTERNAL_MUTATION_API_KEYS = 'treasury-checker';
 process.env.TREASURY_OPERATOR_DELEGATION_API_KEYS = 'treasury-checker';
 
+// These tests isolate actor/provider/fee-accrual policy. Sweep chain verification has its own receipt and PostgreSQL proofs.
+jest.mock('../src/core/sweepExecutionMatcher', () => ({
+  SweepExecutionMatcherService: jest.fn().mockImplementation(() => ({
+    revalidateMatchedBatch: jest
+      .fn()
+      .mockImplementation(async () =>
+        jest.requireActual('./helpers/sweepFinality').controlledSweepFinality(),
+      ),
+  })),
+}));
+
 jest.mock('../src/database/queries', () => ({
   ...jest.requireActual('../src/database/queries'),
   addSweepBatchEntry: jest.fn(),

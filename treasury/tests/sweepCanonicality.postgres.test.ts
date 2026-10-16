@@ -1,3 +1,4 @@
+import { controlledSweepFinality, controlledTreasuryClaim } from './helpers/sweepFinality';
 /**
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -269,18 +270,11 @@ describePostgres('treasury sweep canonicality gate (postgres)', () => {
 
     function claimFor(batchId: number) {
       sequence += 1;
-      return {
-        sourceEventId: `claim-sc-${sequence}`,
-        matchedSweepBatchId: batchId,
-        txHash: `0xclaimsc${sequence}`,
-        blockNumber: 900 + sequence,
-        observedAt: new Date('2026-04-16T09:00:00.000Z'),
-        treasuryIdentity: `0x${'aa'.repeat(20)}`,
-        payoutReceiver: '0xpayoutreceiver',
-        amountRaw: '125000000',
-        triggeredBy: `0x${'cc'.repeat(20)}`,
-      };
+      return controlledTreasuryClaim(batchId, sequence);
     }
+
+    const finalizedEvidence = (claim: ReturnType<typeof claimFor>) =>
+      controlledSweepFinality(claim.txHash, String(claim.blockNumber));
 
     async function claimCount(batchId: number): Promise<number> {
       const result = await sidecar.query<{ count: number }>(
@@ -304,6 +298,7 @@ describePostgres('treasury sweep canonicality gate (postgres)', () => {
 
       const batch = await queries.recordSweepBatchExecution({
         claim,
+        finalizedEvidence: finalizedEvidence(claim),
         actor: 'treasury-executor',
       });
 
@@ -312,14 +307,183 @@ describePostgres('treasury sweep canonicality gate (postgres)', () => {
       expect(await claimCount(batchId)).toBe(1);
     });
 
+    it('rejects stale verification after locking without binding a claim or executing the batch', async () => {
+      const batchId = await seedApprovedBatch();
+      const claim = claimFor(batchId);
+      await expect(
+        queries.recordSweepBatchExecution({
+          claim,
+          actor: 'treasury-executor',
+          finalizedEvidence: {
+            ...finalizedEvidence(claim),
+            verifiedAt: new Date(Date.now() - 11000).toISOString(),
+          },
+        }),
+      ).rejects.toThrow('Fresh independent finalized treasury evidence');
+      expect(await claimCount(batchId)).toBe(0);
+      expect(
+        (await sidecar.query('SELECT status FROM sweep_batches WHERE id=$1', [batchId])).rows[0]
+          .status,
+      ).toBe('APPROVED');
+    });
+
+    it('rechecks original sweep finality before handoff and close under the batch lock', async () => {
+      const batchId = await seedApprovedBatch();
+      const claim = claimFor(batchId);
+      await queries.recordSweepBatchExecution({
+        claim,
+        finalizedEvidence: finalizedEvidence(claim),
+        actor: 'treasury-executor',
+      });
+      await expect(
+        queries.updateSweepBatchStatus({
+          batchId,
+          status: 'HANDED_OFF',
+          actor: 'handoff-recorder',
+        }),
+      ).rejects.toThrow('Original finalized sweep evidence');
+      await expect(
+        queries.updateSweepBatchStatus({
+          batchId,
+          status: 'HANDED_OFF',
+          actor: 'handoff-recorder',
+          finalizedSweepEvidence: { ...finalizedEvidence(claim), blockHash: `0x${'d'.repeat(64)}` },
+        }),
+      ).rejects.toThrow('Original sweep evidence changed');
+      await expect(
+        queries.updateSweepBatchStatus({
+          batchId,
+          status: 'HANDED_OFF',
+          actor: 'handoff-recorder',
+          finalizedSweepEvidence: {
+            ...finalizedEvidence(claim),
+            verifiedAt: new Date(Date.now() - 20000).toISOString(),
+          },
+        }),
+      ).rejects.toThrow('Fresh independent finalized treasury evidence');
+      const handed = await queries.updateSweepBatchStatus({
+        batchId,
+        status: 'HANDED_OFF',
+        actor: 'handoff-recorder',
+        finalizedSweepEvidence: finalizedEvidence(claim),
+      });
+      expect(handed.status).toBe('HANDED_OFF');
+      await expect(
+        queries.updateSweepBatchStatus({
+          batchId,
+          status: 'CLOSED',
+          actor: 'independent-finance-closer',
+        }),
+      ).rejects.toThrow('Original finalized sweep evidence');
+      expect(
+        (
+          await queries.updateSweepBatchStatus({
+            batchId,
+            status: 'CLOSED',
+            actor: 'independent-finance-closer',
+            finalizedSweepEvidence: finalizedEvidence(claim),
+          })
+        ).status,
+      ).toBe('CLOSED');
+    });
+
+    it('requires fresh original sweep evidence for revenue realization and preserves one posting', async () => {
+      const batchId = await seedApprovedBatch();
+      const claim = claimFor(batchId);
+      await queries.recordSweepBatchExecution({
+        claim,
+        finalizedEvidence: finalizedEvidence(claim),
+        actor: 'treasury-executor',
+      });
+      const detail = (await queries.getSweepBatchDetail(batchId))!;
+      const entryId = detail.entries[0]!.ledger_entry_id;
+      const handoff = await queries.upsertPartnerHandoff({
+        sweepBatchId: batchId,
+        partnerName: 'controlled-provider',
+        partnerReference: `controlled-${batchId}`,
+        handoffStatus: 'COMPLETED',
+        evidenceReference: `controlled-bank-evidence-${batchId}`,
+      });
+      await queries.updateSweepBatchStatus({
+        batchId,
+        status: 'HANDED_OFF',
+        actor: 'handoff-recorder',
+        finalizedSweepEvidence: finalizedEvidence(claim),
+      });
+      await queries.appendPayoutState({
+        ledgerEntryId: entryId,
+        state: 'READY_FOR_EXTERNAL_HANDOFF',
+        actor: 'test',
+      });
+      await queries.appendPayoutState({
+        ledgerEntryId: entryId,
+        state: 'AWAITING_EXTERNAL_CONFIRMATION',
+        actor: 'test',
+      });
+      await queries.upsertBankPayoutConfirmation({
+        ledgerEntryId: entryId,
+        bankReference: `controlled-bank-${batchId}`,
+        bankState: 'CONFIRMED',
+        confirmedAt: new Date(),
+        source: 'controlled-test',
+        actor: 'independent-finance-closer',
+        evidenceReference: 'controlled-bank-evidence',
+      });
+      const command = {
+        ledgerEntryId: entryId,
+        accountingPeriodId: detail.batch.accounting_period_id,
+        sweepBatchId: batchId,
+        partnerHandoffId: handoff.id,
+        actor: 'independent-finance-closer',
+        reconciliationBinding: {
+          runKey: 'controlled-run',
+          entryBlockNumber: 0,
+          coverageToBlock: 10000,
+        },
+      };
+      await expect(queries.createRevenueRealization(command)).rejects.toThrow(
+        'Original finalized sweep evidence',
+      );
+      await expect(
+        queries.createRevenueRealization({
+          ...command,
+          finalizedSweepEvidence: { ...finalizedEvidence(claim), blockHash: `0x${'d'.repeat(64)}` },
+        }),
+      ).rejects.toThrow('Original sweep evidence changed');
+      expect(
+        (
+          await queries.createRevenueRealization({
+            ...command,
+            finalizedSweepEvidence: finalizedEvidence(claim),
+          })
+        ).realization_status,
+      ).toBe('REALIZED');
+      await expect(
+        queries.createRevenueRealization({
+          ...command,
+          finalizedSweepEvidence: finalizedEvidence(claim),
+        }),
+      ).rejects.toThrow('already realized');
+      expect(
+        (
+          await sidecar.query(
+            'SELECT count(*)::int AS count FROM revenue_realizations WHERE ledger_entry_id=$1',
+            [entryId],
+          )
+        ).rows[0].count,
+      ).toBe(1);
+    });
+
     it('leaves no bound claim behind when the transition is refused', async () => {
       // Still DRAFT, so EXECUTED is not a legal transition and the whole write
       // must roll back -- a claim left bound here is what stranded batches.
       const batchId = await seedDraftBatch();
 
+      const claim = claimFor(batchId);
       await expect(
         queries.recordSweepBatchExecution({
-          claim: claimFor(batchId),
+          finalizedEvidence: finalizedEvidence(claim),
+          claim,
           actor: 'treasury-executor',
         }),
       ).rejects.toThrow();

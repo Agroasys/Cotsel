@@ -13,6 +13,21 @@ const confirmedOutcome = {
 };
 
 describe('Postgres gasless transaction outcome store', () => {
+  test('scopes retained wallet outcomes to the authenticated issuing service and original resource', async () => {
+    const query = jest.fn().mockResolvedValue({ rows: [{ transactionHash, chainId: '84532' }] });
+    const store = createPostgresGaslessTransactionOutcomeRecorder({ query } as unknown as Pool);
+    await expect(
+      store.listWalletTransferOutcomes('service-A', 'transfer-original'),
+    ).resolves.toEqual([{ transactionHash, chainId: 84532 }]);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("source_api_key_id = $1 AND resource_type = 'platform_transfer'"),
+      ['service-A', 'transfer-original'],
+    );
+    query.mockResolvedValue({ rows: Array(11).fill({ transactionHash, chainId: '84532' }) });
+    await expect(
+      store.listWalletTransferOutcomes('service-A', 'transfer-original'),
+    ).rejects.toThrow('automatic observation limit');
+  });
   test('accepts an identical terminal transition after another worker committed it', async () => {
     const query = jest
       .fn()

@@ -18,6 +18,7 @@ export interface GaslessTransactionContext {
   resourceId: string;
   operation: string;
   intentHash?: string;
+  sourceApiKeyId?: string | null;
 }
 
 export class GaslessTransactionOutcomePendingError extends GatewayError {
@@ -83,6 +84,7 @@ function requireSignedTransactionIdentity(
     gasPriceWei: transaction.gasPrice?.toString() ?? null,
     calldataHash: keccak256(transaction.data || '0x'),
     intentHash: context.intentHash ?? transaction.unsignedHash,
+    sourceApiKeyId: context.sourceApiKeyId ?? null,
   };
 }
 

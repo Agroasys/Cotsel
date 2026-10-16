@@ -23,7 +23,7 @@ import {
 import { loadLedgerExportPage } from '../core/ledgerExportService';
 import { actorFor, optionalActorFor } from './actorBinding';
 import { mapValidationError } from './errorMapping';
-import { resolveRealizationBinding } from './realizationBinding';
+import { realizeEntryWithFinalizedSweep } from './revenueRealizationCommand';
 import { SweepBatchGate } from './sweepBatchGate';
 import type {
   AddSweepBatchEntryBody,
@@ -57,7 +57,6 @@ import {
   addSweepBatchEntry,
   appendTreasuryPartnerHandoffEvidence,
   createAccountingPeriod,
-  createRevenueRealization,
   createSweepBatch,
   getTreasuryPartnerHandoffByLedgerEntryId,
   listTreasuryPartnerHandoffEventsByLedgerEntryId,
@@ -879,6 +878,7 @@ export class TreasuryController {
         await updateSweepBatchStatus({
           batchId,
           status: 'HANDED_OFF',
+          finalizedSweepEvidence: await this.sweepExecutionMatcher.revalidateMatchedBatch(batchId),
           actor: actorFor(req, body.actor),
           metadata: {
             partnerName: handoff.partner_name,
@@ -933,6 +933,7 @@ export class TreasuryController {
       const batch = await updateSweepBatchStatus({
         batchId,
         status: 'CLOSED',
+        finalizedSweepEvidence: await this.sweepExecutionMatcher.revalidateMatchedBatch(batchId),
         actor: actorFor(req, body.actor),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
@@ -967,24 +968,13 @@ export class TreasuryController {
     try {
       const entryId = parseEntryId(req.params.entryId);
       const body = requireObject<CreateRevenueRealizationBody>(req.body, 'body');
-      const realization = await createRevenueRealization({
-        reconciliationBinding: await resolveRealizationBinding(this.reconciliationGate, entryId),
-        ledgerEntryId: entryId,
-        accountingPeriodId: requireInteger(body.accountingPeriodId, 'accountingPeriodId', {
-          min: 1,
-        }),
-        sweepBatchId:
-          body.sweepBatchId === undefined || body.sweepBatchId === null
-            ? null
-            : requireInteger(body.sweepBatchId, 'sweepBatchId', { min: 1 }),
-        partnerHandoffId:
-          body.partnerHandoffId === undefined || body.partnerHandoffId === null
-            ? null
-            : requireInteger(body.partnerHandoffId, 'partnerHandoffId', { min: 1 }),
-        actor: actorFor(req, body.actor),
-        note: optionalNullableString(body.note, 'note'),
-        metadata: optionalRecord(body.metadata, 'metadata'),
-      });
+      const realization = await realizeEntryWithFinalizedSweep(
+        entryId,
+        body,
+        actorFor(req, body.actor),
+        this.sweepExecutionMatcher,
+        this.reconciliationGate,
+      );
 
       res.status(201).json(success(realization));
     } catch (error: unknown) {

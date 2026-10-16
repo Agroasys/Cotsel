@@ -1,3 +1,4 @@
+import type { RetainedSettlementRail } from './retainedSettlementRails';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -16,6 +17,9 @@ export interface GatewayConfig {
   authBaseUrl: string;
   authRequestTimeoutMs: number;
   indexerGraphqlUrl: string;
+  indexerCoverageUrl?: string;
+  retainedSettlementRails?: RetainedSettlementRail[];
+  reconciliationCoverageUrl?: string;
   indexerRequestTimeoutMs: number;
   rpcUrl: string;
   rpcFallbackUrls: string[];

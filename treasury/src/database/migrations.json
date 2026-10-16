@@ -50,6 +50,13 @@
       "file": "007_realization_reconciliation_binding.sql",
       "sha256": "9d8acdc90706d92e50457a795994257cecaf05a960bb6406317f0f6809bd224d",
       "schema_sha256": "1036385e023172ed3fc0882b32fb972379e4e81d73f7fe7e4051ba3d9dffb4dc"
+    },
+    {
+      "version": "202610160008",
+      "name": "sweep_finalized_evidence",
+      "file": "008_sweep_finalized_evidence.sql",
+      "sha256": "1db70689fe08887100179c0bffefd54875208d54d5441c93f331c98376da86b7",
+      "schema_sha256": "ade505a78a70757afcae83527c497af26b6b7ad5e985f318dbb0e45d75bb306a"
     }
   ]
 }

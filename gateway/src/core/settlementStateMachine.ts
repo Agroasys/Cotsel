@@ -41,6 +41,19 @@ export function validateExecutionTransition(
   next: SettlementExecutionStatus,
   eventType: SettlementEventType,
 ): void {
+  if (eventType === 'chain_evidence_orphaned') {
+    if (
+      !['confirmed', 'reverted', 'confirmation_pending'].includes(current) ||
+      next !== 'confirmation_pending'
+    ) {
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'Chain canonicality loss must retain the original operation for reconciliation',
+      );
+    }
+    return;
+  }
   if (RECONCILIATION_EVENT_TYPES.has(eventType)) {
     if (current !== 'confirmed') {
       throw new GatewayError(

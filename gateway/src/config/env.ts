@@ -1,3 +1,4 @@
+import { parseRetainedSettlementRails } from './retainedSettlementRails';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -101,6 +102,9 @@ export function loadConfig(): GatewayConfig {
     process.env.GATEWAY_ORACLE_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
   const treasuryBaseUrl =
     process.env.GATEWAY_TREASURY_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const indexerCoverageUrl = process.env.GATEWAY_INDEXER_COVERAGE_URL?.trim() || undefined;
+  const reconciliationCoverageUrl =
+    process.env.GATEWAY_RECONCILIATION_COVERAGE_URL?.trim() || undefined;
   const reconciliationBaseUrl =
     process.env.GATEWAY_RECONCILIATION_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
   const ricardianBaseUrl =
@@ -149,6 +153,8 @@ export function loadConfig(): GatewayConfig {
     );
   }
   for (const [name, value] of [
+    ['GATEWAY_INDEXER_COVERAGE_URL', indexerCoverageUrl],
+    ['GATEWAY_RECONCILIATION_COVERAGE_URL', reconciliationCoverageUrl],
     ['GATEWAY_ORACLE_BASE_URL', oracleBaseUrl],
     ['GATEWAY_TREASURY_BASE_URL', treasuryBaseUrl],
     ['GATEWAY_RECONCILIATION_BASE_URL', reconciliationBaseUrl],
@@ -315,8 +321,8 @@ export function loadConfig(): GatewayConfig {
   }
 
   assert(
-    !immediateInspectionAcceptanceEnabled || (nodeEnv !== 'production' && chainId !== 8453),
-    'GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED cannot be enabled in production until buyer-signed on-chain acceptance is implemented',
+    !immediateInspectionAcceptanceEnabled,
+    'GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED cannot enable Oracle-only inspection acceptance; use the buyer-signed user-action route',
   );
   if (!contractAddressRequired) {
     assert(
@@ -365,6 +371,11 @@ export function loadConfig(): GatewayConfig {
     authBaseUrl,
     authRequestTimeoutMs: envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000),
     indexerGraphqlUrl,
+    indexerCoverageUrl,
+    retainedSettlementRails: parseRetainedSettlementRails(
+      process.env.GATEWAY_RETAINED_SETTLEMENT_RAILS_JSON,
+    ),
+    reconciliationCoverageUrl,
     indexerRequestTimeoutMs: envNumber('GATEWAY_INDEXER_REQUEST_TIMEOUT_MS', 5000),
     rpcUrl,
     rpcFallbackUrls,

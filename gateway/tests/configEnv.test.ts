@@ -17,23 +17,26 @@ describe('gateway runtime env config', () => {
     );
   });
 
-  it('rejects oracle-only immediate acceptance release in production', () => {
-    withEnv(
-      {
-        NODE_ENV: 'production',
-        GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH: 'false',
-        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
-        GATEWAY_RPC_URL: undefined,
-        GATEWAY_CHAIN_ID: undefined,
-        GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED: 'true',
-      },
-      () => {
-        expect(() => loadConfigModule().loadConfig()).toThrow(
-          'GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED cannot be enabled in production',
-        );
-      },
-    );
-  });
+  it.each(['production', 'test'])(
+    'rejects oracle-only immediate acceptance release in %s',
+    (nodeEnv) => {
+      withEnv(
+        {
+          NODE_ENV: nodeEnv,
+          GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH: 'false',
+          GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+          GATEWAY_RPC_URL: undefined,
+          GATEWAY_CHAIN_ID: undefined,
+          GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED: 'true',
+        },
+        () => {
+          expect(() => loadConfigModule().loadConfig()).toThrow(
+            'GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED cannot enable Oracle-only',
+          );
+        },
+      );
+    },
+  );
 
   test('resolves base-sepolia runtime from canonical runtime key without explicit RPC inputs', () => {
     withEnv(

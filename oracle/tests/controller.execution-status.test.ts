@@ -1,3 +1,5 @@
+import { fundedBindingFixture } from './helpers/fundedBinding';
+import { TriggerType } from '../src/types/trigger';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -31,7 +33,13 @@ describe('OracleController execution truth', () => {
     const recorder = responseRecorder();
 
     await controller.finalizeAfterInspectionAcceptance(
-      { body: { tradeId: '42', requestId: 'request-42' } } as Request,
+      {
+        body: {
+          tradeId: '42',
+          requestId: 'request-42',
+          fundedBinding: fundedBindingFixture(TriggerType.FINALIZE_TRADE, '42'),
+        },
+      } as Request,
       recorder as unknown as Response<OracleResponse | ErrorResponse>,
     );
 
@@ -56,7 +64,13 @@ describe('OracleController execution truth', () => {
     const recorder = responseRecorder();
 
     await controller.finalizeTrade(
-      { body: { tradeId: '42', requestId: 'request-42' } } as Request,
+      {
+        body: {
+          tradeId: '42',
+          requestId: 'request-42',
+          fundedBinding: fundedBindingFixture(TriggerType.FINALIZE_TRADE, '42'),
+        },
+      } as Request,
       recorder as unknown as Response<OracleResponse | ErrorResponse>,
     );
 
@@ -76,7 +90,13 @@ describe('OracleController execution truth', () => {
       const recorder = responseRecorder();
 
       await controller.finalizeTrade(
-        { body: { tradeId: '42', requestId: 'request-42' } } as Request,
+        {
+          body: {
+            tradeId: '42',
+            requestId: 'request-42',
+            fundedBinding: fundedBindingFixture(TriggerType.FINALIZE_TRADE, '42'),
+          },
+        } as Request,
         recorder as unknown as Response<OracleResponse | ErrorResponse>,
       );
 

@@ -993,7 +993,8 @@ paths:
       description: |
         Service-authenticated, idempotent execution step used after handoff ingress. The gateway maps the stored
         settlement phase to the matching oracle command. It supports custody-and-document release, standard or
-        packaged-local inspection availability, buyer inspection acceptance, and notice-deadline finalization.
+        packaged-local inspection availability and notice-deadline finalization. Buyer inspection acceptance
+        requires the existing buyer-signed user-action route. Stored phases cannot be substituted.
         Governed dispute resolutions are deliberately rejected and must follow their administrative workflow.
         The stored trade identifier must be a numeric on-chain Cotsel trade id.
       operationId: executeSettlementHandoffOracleProgression
@@ -1164,6 +1165,39 @@ paths:
           $ref: '#/components/responses/ConflictError'
         '503':
           $ref: '#/components/responses/UpstreamUnavailableError'
+  /wallet/usdc/gasless-transfers/{transferId}/outcomes:
+    get:
+      tags:
+        - Settlement
+      summary: Observe retained original wallet execution outcomes
+      description: |
+        Requires signed service authentication with a fresh nonce. Returns only outcomes recorded for the
+        authenticated issuing service and original platform transfer ID. This read does not broadcast,
+        issue authorizations, retire signatures, or establish Agroasys accounting success. Legacy records
+        without an issuing service identity are not returned. Consumers independently verify each hash.
+      operationId: observeSponsoredWalletUsdcTransfer
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: transferId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{1,128}$
+      responses:
+        '200':
+          description: Retained service-bound transaction candidates, possibly empty.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletUsdcExecutionObservationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
   /wallet/usdc/gasless-transfers:
     post:
       tags:
@@ -1268,6 +1302,56 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '409':
           $ref: '#/components/responses/ConflictError'
+  /settlement/transactions/{transactionHash}/finality:
+    get:
+      tags:
+        - Settlement
+      summary: Read finalized settlement evidence and retained projection coverage
+      description: Service-authenticated read. Issuance pause does not disable observation. Pending or unproven evidence returns 503.
+      operationId: getSettlementTransactionFinality
+      security: []
+      parameters:
+        - name: transactionHash
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^0x[0-9a-fA-F]{64}$
+        - name: chainId
+          in: query
+          description: Historical chain identity. Supply with escrowAddress. The server must approve the retained deployment.
+          schema:
+            type: string
+            pattern: ^[1-9][0-9]{0,15}$
+        - name: escrowAddress
+          in: query
+          description: Original escrow identity. Supply with chainId. Caller-provided RPC URLs are rejected.
+          schema:
+            type: string
+            pattern: ^0x[0-9a-fA-F]{40}$
+      responses:
+        '200':
+          description: Independently matching finalized receipt and retained indexer/reconciliation coverage.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                  - timestamp
+                properties:
+                  success:
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                  data:
+                    $ref: '#/components/schemas/SettlementFinalityEvidence'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          description: Finalized matching evidence is not available yet.
   /governance/status:
     get:
       tags:
@@ -5204,6 +5288,10 @@ components:
           type:
             - string
             - 'null'
+        executionBinding:
+          oneOf:
+            - $ref: '#/components/schemas/SettlementExecutionBinding'
+            - type: 'null'
         metadata:
           type: object
           additionalProperties: true
@@ -5388,6 +5476,25 @@ components:
         - settlementChannel
         - displayCurrency
         - displayAmount
+      allOf:
+        - if:
+            properties:
+              phase:
+                enum:
+                  - gasless_create_trade
+                  - initial_release_after_custody_and_documents
+                  - inspection_available_standard
+                  - inspection_available_packaged_local
+                  - final_release_after_inspection_acceptance
+                  - final_release_after_notice_deadline
+                  - dispute_resolution
+            required:
+              - phase
+          then:
+            required:
+              - executionBinding
+              - externalReference
+              - ricardianHash
       properties:
         platformId:
           type: string
@@ -5424,6 +5531,8 @@ components:
           type: string
         externalReference:
           type: string
+        executionBinding:
+          $ref: '#/components/schemas/SettlementExecutionBinding'
         metadata:
           type: object
           additionalProperties: true
@@ -6072,6 +6181,72 @@ components:
         timestamp:
           type: string
           format: date-time
+    WalletUsdcExecutionObservationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - platformTransferId
+            - outcomes
+          properties:
+            platformTransferId:
+              type: string
+            outcomes:
+              type: array
+              maxItems: 10
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                  - transactionHash
+                  - observedTransactionHash
+                  - applicationRequestId
+                  - outcomeStatus
+                  - chainId
+                  - destinationAddress
+                  - calldataHash
+                properties:
+                  transactionHash:
+                    type: string
+                    pattern: ^0x[0-9a-fA-F]{64}$
+                  observedTransactionHash:
+                    type:
+                      - string
+                      - 'null'
+                  applicationRequestId:
+                    type: string
+                  outcomeStatus:
+                    type: string
+                    enum:
+                      - broadcast_pending
+                      - broadcast_unknown
+                      - confirmation_pending
+                      - confirmed
+                      - reverted
+                      - replaced
+                      - failed
+                  chainId:
+                    type: integer
+                    minimum: 1
+                  destinationAddress:
+                    type: string
+                    pattern: ^0x[0-9a-fA-F]{40}$
+                  calldataHash:
+                    type: string
+                    pattern: ^0x[0-9a-fA-F]{64}$
     ReconciliationRecord:
       type: object
       required:
@@ -8573,3 +8748,329 @@ components:
           type: string
           nullable: true
           description: Associated decision record when one exists.
+    SettlementExecutionBinding:
+      oneOf:
+        - $ref: '#/components/schemas/SettlementCreateTradeBinding'
+        - $ref: '#/components/schemas/SettlementFundedBinding'
+    SettlementFinalityEvidence:
+      type: object
+      required:
+        - chainId
+        - blockNumber
+        - finalizedBlockNumber
+        - transactionHash
+        - blockHash
+        - finalizedBlockHash
+        - policyVersion
+        - rpcWitnesses
+        - projectionCoverage
+      properties:
+        chainId:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)$
+        blockNumber:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)$
+        finalizedBlockNumber:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)$
+        transactionHash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        blockHash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        finalizedBlockHash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        policyVersion:
+          const: gasless_dual_rpc_finalized_v1
+        rpcWitnesses:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            type: string
+            pattern: ^0x[0-9a-f]{64}$
+        projectionCoverage:
+          type: object
+          required:
+            - version
+            - tradeId
+            - indexer
+            - reconciliation
+          properties:
+            version:
+              const: cotsel.financial-projection-coverage.v1
+            tradeId:
+              type: string
+              pattern: ^(0|[1-9][0-9]*)$
+            indexer:
+              type: object
+              required:
+                - blockNumber
+                - blockHash
+              properties:
+                blockNumber:
+                  type: string
+                  pattern: ^(0|[1-9][0-9]*)$
+                blockHash:
+                  type: string
+                  pattern: ^0x[0-9a-f]{64}$
+            reconciliation:
+              type: object
+              required:
+                - runKey
+                - blockNumber
+                - blockHash
+                - verifiedAt
+              properties:
+                runKey:
+                  type: string
+                blockNumber:
+                  type: string
+                  pattern: ^(0|[1-9][0-9]*)$
+                blockHash:
+                  type: string
+                  pattern: ^0x[0-9a-f]{64}$
+                verifiedAt:
+                  type: string
+                  format: date-time
+    SettlementCreateTradeBinding:
+      type: object
+      additionalProperties: false
+      required:
+        - scopeVersion
+        - sourceOperationId
+        - packageId
+        - approvalScopeFingerprint
+        - ricardianHash
+        - executionScopeHash
+        - chainId
+        - totalAmount
+        - logisticsAmount
+        - platformFeesAmount
+        - supplierFirstTranche
+        - supplierSecondTranche
+        - escrowAddress
+        - tokenAddress
+        - buyerAddress
+        - supplierAddress
+        - expiresAt
+        - buyerAuthorization
+        - usdcAuthorization
+      properties:
+        scopeVersion:
+          type: string
+          const: agroasys.cotsel-execution-binding.v1
+        ownerServiceId:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Derived from authenticated service credentials. A supplied value must match.
+        sourceOperationId:
+          type: string
+          minLength: 1
+          maxLength: 255
+        packageId:
+          type: string
+          minLength: 1
+          maxLength: 255
+        approvalScopeFingerprint:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        ricardianHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        executionScopeHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        chainId:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+          description: Canonical unsigned decimal integer within uint256.
+        totalAmount:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+          description: Canonical unsigned decimal integer within uint256.
+        logisticsAmount:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+          description: Canonical unsigned decimal integer within uint256.
+        platformFeesAmount:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+          description: Canonical unsigned decimal integer within uint256.
+        supplierFirstTranche:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+          description: Canonical unsigned decimal integer within uint256.
+        supplierSecondTranche:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+          description: Canonical unsigned decimal integer within uint256.
+        escrowAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        tokenAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        buyerAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        supplierAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        expiresAt:
+          type: string
+          format: date-time
+          description: Exact ISO timestamp captured at package issuance.
+        buyerAuthorization:
+          type: object
+          additionalProperties: false
+          required:
+            - nonce
+            - deadline
+          properties:
+            nonce:
+              type: string
+              pattern: ^(0|[1-9][0-9]{0,77})$
+            deadline:
+              type: string
+              pattern: ^(0|[1-9][0-9]{0,77})$
+        usdcAuthorization:
+          type: object
+          additionalProperties: false
+          required:
+            - from
+            - to
+            - value
+            - validAfter
+            - validBefore
+            - nonce
+          properties:
+            from:
+              type: string
+              pattern: ^0x[0-9a-fA-F]{40}$
+            to:
+              type: string
+              pattern: ^0x[0-9a-fA-F]{40}$
+            value:
+              type: string
+              pattern: ^(0|[1-9][0-9]{0,77})$
+            validAfter:
+              type: string
+              pattern: ^(0|[1-9][0-9]{0,77})$
+            validBefore:
+              type: string
+              pattern: ^(0|[1-9][0-9]{0,77})$
+            nonce:
+              type: string
+              pattern: ^0x[0-9a-fA-F]{64}$
+      description: Immutable complete funding instruction. Required for new gasless create-trade handoffs; legacy missing bindings cannot execute.
+    SettlementFundedBinding:
+      type: object
+      additionalProperties: false
+      required:
+        - scopeVersion
+        - ownerServiceId
+        - sourceOperationId
+        - phase
+        - chainId
+        - escrowAddress
+        - tokenAddress
+        - tradeId
+        - buyerAddress
+        - supplierAddress
+        - ricardianHash
+        - totalAmount
+        - logisticsAmount
+        - platformFeesAmount
+        - supplierFirstTranche
+        - supplierSecondTranche
+        - supplierPayoutAmount
+        - treasuryAccrualAmount
+        - buyerRefundAmount
+        - fundingTransactionHash
+        - fundingBlockNumber
+        - fundingBlockHash
+        - originalFundingFingerprint
+      properties:
+        scopeVersion:
+          type: string
+          const: agroasys.funded-settlement-binding.v1
+        ownerServiceId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        sourceOperationId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        phase:
+          type: string
+          enum:
+            - initial_release_after_custody_and_documents
+            - inspection_available_standard
+            - inspection_available_packaged_local
+            - final_release_after_inspection_acceptance
+            - final_release_after_notice_deadline
+            - dispute_resolution
+        chainId:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        escrowAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        tokenAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        tradeId:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        buyerAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        supplierAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        ricardianHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        totalAmount:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        logisticsAmount:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        platformFeesAmount:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        supplierFirstTranche:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        supplierSecondTranche:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        supplierPayoutAmount:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        treasuryAccrualAmount:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        buyerRefundAmount:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        fundingTransactionHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        fundingBlockNumber:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        fundingBlockHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        originalFundingFingerprint:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+      description: Immutable original finalized funding and exact progression instruction. Retained Oracle execution revalidates this scope on every submission and retry.

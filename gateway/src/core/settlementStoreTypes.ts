@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { SettlementAmountInput } from './settlementAmount';
+import type { SettlementExecutionBinding } from './settlementExecutionBinding';
 
 export const SETTLEMENT_EXECUTION_STATUSES = [
   'pending',
@@ -46,6 +47,7 @@ export const SETTLEMENT_EVENT_TYPES = [
   'rejected',
   'reconciled',
   'drift_detected',
+  'chain_evidence_orphaned',
 ] as const;
 
 export type SettlementExecutionStatus = (typeof SETTLEMENT_EXECUTION_STATUSES)[number];
@@ -54,6 +56,7 @@ export type SettlementCallbackStatus = (typeof SETTLEMENT_CALLBACK_STATUSES)[num
 export type SettlementEventType = (typeof SETTLEMENT_EVENT_TYPES)[number];
 
 export interface SettlementHandoffRecord {
+  executionBinding?: SettlementExecutionBinding | null;
   handoffId: string;
   platformId: string;
   platformHandoffId: string;
@@ -120,6 +123,7 @@ export interface SettlementCallbackDeliveryRecord {
 }
 
 export interface CreateSettlementHandoffInput {
+  executionBinding?: SettlementExecutionBinding | null;
   platformId: string;
   platformHandoffId: string;
   tradeId: string;

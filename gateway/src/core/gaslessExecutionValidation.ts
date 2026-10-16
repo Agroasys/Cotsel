@@ -9,6 +9,10 @@ import type {
   GaslessUserActionExecutionInput,
 } from './gaslessExecutionTypes';
 import type { SettlementHandoffRecord } from './settlementStore';
+import {
+  parseSettlementExecutionBinding,
+  assertExecutionMatchesTypedBinding,
+} from './settlementExecutionBinding';
 
 export function assertAmountsMatchAuthorization(input: GaslessCreateTradeExecutionInput): void {
   const expectedTotal =
@@ -99,8 +103,12 @@ export function assertUserAuthorizationBindings(
 export function assertHandoffMatchesExecution(
   handoff: SettlementHandoffRecord,
   input: GaslessCreateTradeExecutionInput,
+  tokenAddress: string,
 ): void {
-  if (handoff.ricardianHash && handoff.ricardianHash !== input.ricardianHash) {
+  if (
+    !handoff.ricardianHash ||
+    handoff.ricardianHash.toLowerCase() !== input.ricardianHash.toLowerCase()
+  ) {
     throw new GatewayError(
       409,
       'CONFLICT',
@@ -112,6 +120,26 @@ export function assertHandoffMatchesExecution(
       },
     );
   }
+  if (!input.sourceApiKeyId || handoff.sourceApiKeyId !== input.sourceApiKeyId) {
+    throw new GatewayError(
+      403,
+      'FORBIDDEN',
+      'gasless execution must use the handoff issuing service identity',
+    );
+  }
+  if (
+    handoff.phase !== 'gasless_create_trade' ||
+    handoff.settlementChannel !== 'cotsel_escrow' ||
+    !handoff.executionBinding
+  ) {
+    throw new GatewayError(
+      409,
+      'CONFLICT',
+      'gasless execution does not match the immutable handoff scope',
+    );
+  }
+  const binding = parseSettlementExecutionBinding(handoff.executionBinding, input.sourceApiKeyId);
+  assertExecutionMatchesTypedBinding(binding, input, tokenAddress);
 }
 
 export function assertContractMatchesRuntime(

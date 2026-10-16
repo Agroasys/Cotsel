@@ -41,6 +41,8 @@ function buildRecord(
 
 function createDependencies(record: GaslessTransactionOutcomeRecord) {
   const store = {
+    listWalletTransferOutcomes: jest.fn(async () => []),
+    markOrphaned: jest.fn(async () => undefined),
     listRecoveryCandidates: jest.fn(async () => [record]),
     recordPrepared: jest.fn(),
     markBroadcastUnknown: jest.fn(async () => undefined),
@@ -58,12 +60,29 @@ function createDependencies(record: GaslessTransactionOutcomeRecord) {
     ),
   };
   const observer = {
+    onOrphaned: jest.fn(async () => undefined),
     onBroadcastUnknown: jest.fn(async () => undefined),
     onConfirmationPending: jest.fn(async () => undefined),
     onConfirmed: jest.fn(async () => undefined),
     onReverted: jest.fn(async () => undefined),
   };
-  return { store, provider, observer };
+  const finality = {
+    verifyReceipt: jest.fn<
+      Promise<import('../src/core/gaslessChainFinality').GaslessFinalityEvidence | null>,
+      [number, string, TransactionReceipt]
+    >(async () => ({
+      policyVersion: 'gasless_dual_rpc_finalized_v1' as const,
+      chainId: String(record.chainId),
+      transactionHash,
+      blockNumber: '1234',
+      blockHash: `0x${'d'.repeat(64)}`,
+      finalizedBlockNumber: '1300',
+      finalizedBlockHash: `0x${'f'.repeat(64)}`,
+      rpcWitnesses: ['rpc-a', 'rpc-b'],
+    })),
+    revalidateBlock: jest.fn(async () => 'canonical' as 'canonical' | 'orphaned' | 'unavailable'),
+  };
+  return { store, provider, observer, finality };
 }
 
 function confirmedReceipt(status = 1): TransactionReceipt {
@@ -77,6 +96,62 @@ function confirmedReceipt(status = 1): TransactionReceipt {
 }
 
 describe('gasless transaction outcome restart recovery', () => {
+  test('keeps mined receipts pending until both RPC witnesses establish finality', async () => {
+    const dependencies = createDependencies(buildRecord('confirmation_pending'));
+    dependencies.provider.getTransactionReceipt.mockResolvedValue(confirmedReceipt());
+    dependencies.finality.verifyReceipt.mockResolvedValue(null);
+    const reconciler = new GaslessTransactionOutcomeReconciler(
+      dependencies.store,
+      dependencies.provider,
+      dependencies.observer,
+      5000,
+      dependencies.finality,
+    );
+    await reconciler.processUnresolved();
+    expect(dependencies.store.markConfirmed).not.toHaveBeenCalled();
+    expect(dependencies.observer.onConfirmed).not.toHaveBeenCalled();
+    expect(dependencies.store.markConfirmationPending).toHaveBeenCalledWith(transactionHash);
+  });
+  test('retains confirmed transactions and withdraws success when their finalized block is orphaned', async () => {
+    const record = {
+      ...buildRecord('confirmed'),
+      projectedOutcomeStatus: 'confirmed' as const,
+      blockNumber: '1234',
+      blockHash: `0x${'d'.repeat(64)}`,
+    };
+    const dependencies = createDependencies(record);
+    dependencies.finality.revalidateBlock.mockResolvedValue('orphaned');
+    const reconciler = new GaslessTransactionOutcomeReconciler(
+      dependencies.store,
+      dependencies.provider,
+      dependencies.observer,
+      5000,
+      dependencies.finality,
+    );
+    await reconciler.processUnresolved();
+    expect(dependencies.store.markOrphaned).toHaveBeenCalledWith(transactionHash);
+    expect(dependencies.observer.onOrphaned).toHaveBeenCalledWith(
+      expect.objectContaining({ transactionHash, failureCode: 'FINALIZED_BLOCK_ORPHANED' }),
+    );
+    expect(dependencies.provider.getTransactionReceipt).not.toHaveBeenCalled();
+  });
+  test('does not auto-confirm or rebroadcast orphaned operations after restart', async () => {
+    const dependencies = createDependencies({
+      ...buildRecord('confirmation_pending'),
+      failureCode: 'FINALIZED_BLOCK_ORPHANED',
+    });
+    const reconciler = new GaslessTransactionOutcomeReconciler(
+      dependencies.store,
+      dependencies.provider,
+      dependencies.observer,
+      5000,
+      dependencies.finality,
+    );
+    await reconciler.processUnresolved();
+    expect(dependencies.observer.onOrphaned).toHaveBeenCalled();
+    expect(dependencies.provider.getTransactionReceipt).not.toHaveBeenCalled();
+    expect(dependencies.store.markConfirmed).not.toHaveBeenCalled();
+  });
   test('projects and records the original confirmed transaction without rebroadcast', async () => {
     const dependencies = createDependencies(buildRecord('confirmation_pending'));
     dependencies.provider.getTransactionReceipt.mockResolvedValue(confirmedReceipt());
@@ -85,6 +160,7 @@ describe('gasless transaction outcome restart recovery', () => {
       dependencies.provider,
       dependencies.observer,
       5000,
+      dependencies.finality,
     );
 
     await reconciler.processUnresolved();
@@ -114,6 +190,7 @@ describe('gasless transaction outcome restart recovery', () => {
       dependencies.provider,
       dependencies.observer,
       5000,
+      dependencies.finality,
     );
 
     await reconciler.processUnresolved();
@@ -152,6 +229,7 @@ describe('gasless transaction outcome restart recovery', () => {
       dependencies.provider,
       dependencies.observer,
       5000,
+      dependencies.finality,
     );
 
     await reconciler.processUnresolved();
@@ -191,6 +269,7 @@ describe('gasless transaction outcome restart recovery', () => {
       dependencies.provider,
       dependencies.observer,
       5000,
+      dependencies.finality,
     );
 
     await reconciler.processUnresolved();
@@ -213,6 +292,7 @@ describe('gasless transaction outcome restart recovery', () => {
       dependencies.provider,
       dependencies.observer,
       5000,
+      dependencies.finality,
     );
 
     await reconciler.processUnresolved();
@@ -240,6 +320,7 @@ describe('gasless transaction outcome restart recovery', () => {
       dependencies.provider,
       dependencies.observer,
       5000,
+      dependencies.finality,
     );
 
     await reconciler.processUnresolved();
@@ -273,6 +354,7 @@ describe('gasless transaction outcome restart recovery', () => {
       dependencies.provider,
       dependencies.observer,
       5000,
+      dependencies.finality,
     );
 
     await reconciler.processUnresolved();

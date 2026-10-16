@@ -1,159 +1,109 @@
 import { ConfirmationWorker } from '../src/worker/confirmation-worker';
 import { TriggerStatus, TriggerType } from '../src/types/trigger';
-
+import { fundedBindingFixture } from './helpers/fundedBinding';
 const mockGetTriggersByStatus = jest.fn();
 const mockUpdateTrigger = jest.fn();
-const TRADE_STATUS_LOCKED = 0;
-const TRADE_STATUS_IN_TRANSIT = 1;
-
+const mockResolveSignerDispatch = jest.fn();
 jest.mock('../src/database/queries', () => ({
   getTriggersByStatus: (...args: unknown[]) => mockGetTriggersByStatus(...args),
   updateTrigger: (...args: unknown[]) => mockUpdateTrigger(...args),
+  resolveSignerDispatch: (...args: unknown[]) => mockResolveSignerDispatch(...args),
 }));
-
-type TriggerLike = {
-  idempotency_key: string;
-  action_key: string;
-  request_id: string;
-  tx_hash: string;
-  trade_id: string;
-  trigger_type: TriggerType;
-  submitted_at: Date;
+const hash = `0x${'a'.repeat(64)}`;
+const scope = '31337:0x3333333333333333333333333333333333333333';
+const trigger = {
+  idempotency_key: 'operation',
+  action_key: 'RELEASE_STAGE_1:1',
+  request_id: 'req-1',
+  tx_hash: hash,
+  trade_id: '1',
+  trigger_type: TriggerType.RELEASE_STAGE_1,
+  submitted_at: new Date(Date.now() - 35 * 60 * 1000),
+  dispatch_started_at: new Date(),
+  dispatch_signer_scope: scope,
+  funded_binding: fundedBindingFixture(),
 };
-
-type IndexerClientLike = ConstructorParameters<typeof ConfirmationWorker>[0];
-type SdkClientLike = ConstructorParameters<typeof ConfirmationWorker>[1];
-
-function makeTrigger(overrides: Partial<TriggerLike> = {}): TriggerLike {
-  return {
-    idempotency_key: 'test-idempotency-key',
-    action_key: 'RELEASE_STAGE_1:1',
-    request_id: 'req-1',
-    tx_hash: '0x1111111111111111111111111111111111111111111111111111111111111111',
-    trade_id: '1',
-    trigger_type: TriggerType.RELEASE_STAGE_1,
-    submitted_at: new Date(Date.now() - 25 * 60 * 1000),
-    ...overrides,
+const evidence = {
+  policy: 'oracle_dispatch_nonce_finality_v1',
+  signerScope: scope,
+  transactionHash: hash,
+  blockNumber: 100,
+  blockHash: `0x${'b'.repeat(64)}`,
+  receiptStatus: 1,
+};
+function setup(eventChanges: Record<string, unknown> = {}) {
+  const sdk = {
+    getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(null),
+    getSettlementConfirmationHeads: jest.fn(),
+    verifyProgressionReceipt: jest.fn().mockResolvedValue(evidence),
+    getTrade: jest.fn().mockResolvedValue({ status: 4 }),
   };
+  const indexer = {
+    findConfirmationEvent: jest.fn().mockResolvedValue({
+      id: 'event',
+      txHash: hash,
+      tradeId: '1',
+      blockNumber: 100,
+      eventName: 'FundsReleasedStage1',
+      ...eventChanges,
+    }),
+  };
+  const worker = new ConfirmationWorker(indexer as never, sdk as never);
+  const check = (
+    Reflect.get(worker, 'checkConfirmation') as (value: unknown) => Promise<void>
+  ).bind(worker);
+  return { sdk, indexer, check };
 }
-
-describe('ConfirmationWorker on-chain fallback', () => {
+describe('Oracle independently finalized original confirmation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockResolveSignerDispatch.mockResolvedValue(undefined);
   });
-
-  it('marks trigger confirmed when indexer is unavailable but chain state has advanced', async () => {
-    const indexerClient: IndexerClientLike = {
-      findConfirmationEvent: jest.fn().mockResolvedValue(null),
-    } as unknown as IndexerClientLike;
-
-    const sdkClient: SdkClientLike = {
-      getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(null),
-      getSettlementConfirmationHeads: jest.fn(),
-      getTrade: jest.fn().mockResolvedValue({ status: TRADE_STATUS_IN_TRANSIT }),
-    } as unknown as SdkClientLike;
-
-    const worker = new ConfirmationWorker(indexerClient, sdkClient);
-    const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
-      trigger: TriggerLike,
-    ) => Promise<void>;
-    const boundCheckConfirmation = checkConfirmation.bind(worker);
-
-    await boundCheckConfirmation(makeTrigger());
-
-    expect(sdkClient.getTrade).toHaveBeenCalledWith('1');
+  it('confirms only the matching original finalized receipt and projection', async () => {
+    const { sdk, check } = setup();
+    await check(trigger);
+    expect(sdk.verifyProgressionReceipt).toHaveBeenCalledWith(scope, hash, trigger.funded_binding);
+    expect(mockResolveSignerDispatch).toHaveBeenCalledWith('operation', evidence);
     expect(mockUpdateTrigger).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        status: TriggerStatus.CONFIRMED,
-        on_chain_verified: true,
-      }),
+      'operation',
+      expect.objectContaining({ status: TriggerStatus.CONFIRMED, confirmation_stage: 'FINALIZED' }),
     );
   });
-
-  it('does not mark confirmed when chain state is still pending', async () => {
-    const indexerClient: IndexerClientLike = {
-      findConfirmationEvent: jest.fn().mockResolvedValue(null),
-    } as unknown as IndexerClientLike;
-
-    const sdkClient: SdkClientLike = {
-      getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(null),
-      getSettlementConfirmationHeads: jest.fn(),
-      getTrade: jest.fn().mockResolvedValue({ status: TRADE_STATUS_LOCKED }),
-    } as unknown as SdkClientLike;
-
-    const worker = new ConfirmationWorker(indexerClient, sdkClient);
-    const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
-      trigger: TriggerLike,
-    ) => Promise<void>;
-    const boundCheckConfirmation = checkConfirmation.bind(worker);
-
-    await boundCheckConfirmation(makeTrigger());
-
-    expect(sdkClient.getTrade).toHaveBeenCalledWith('1');
-    expect(mockUpdateTrigger).not.toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ status: TriggerStatus.CONFIRMED }),
-    );
+  it.each([
+    'missing receipt',
+    'unfinalized',
+    'RPC disagreement',
+    'wrong recipient',
+    'wrong input',
+    'reverted',
+  ])('retains %s even after timeout and advanced trade state', async (reason) => {
+    const { sdk, check } = setup();
+    sdk.verifyProgressionReceipt.mockRejectedValue(new Error(reason));
+    await check(trigger);
+    expect(mockUpdateTrigger).not.toHaveBeenCalled();
+    expect(mockResolveSignerDispatch).not.toHaveBeenCalled();
+    expect(sdk.getTrade).not.toHaveBeenCalled();
   });
-
-  it('rate-limits on-chain fallback checks per tradeId', async () => {
-    const indexerClient: IndexerClientLike = {
-      findConfirmationEvent: jest.fn().mockResolvedValue(null),
-    } as unknown as IndexerClientLike;
-
-    const sdkClient: SdkClientLike = {
-      getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(null),
-      getSettlementConfirmationHeads: jest.fn(),
-      getTrade: jest.fn().mockResolvedValue({ status: TRADE_STATUS_LOCKED }),
-    } as unknown as SdkClientLike;
-
-    const worker = new ConfirmationWorker(indexerClient, sdkClient);
-    const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
-      trigger: TriggerLike,
-    ) => Promise<void>;
-    const boundCheckConfirmation = checkConfirmation.bind(worker);
-    const trigger = makeTrigger();
-
-    await boundCheckConfirmation(trigger);
-    await boundCheckConfirmation(trigger);
-
-    expect(sdkClient.getTrade).toHaveBeenCalledTimes(1);
+  it.each([
+    { txHash: `0x${'c'.repeat(64)}` },
+    { tradeId: '2' },
+    { blockNumber: 99 },
+    { eventName: 'TradeLocked' },
+  ])('rejects contradictory projection %j', async (changes) => {
+    const { check } = setup(changes);
+    await check(trigger);
+    expect(mockUpdateTrigger).not.toHaveBeenCalled();
   });
-
-  it('confirms from receipt once the block has reached the safe stage', async () => {
-    const indexerClient: IndexerClientLike = {
-      findConfirmationEvent: jest.fn().mockResolvedValue(null),
-    } as unknown as IndexerClientLike;
-
-    const sdkClient: SdkClientLike = {
-      getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(123),
-      getSettlementConfirmationHeads: jest.fn().mockResolvedValue({
-        latestBlockNumber: 140,
-        safeBlockNumber: 130,
-        finalizedBlockNumber: 100,
-      }),
-      getTrade: jest.fn(),
-    } as unknown as SdkClientLike;
-
-    const worker = new ConfirmationWorker(indexerClient, sdkClient);
-    const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
-      trigger: TriggerLike,
-    ) => Promise<void>;
-    const boundCheckConfirmation = checkConfirmation.bind(worker);
-
-    await boundCheckConfirmation(
-      makeTrigger({ submitted_at: new Date(Date.now() - 35 * 60 * 1000) }),
-    );
-
-    expect(mockUpdateTrigger).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        status: TriggerStatus.CONFIRMED,
-        on_chain_verified: true,
-        confirmation_stage: 'SAFE',
-      }),
-    );
-    expect(sdkClient.getTrade).not.toHaveBeenCalled();
+  it('keeps legacy dispatches without signer attribution unresolved', async () => {
+    const { sdk, check } = setup();
+    await check({ ...trigger, dispatch_signer_scope: null });
+    expect(sdk.verifyProgressionReceipt).not.toHaveBeenCalled();
+    expect(mockUpdateTrigger).not.toHaveBeenCalled();
+  });
+  it('does not confirm if committing original nonce evidence fails', async () => {
+    const { check } = setup();
+    mockResolveSignerDispatch.mockRejectedValue(new Error('database unavailable'));
+    await check(trigger);
+    expect(mockUpdateTrigger).not.toHaveBeenCalled();
   });
 });

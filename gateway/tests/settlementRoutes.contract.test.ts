@@ -1,307 +1,22 @@
-/**
- * SPDX-License-Identifier: Apache-2.0
- */
-import type { Server } from 'http';
-import { Router } from 'express';
+/** SPDX-License-Identifier: Apache-2.0 */
 import { Signature, Wallet } from 'ethers';
-import { createInMemoryNonceStore } from '@agroasys/shared-auth';
-import { createApp } from '../src/app';
-import type { GatewayConfig } from '../src/config/env';
+import { testExports as gaslessSettlementExecutionTestExports } from '../src/core/gaslessSettlementExecutionService';
+import { executionBindingFixture } from './helpers/settlementExecutionBindingFixtures';
+import {
+  createGaslessExecutionScopeHash,
+  createGaslessPayloadHash,
+} from '../src/core/gaslessRequestNormalization';
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
-import { createInMemoryIdempotencyStore } from '../src/core/idempotencyStore';
-import { createServiceApiKeyLookup, createServiceAuthHeaders } from '../src/core/serviceAuth';
-import { SettlementService } from '../src/core/settlementService';
-import { createInMemorySettlementStore } from '../src/core/settlementStore';
-import {
-  GaslessSettlementExecutionService,
-  type GaslessExecutionSubmission,
-  testExports as gaslessSettlementExecutionTestExports,
-} from '../src/core/gaslessSettlementExecutionService';
-import { createCapabilitiesRouter } from '../src/routes/capabilities';
-import { createSettlementRouter } from '../src/routes/settlement';
 import type { RicardianClient } from '../src/core/ricardianClient';
-
-const config: GatewayConfig = {
-  port: 3600,
-  dbHost: 'localhost',
-  dbPort: 5432,
-  dbName: 'agroasys_gateway',
-  dbUser: 'postgres',
-  dbPassword: 'postgres',
-  authBaseUrl: 'http://127.0.0.1:3005',
-  authRequestTimeoutMs: 5000,
-  indexerGraphqlUrl: 'http://127.0.0.1:4350/graphql',
-  indexerRequestTimeoutMs: 5000,
-  rpcUrl: 'http://127.0.0.1:8545',
-  rpcFallbackUrls: [],
-  rpcReadTimeoutMs: 8000,
-  chainId: 31337,
-  escrowAddress: '0x0000000000000000000000000000000000000999',
-  usdcAddress: '0x0000000000000000000000000000000000000888',
-  enableMutations: false,
-  writeAllowlist: [],
-  governanceQueueTtlSeconds: 86400,
-  settlementIngressEnabled: true,
-  settlementServiceAuthApiKeysJson: JSON.stringify([
-    { id: 'platform-main', secret: 'super-secret', active: true },
-  ]),
-  settlementServiceAuthMaxSkewSeconds: 300,
-  settlementServiceAuthNonceTtlSeconds: 600,
-  settlementCallbackEnabled: false,
-  settlementCallbackRequestTimeoutMs: 5000,
-  settlementCallbackPollIntervalMs: 5000,
-  settlementCallbackMaxAttempts: 8,
-  settlementCallbackInitialBackoffMs: 2000,
-  settlementCallbackMaxBackoffMs: 60000,
-  gaslessExecutionEnabled: true,
-  gaslessExecutorPrivateKey: '0x0000000000000000000000000000000000000000000000000000000000000001',
-  gaslessMaxGasLimit: 1_500_000n,
-  gaslessMinExecutorBalanceWei: 0n,
-  gaslessRequestMaxTtlSeconds: 900,
-  commitSha: 'abc1234',
-  buildTime: '2026-03-11T00:00:00.000Z',
-  nodeEnv: 'test',
-  corsAllowedOrigins: [],
-  corsAllowNoOrigin: true,
-  rateLimitEnabled: true,
-  contractAddressRequired: true,
-  allowInsecureDownstreamAuth: true,
-};
-
-const buildConfirmedSubmission = (txHash: string): GaslessExecutionSubmission => ({
-  txHash,
-  receipt: {
-    txHash,
-    blockNumber: '12345',
-    gasUsed: '210000',
-    effectiveGasPriceWei: '1000000000',
-    nativeCostWei: '210000000000000',
-    executorAddress: '0x1111111111111111111111111111111111111111',
-    executorBalanceWei: '1000000000000000000',
-  },
-});
-
-async function startServer(
-  overrides: Partial<GatewayConfig> = {},
-  executorOverrides: Partial<{
-    simulateCreateTrade: () => Promise<{ gasEstimate?: bigint | string | number | null }>;
-    executeCreateTrade: () => Promise<GaslessExecutionSubmission>;
-    simulateUserAction: () => Promise<{ gasEstimate?: bigint | string | number | null }>;
-    executeUserAction: () => Promise<GaslessExecutionSubmission>;
-    simulateWalletUsdcTransfer: () => Promise<{
-      gasEstimate?: bigint | string | number | null;
-    }>;
-    executeWalletUsdcTransfer: () => Promise<GaslessExecutionSubmission>;
-  }> = {},
-  serverOptions: Partial<{ includeProtectedRouterBeforeSettlement: boolean }> = {},
-  ricardianClient?: RicardianClient,
-) {
-  const runtimeConfig: GatewayConfig = { ...config, ...overrides };
-  const settlementStore = createInMemorySettlementStore();
-  const settlementService = new SettlementService(runtimeConfig, settlementStore);
-  const gaslessSettlementService = new GaslessSettlementExecutionService(
-    settlementService,
-    settlementStore,
-    {
-      async executeCreateTrade() {
-        return buildConfirmedSubmission(
-          '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-        );
-      },
-      async simulateCreateTrade() {
-        return {
-          gasEstimate: 500000n,
-        };
-      },
-      async executeUserAction() {
-        return buildConfirmedSubmission(
-          '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-        );
-      },
-      async simulateUserAction() {
-        return {
-          gasEstimate: 300000n,
-        };
-      },
-      async executeWalletUsdcTransfer() {
-        return buildConfirmedSubmission(
-          '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
-        );
-      },
-      async simulateWalletUsdcTransfer() {
-        return { gasEstimate: 110000n };
-      },
-      ...executorOverrides,
-    },
-    {
-      chainId: runtimeConfig.chainId,
-      escrowAddress: runtimeConfig.escrowAddress,
-      usdcAddress: runtimeConfig.usdcAddress,
-      requestMaxTtlSeconds: runtimeConfig.gaslessRequestMaxTtlSeconds ?? 900,
-      broadcastPaused: runtimeConfig.gaslessBroadcastPaused,
-      signerCustodyMode: runtimeConfig.gaslessSignerCustodyMode,
-      rpcFallbackCount: runtimeConfig.rpcFallbackUrls.length,
-      gasLimitCap: runtimeConfig.gaslessMaxGasLimit,
-      maxFeePerGasWei: runtimeConfig.gaslessMaxFeePerGasWei,
-      maxNativeCostWei: runtimeConfig.gaslessMaxNativeCostWei,
-      minExecutorBalanceWei: runtimeConfig.gaslessMinExecutorBalanceWei,
-      lowBalanceAlertWei: runtimeConfig.gaslessLowBalanceAlertWei,
-      capacityTargetTxPerDay: runtimeConfig.gaslessCapacityTargetTxPerDay,
-      capacityBurstMultiplierBasisPoints: runtimeConfig.gaslessCapacityBurstMultiplierBasisPoints,
-      capacitySafetyMarginBasisPoints: runtimeConfig.gaslessCapacitySafetyMarginBasisPoints,
-      capacityRequiredExecutorBalanceWei: runtimeConfig.gaslessCapacityRequiredExecutorBalanceWei,
-      capacityFailClosed: runtimeConfig.gaslessCapacityFailClosed,
-      stuckQueueThresholdMs: runtimeConfig.gaslessStuckQueueThresholdMs,
-      receiptTimeoutMs: runtimeConfig.gaslessReceiptTimeoutMs,
-      repeatedFailureAlertThreshold: runtimeConfig.gaslessRepeatedFailureAlertThreshold,
-    },
-  );
-  const nonceStore = createInMemoryNonceStore();
-  const idempotencyStore = createInMemoryIdempotencyStore();
-  const router = Router();
-  if (serverOptions.includeProtectedRouterBeforeSettlement) {
-    router.use(
-      createCapabilitiesRouter({
-        authSessionClient: {
-          async resolveSession() {
-            throw new Error('operator auth should not run for settlement service routes');
-          },
-          async checkReadiness() {},
-        },
-        config: runtimeConfig,
-      }),
-    );
-  }
-  router.use(
-    createSettlementRouter({
-      config: runtimeConfig,
-      settlementService,
-      settlementStore,
-      gaslessSettlementService,
-      ricardianClient,
-      nonceStore,
-      idempotencyStore,
-      lookupServiceApiKey: createServiceApiKeyLookup(
-        runtimeConfig.settlementServiceAuthApiKeysJson,
-      ),
-    }),
-  );
-  router.get('/after-settlement', (_req, res) => {
-    res.status(200).json({ success: true });
-  });
-
-  const app = createApp(runtimeConfig, {
-    version: '0.1.0',
-    commitSha: config.commitSha,
-    buildTime: config.buildTime,
-    readinessCheck: async () => [{ name: 'postgres', status: 'ok' }],
-    extraRouter: router,
-  });
-
-  const server = await new Promise<Server>((resolve) => {
-    const instance = app.listen(0, () => resolve(instance));
-  });
-
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Failed to resolve server address');
-  }
-
-  return {
-    server,
-    baseUrl: `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1`,
-    gaslessSettlementService,
-  };
-}
-
-function withServiceAuth(path: string, body?: Record<string, unknown> | null, method = 'POST') {
-  return createServiceAuthHeaders({
-    apiKey: 'platform-main',
-    apiSecret: 'super-secret',
-    method,
-    path,
-    body: body ?? null,
-    timestamp: Math.floor(Date.now() / 1000),
-    nonce: `nonce-${Math.random().toString(16).slice(2)}`,
-  });
-}
-
-function buildGaslessCreateTradeBody(
-  handoffId: string,
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  const authorizationDeadline = Math.floor(Date.now() / 1000) + 10 * 60;
-  const buyerAddress = '0x0000000000000000000000000000000000000200';
-  const body = {
-    action: 'create_trade' as const,
-    handoffId,
-    chainId: config.chainId,
-    contractAddress: config.escrowAddress,
-    expiresAt,
-    buyerAddress,
-    supplierAddress: '0x0000000000000000000000000000000000000100',
-    totalAmount: '1000000000',
-    logisticsAmount: '100000000',
-    platformFeesAmount: '10000000',
-    supplierFirstTranche: '445000000',
-    supplierSecondTranche: '445000000',
-    ricardianHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    buyerAuthorization: {
-      nonce: '0',
-      deadline: authorizationDeadline.toString(),
-      signature:
-        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    },
-    usdcAuthorization: {
-      from: buyerAddress,
-      to: config.escrowAddress,
-      value: '1000000000',
-      validAfter: '0',
-      validBefore: authorizationDeadline.toString(),
-      nonce: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-      v: 27,
-      r: '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-      s: '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-    },
-    ...overrides,
-  };
-
-  return {
-    ...body,
-    payloadHash: gaslessSettlementExecutionTestExports.createPayloadHash(body),
-  };
-}
-
-function buildGaslessUserActionBody(
-  handoffId: string,
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  const authorizationDeadline = Math.floor(Date.now() / 1000) + 10 * 60;
-  const body = {
-    action: 'open_dispute' as const,
-    handoffId,
-    chainId: config.chainId,
-    contractAddress: config.escrowAddress,
-    expiresAt,
-    userAddress: '0x0000000000000000000000000000000000000200',
-    tradeId: '42',
-    userAuthorization: {
-      nonce: '0',
-      deadline: authorizationDeadline.toString(),
-      signature:
-        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    },
-    ...overrides,
-  };
-
-  return {
-    ...body,
-    payloadHash: gaslessSettlementExecutionTestExports.createPayloadHash(body),
-  };
-}
+import {
+  config,
+  buildConfirmedSubmission,
+  startServer,
+  withServiceAuth,
+  buildGaslessCreateTradeBody,
+  buildGaslessUserActionBody,
+} from './helpers/settlementRoutesFixture';
 
 describe('gateway settlement routes contract', () => {
   const spec = loadOpenApiSpec();
@@ -329,6 +44,35 @@ describe('gateway settlement routes contract', () => {
     spec,
     '#/components/schemas/SettlementExecutionEventListResponse',
   );
+
+  test('reads retained wallet operations using service authentication without operator login or new execution', async () => {
+    const { server, baseUrl, walletOutcomes } = await startServer();
+    try {
+      const path =
+        '/api/dashboard-gateway/v1/wallet/usdc/gasless-transfers/transfer-original/outcomes';
+      const denied = await fetch(
+        `${baseUrl}/wallet/usdc/gasless-transfers/transfer-original/outcomes`,
+      );
+      expect(denied.status).toBe(401);
+      const response = await fetch(
+        `${baseUrl}/wallet/usdc/gasless-transfers/transfer-original/outcomes`,
+        { headers: { ...withServiceAuth(path, null, 'GET') } },
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(
+        expect.objectContaining({
+          success: true,
+          data: { platformTransferId: 'transfer-original', outcomes: [] },
+        }),
+      );
+      expect(walletOutcomes.listWalletTransferOutcomes).toHaveBeenCalledWith(
+        'platform-main',
+        'transfer-original',
+      );
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
 
   test('OpenAPI spec exposes settlement ingress routes', () => {
     expect(hasOperation(spec, 'post', '/settlement/handoffs')).toBe(true);
@@ -646,11 +390,23 @@ describe('gateway settlement routes contract', () => {
     });
 
     try {
+      const boundRequest = buildGaslessCreateTradeBody('pending');
       const handoffBody = {
+        ricardianHash: boundRequest.ricardianHash,
+        externalReference: 'controlled-operation',
+        executionBinding: executionBindingFixture(
+          boundRequest as never,
+          'platform-main',
+          config.usdcAddress,
+        ),
+        metadata: {
+          executionScopeVersion: 'gasless_create_trade_scope_v1',
+          executionScopeHash: createGaslessExecutionScopeHash(boundRequest as never),
+        },
         platformId: 'agroasys-platform',
         platformHandoffId: 'handoff-gasless',
         tradeId: 'TRD-gasless',
-        phase: 'lock',
+        phase: 'gasless_create_trade',
         settlementChannel: 'cotsel_escrow',
         displayCurrency: 'USD',
         displayAmount: 1000,
@@ -669,7 +425,12 @@ describe('gateway settlement routes contract', () => {
       const handoffPayload = await handoffResponse.json();
       const handoffId = handoffPayload.data.handoffId as string;
 
-      const gaslessBody = buildGaslessCreateTradeBody(handoffId);
+      const { payloadHash: _payloadHash, ...boundFields } = boundRequest;
+      const gaslessBody: Record<string, unknown> = {
+        ...boundFields,
+        handoffId,
+        payloadHash: createGaslessPayloadHash({ ...boundFields, handoffId } as never),
+      };
       const gaslessPath = '/api/dashboard-gateway/v1/settlement/gasless-executions/create-trade';
       const gaslessResponse = await fetch(`${baseUrl}/settlement/gasless-executions/create-trade`, {
         method: 'POST',
@@ -1018,12 +779,27 @@ describe('gateway settlement routes contract', () => {
     );
 
     try {
+      const issuedRequests = new Map<string, Record<string, unknown>>();
       async function createHandoff(label: string): Promise<string> {
+        const boundRequest = buildGaslessCreateTradeBody('pending', {
+          ricardianHash: `0x${(label === 'a' ? '1' : '2').repeat(64)}`,
+        });
         const handoffBody = {
+          ricardianHash: boundRequest.ricardianHash,
+          externalReference: 'controlled-operation',
+          executionBinding: executionBindingFixture(
+            boundRequest as never,
+            'platform-main',
+            config.usdcAddress,
+          ),
+          metadata: {
+            executionScopeVersion: 'gasless_create_trade_scope_v1',
+            executionScopeHash: createGaslessExecutionScopeHash(boundRequest as never),
+          },
           platformId: 'agroasys-platform',
           platformHandoffId: `handoff-gasless-queue-${label}`,
           tradeId: `TRD-gasless-queue-${label}`,
-          phase: 'lock',
+          phase: 'gasless_create_trade',
           settlementChannel: 'cotsel_escrow',
           displayCurrency: 'USD',
           displayAmount: 1000,
@@ -1040,16 +816,21 @@ describe('gateway settlement routes contract', () => {
           body: JSON.stringify(handoffBody),
         });
         const payload = await handoffResponse.json();
-        return payload.data.handoffId as string;
+        const handoffId = payload.data.handoffId as string;
+        const { payloadHash: _payloadHash, ...boundFields } = boundRequest;
+        issuedRequests.set(handoffId, {
+          ...boundFields,
+          handoffId,
+          payloadHash: createGaslessPayloadHash({ ...boundFields, handoffId } as never),
+        });
+        return handoffId;
       }
 
       const handoffIds = await Promise.all([createHandoff('a'), createHandoff('b')]);
       const gaslessPath = '/api/dashboard-gateway/v1/settlement/gasless-executions/create-trade';
       const responses = await Promise.all(
         handoffIds.map((handoffId, index) => {
-          const body = buildGaslessCreateTradeBody(handoffId, {
-            ricardianHash: `0x${(index + 1).toString(16).repeat(64)}`,
-          });
+          const body = issuedRequests.get(handoffId)!;
           return fetch(`${baseUrl}/settlement/gasless-executions/create-trade`, {
             method: 'POST',
             headers: {
@@ -1315,11 +1096,23 @@ describe('gateway settlement routes contract', () => {
     );
 
     try {
+      const boundRequest = buildGaslessCreateTradeBody('pending');
       const handoffBody = {
+        ricardianHash: boundRequest.ricardianHash,
+        externalReference: 'controlled-operation',
+        executionBinding: executionBindingFixture(
+          boundRequest as never,
+          'platform-main',
+          config.usdcAddress,
+        ),
+        metadata: {
+          executionScopeVersion: 'gasless_create_trade_scope_v1',
+          executionScopeHash: createGaslessExecutionScopeHash(boundRequest as never),
+        },
         platformId: 'agroasys-platform',
         platformHandoffId: 'handoff-gasless-sim-fail',
         tradeId: 'TRD-gasless-sim-fail',
-        phase: 'lock',
+        phase: 'gasless_create_trade',
         settlementChannel: 'cotsel_escrow',
         displayCurrency: 'USD',
         displayAmount: 1000,
@@ -1335,7 +1128,12 @@ describe('gateway settlement routes contract', () => {
       });
       const handoffPayload = await handoffResponse.json();
       const handoffId = handoffPayload.data.handoffId as string;
-      const gaslessBody = buildGaslessCreateTradeBody(handoffId);
+      const { payloadHash: _payloadHash, ...boundFields } = boundRequest;
+      const gaslessBody = {
+        ...boundFields,
+        handoffId,
+        payloadHash: createGaslessPayloadHash({ ...boundFields, handoffId } as never),
+      };
       const gaslessPath = '/api/dashboard-gateway/v1/settlement/gasless-executions/create-trade';
       const gaslessResponse = await fetch(`${baseUrl}/settlement/gasless-executions/create-trade`, {
         method: 'POST',

@@ -138,7 +138,8 @@ paths:
       description: |
         Service-authenticated, idempotent execution step used after handoff ingress. The gateway maps the stored
         settlement phase to the matching oracle command. It supports custody-and-document release, standard or
-        packaged-local inspection availability, buyer inspection acceptance, and notice-deadline finalization.
+        packaged-local inspection availability and notice-deadline finalization. Buyer inspection acceptance
+        requires the existing buyer-signed user-action route. Stored phases cannot be substituted.
         Governed dispute resolutions are deliberately rejected and must follow their administrative workflow.
         The stored trade identifier must be a numeric on-chain Cotsel trade id.
       operationId: executeSettlementHandoffOracleProgression
@@ -309,6 +310,39 @@ paths:
           $ref: '#/components/responses/ConflictError'
         '503':
           $ref: '#/components/responses/UpstreamUnavailableError'
+  /wallet/usdc/gasless-transfers/{transferId}/outcomes:
+    get:
+      tags:
+        - Settlement
+      summary: Observe retained original wallet execution outcomes
+      description: |
+        Requires signed service authentication with a fresh nonce. Returns only outcomes recorded for the
+        authenticated issuing service and original platform transfer ID. This read does not broadcast,
+        issue authorizations, retire signatures, or establish Agroasys accounting success. Legacy records
+        without an issuing service identity are not returned. Consumers independently verify each hash.
+      operationId: observeSponsoredWalletUsdcTransfer
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: transferId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{1,128}$'
+      responses:
+        '200':
+          description: Retained service-bound transaction candidates, possibly empty.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletUsdcExecutionObservationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
   /wallet/usdc/gasless-transfers:
     post:
       tags:
@@ -413,3 +447,49 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '409':
           $ref: '#/components/responses/ConflictError'
+  /settlement/transactions/{transactionHash}/finality:
+    get:
+      tags: [Settlement]
+      summary: Read finalized settlement evidence and retained projection coverage
+      description: Service-authenticated read. Issuance pause does not disable observation. Pending or unproven evidence returns 503.
+      operationId: getSettlementTransactionFinality
+      security: []
+      parameters:
+        - name: transactionHash
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^0x[0-9a-fA-F]{64}$
+        - name: chainId
+          in: query
+          description: Historical chain identity. Supply with escrowAddress. The server must approve the retained deployment.
+          schema:
+            type: string
+            pattern: ^[1-9][0-9]{0,15}$
+        - name: escrowAddress
+          in: query
+          description: Original escrow identity. Supply with chainId. Caller-provided RPC URLs are rejected.
+          schema:
+            type: string
+            pattern: ^0x[0-9a-fA-F]{40}$
+      responses:
+        '200':
+          description: Independently matching finalized receipt and retained indexer/reconciliation coverage.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, timestamp]
+                properties:
+                  success:
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                  data:
+                    $ref: '#/components/schemas/SettlementFinalityEvidence'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          description: Finalized matching evidence is not available yet.

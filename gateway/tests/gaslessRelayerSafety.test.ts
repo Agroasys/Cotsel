@@ -1,3 +1,8 @@
+import { executionBindingFixture } from './helpers/settlementExecutionBindingFixtures';
+import {
+  createGaslessExecutionScopeHash,
+  createGaslessPayloadHash,
+} from '../src/core/gaslessRequestNormalization';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -67,12 +72,26 @@ async function expectGatewayError(
   expect((rejection as Error).message).toBe(expected.message);
 }
 
+const boundInputs = new Map<string, GaslessCreateTradeExecutionInput>();
+
 async function createHandoff(store: SettlementStore, label: string): Promise<string> {
+  const boundInput = {
+    ...buildCreateTradeInput('pending', /^[a-f0-9]/.test(label) ? label : 'a'),
+    sourceApiKeyId: 'service-test',
+  };
   const handoff = await store.createHandoff({
+    sourceApiKeyId: 'service-test',
+    executionBinding: executionBindingFixture(boundInput, 'service-test', config.usdcAddress),
+    externalReference: 'controlled-operation',
+    ricardianHash: boundInput.ricardianHash,
+    metadata: {
+      executionScopeVersion: 'gasless_create_trade_scope_v1',
+      executionScopeHash: createGaslessExecutionScopeHash(boundInput),
+    },
     platformId: 'agroasys-platform',
     platformHandoffId: `handoff-${label}`,
     tradeId: `TRD-${label}`,
-    phase: 'lock',
+    phase: 'gasless_create_trade',
     settlementChannel: 'cotsel_escrow',
     displayCurrency: 'USD',
     displayAmount: 1000,
@@ -81,6 +100,17 @@ async function createHandoff(store: SettlementStore, label: string): Promise<str
     requestId: `request-${label}`,
   });
 
+  const {
+    requestId: _requestId,
+    sourceApiKeyId: _sourceApiKeyId,
+    payloadHash: _payloadHash,
+    ...payload
+  } = boundInput;
+  boundInputs.set(handoff.handoffId, {
+    ...boundInput,
+    handoffId: handoff.handoffId,
+    payloadHash: createGaslessPayloadHash({ ...payload, handoffId: handoff.handoffId }),
+  });
   return handoff.handoffId;
 }
 
@@ -159,7 +189,7 @@ describe('gasless relayer safety controls', () => {
     });
     const handoffId = await createHandoff(store, 'a');
 
-    await expectGatewayError(service.executeCreateTrade(buildCreateTradeInput(handoffId, 'a')), {
+    await expectGatewayError(service.executeCreateTrade(boundInputs.get(handoffId)!), {
       statusCode: 503,
       code: 'UPSTREAM_UNAVAILABLE',
       message: 'Gasless relayer broadcast is paused',
@@ -198,17 +228,14 @@ describe('gasless relayer safety controls', () => {
     const firstHandoffId = await createHandoff(store, 'a');
     const secondHandoffId = await createHandoff(store, 'b');
 
-    await service.executeCreateTrade(buildCreateTradeInput(firstHandoffId, 'a'));
+    await service.executeCreateTrade(boundInputs.get(firstHandoffId)!);
     expect(service.getRelayerReadiness().state).toBe('blocked');
 
-    await expectGatewayError(
-      service.executeCreateTrade(buildCreateTradeInput(secondHandoffId, 'b')),
-      {
-        statusCode: 503,
-        code: 'UPSTREAM_UNAVAILABLE',
-        message: 'Gasless executor balance is below fail-closed capacity policy',
-      },
-    );
+    await expectGatewayError(service.executeCreateTrade(boundInputs.get(secondHandoffId)!), {
+      statusCode: 503,
+      code: 'UPSTREAM_UNAVAILABLE',
+      message: 'Gasless executor balance is below fail-closed capacity policy',
+    });
   });
 
   test('readiness marks a held broadcast and pending follow-up as stuck queue risk', async () => {
@@ -228,9 +255,9 @@ describe('gasless relayer safety controls', () => {
     const firstHandoffId = await createHandoff(store, 'c');
     const secondHandoffId = await createHandoff(store, 'd');
 
-    const first = service.executeCreateTrade(buildCreateTradeInput(firstHandoffId, 'c'));
+    const first = service.executeCreateTrade(boundInputs.get(firstHandoffId)!);
     await activeBroadcast;
-    const second = service.executeCreateTrade(buildCreateTradeInput(secondHandoffId, 'd'));
+    const second = service.executeCreateTrade(boundInputs.get(secondHandoffId)!);
     await new Promise((resolve) => setTimeout(resolve, 5));
 
     const readiness = service.getRelayerReadiness();
@@ -270,19 +297,14 @@ describe('gasless relayer safety controls', () => {
     const failedHandoffId = await createHandoff(store, 'e');
     const recoveredHandoffId = await createHandoff(store, 'f');
 
-    await expectGatewayError(
-      service.executeCreateTrade(buildCreateTradeInput(failedHandoffId, 'e')),
-      {
-        statusCode: 502,
-        code: 'UPSTREAM_UNAVAILABLE',
-        message: 'Gasless execution failed',
-      },
-    );
+    await expectGatewayError(service.executeCreateTrade(boundInputs.get(failedHandoffId)!), {
+      statusCode: 502,
+      code: 'UPSTREAM_UNAVAILABLE',
+      message: 'Gasless execution failed',
+    });
     expect(service.getRelayerReadiness().recentFailureCount).toBe(1);
 
-    const recovered = await service.executeCreateTrade(
-      buildCreateTradeInput(recoveredHandoffId, 'f'),
-    );
+    const recovered = await service.executeCreateTrade(boundInputs.get(recoveredHandoffId)!);
 
     expect(recovered.txHash).toBe(
       '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
@@ -336,9 +358,9 @@ describe('gasless relayer safety controls', () => {
     const firstHandoffId = await createHandoff(store, 'g');
     const secondHandoffId = await createHandoff(store, 'h');
 
-    const first = firstService.executeCreateTrade(buildCreateTradeInput(firstHandoffId, 'a'));
+    const first = firstService.executeCreateTrade(boundInputs.get(firstHandoffId)!);
     await firstStarted;
-    const second = secondService.executeCreateTrade(buildCreateTradeInput(secondHandoffId, 'b'));
+    const second = secondService.executeCreateTrade(boundInputs.get(secondHandoffId)!);
     await new Promise((resolve) => setTimeout(resolve, 5));
 
     expect(secondStarted).toBe(false);
@@ -391,18 +413,15 @@ describe('gasless relayer safety controls', () => {
     const recoverHandoffId = await createHandoff(store, '4');
 
     // First broadcast fails with a connection error.
-    await expectGatewayError(
-      service.executeCreateTrade(buildCreateTradeInput(failHandoffId, '3')),
-      {
-        statusCode: 502,
-        code: 'UPSTREAM_UNAVAILABLE',
-        message: 'Gasless execution failed',
-      },
-    );
+    await expectGatewayError(service.executeCreateTrade(boundInputs.get(failHandoffId)!), {
+      statusCode: 502,
+      code: 'UPSTREAM_UNAVAILABLE',
+      message: 'Gasless execution failed',
+    });
     expect(service.getRelayerReadiness().recentFailureCount).toBe(1);
 
     // Second broadcast succeeds via fallback (simulates FallbackProvider recovery).
-    const result = await service.executeCreateTrade(buildCreateTradeInput(recoverHandoffId, '4'));
+    const result = await service.executeCreateTrade(boundInputs.get(recoverHandoffId)!);
     expect(result.txHash).toBe(
       '0xabababababababababababababababababababababababababababababababab',
     );

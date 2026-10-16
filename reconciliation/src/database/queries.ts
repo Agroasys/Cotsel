@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
 import { pool } from './connection';
+import { config } from '../config';
 import { LIVE_LEASE_PREDICATE, assertLeaseHeld, releaseLease } from './leases';
 import type { DriftFinding, RunLeaseIdentity, RunStats } from '../types';
 
@@ -185,7 +186,8 @@ export async function completeRun(stats: RunStats, executor: Executor = pool): P
          uncovered_tail = $15::numeric,
          coverage_complete = $16,
          indexer_enumeration_truncated = $17,
-         indexer_enumeration_walked = $18
+         indexer_enumeration_walked = $18,
+         chain_evidence = $19::jsonb
      WHERE run_key = $1`,
     [
       stats.runKey,
@@ -206,6 +208,18 @@ export async function completeRun(stats: RunStats, executor: Executor = pool): P
       coverage ? coverage.complete : null,
       coverage ? coverage.indexerEnumerationTruncated : null,
       coverage ? coverage.indexerEnumerationWalked : null,
+      coverage
+        ? JSON.stringify({
+            version: 'cotsel.reconciliation-coverage.v1',
+            chainId: String(config.chainId),
+            escrowAddress: config.escrowAddress.toLowerCase(),
+            blockNumber: String(coverage.boundary.blockNumber),
+            blockHash: coverage.boundary.blockHash.toLowerCase(),
+            tag: coverage.boundary.tag,
+            finalizedBlockNumber: String(coverage.boundary.finalityBlockNumber),
+            indexerProcessedBlock: String(coverage.indexerProcessedBlock),
+          })
+        : null,
     ],
   );
 }

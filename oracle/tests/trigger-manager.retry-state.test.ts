@@ -1,5 +1,7 @@
+import { buildTrade, buildTrigger } from './helpers/triggerState';
+import { fundedBindingFixture } from './helpers/fundedBinding';
 import { TriggerManager } from '../src/core/trigger-manager';
-import { ErrorType, Trigger, TriggerStatus, TriggerType } from '../src/types/trigger';
+import { TriggerStatus, TriggerType } from '../src/types/trigger';
 import {
   createTrigger,
   getLatestTriggerByActionKey,
@@ -20,6 +22,7 @@ jest.mock('../src/core/containment-guard', () => ({
 }));
 
 jest.mock('@agroasys/sdk', () => ({
+  ...jest.requireActual('@agroasys/sdk'),
   TradeStatus: {
     LOCKED: 0,
     IN_TRANSIT: 1,
@@ -31,6 +34,9 @@ jest.mock('@agroasys/sdk', () => ({
 
 jest.mock('../src/database/queries', () => ({
   createTrigger: jest.fn(),
+  claimTriggerDispatch: jest.fn().mockResolvedValue(true),
+  getUnresolvedSignerDispatch: jest.fn().mockResolvedValue(null),
+  resolveSignerDispatch: jest.fn().mockResolvedValue(undefined),
   getTriggerByIdempotencyKey: jest.fn(),
   getLatestTriggerByActionKey: jest.fn(),
   updateTrigger: jest.fn(),
@@ -62,57 +68,6 @@ const mockedIncrementOracleExhaustedRetries =
 
 const TRADE_STATUS_LOCKED = 0;
 type TriggerManagerSdkClient = ConstructorParameters<typeof TriggerManager>[0];
-type TradeRecord = Awaited<ReturnType<TriggerManagerSdkClient['getTrade']>>;
-
-function buildTrade(status: number = TRADE_STATUS_LOCKED): TradeRecord {
-  return {
-    tradeId: '1',
-    buyer: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
-    supplier: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
-    status,
-    totalAmountLocked: 1000n,
-    logisticsAmount: 100n,
-    platformFeesAmount: 50n,
-    supplierFirstTranche: 350n,
-    supplierSecondTranche: 500n,
-    ricardianHash: '0x' + '11'.repeat(32),
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-  };
-}
-
-function buildTrigger(status: TriggerStatus = TriggerStatus.PENDING): Trigger {
-  return {
-    id: 1,
-    action_key: 'RELEASE_STAGE_1:1',
-    request_id: 'req-1',
-    idempotency_key: 'RELEASE_STAGE_1:1:req-1',
-    trade_id: '1',
-    trigger_type: TriggerType.RELEASE_STAGE_1,
-    request_hash: null,
-    attempt_count: 0,
-    status,
-    tx_hash: null,
-    block_number: null,
-    confirmation_stage: null,
-    confirmation_stage_at: null,
-    indexer_confirmed: false,
-    indexer_confirmed_at: null,
-    indexer_event_id: null,
-    last_error: null,
-    error_type: null as ErrorType | null,
-    on_chain_verified: false,
-    on_chain_verified_at: null,
-    approved_by: null,
-    approved_at: null,
-    rejected_by: null,
-    rejected_at: null,
-    created_at: new Date('2026-01-01T00:00:00.000Z'),
-    submitted_at: null,
-    confirmed_at: null,
-    updated_at: new Date('2026-01-01T00:00:00.000Z'),
-  };
-}
-
 describe('TriggerManager retry and idempotency states', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -126,6 +81,11 @@ describe('TriggerManager retry and idempotency states', () => {
     mockedGetLatestTriggerByActionKey.mockResolvedValue(latest);
 
     const sdkClient: TriggerManagerSdkClient = {
+      getDispatchSignerScope: jest
+        .fn()
+        .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+      verifyDispatchFinality: jest.fn(),
+      assertFundedBinding: jest.fn().mockResolvedValue(undefined),
       getTrade: jest.fn(),
       releaseFundsStage1: jest.fn(),
       confirmInspectionAvailable: jest.fn(),
@@ -138,6 +98,7 @@ describe('TriggerManager retry and idempotency states', () => {
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
     });
 
     expect(response.status).toBe(TriggerStatus.SUBMITTED);
@@ -146,11 +107,12 @@ describe('TriggerManager retry and idempotency states', () => {
     expect(mockedUpdateTrigger).not.toHaveBeenCalled();
   });
 
-  it('serializes both final-release reasons under one financial action key', async () => {
+  it('serializes final release and rejects replacement of an accepted execution purpose', async () => {
     const latest = {
       ...buildTrigger(TriggerStatus.SUBMITTED),
       action_key: 'FINAL_RELEASE:1',
       trigger_type: TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
+      funded_binding: fundedBindingFixture(TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE),
       tx_hash: `0x${'a'.repeat(64)}`,
     };
     mockedGetLatestTriggerByActionKey.mockResolvedValue(latest);
@@ -162,6 +124,11 @@ describe('TriggerManager retry and idempotency states', () => {
       },
     };
     const sdkClient = {
+      getDispatchSignerScope: jest
+        .fn()
+        .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+      verifyDispatchFinality: jest.fn(),
+      assertFundedBinding: jest.fn().mockResolvedValue(undefined),
       getTrade: jest.fn(),
       finalizeTrade: jest.fn(),
       isTradePaused: jest.fn().mockResolvedValue(false),
@@ -172,17 +139,20 @@ describe('TriggerManager retry and idempotency states', () => {
       tradeId: '1',
       requestId: 'req-accepted',
       triggerType: TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
+      fundedBinding: fundedBindingFixture(TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE),
     });
-    const deadline = await manager.executeTrigger({
-      tradeId: '1',
-      requestId: 'req-deadline',
-      triggerType: TriggerType.FINALIZE_TRADE,
-    });
+    await expect(
+      manager.executeTrigger({
+        tradeId: '1',
+        requestId: 'req-deadline',
+        triggerType: TriggerType.FINALIZE_TRADE,
+        fundedBinding: fundedBindingFixture(TriggerType.FINALIZE_TRADE),
+      }),
+    ).rejects.toThrow('original funded progression instruction cannot be replaced');
 
     expect(lockedActionKeys).toEqual(['FINAL_RELEASE:1', 'FINAL_RELEASE:1']);
     expect(mockedGetLatestTriggerByActionKey).toHaveBeenCalledWith('FINAL_RELEASE:1');
     expect(accepted).toMatchObject({ idempotent: true, txHash: latest.tx_hash });
-    expect(deadline).toMatchObject({ idempotent: true, txHash: latest.tx_hash });
     expect(sdkClient.finalizeTrade).not.toHaveBeenCalled();
   });
 
@@ -195,8 +165,14 @@ describe('TriggerManager retry and idempotency states', () => {
       request_id: 'req-buyer-acceptance',
       idempotency_key: 'FINAL_RELEASE:1:req-buyer-acceptance',
       trigger_type: TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
+      funded_binding: fundedBindingFixture(TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE),
     });
     const sdkClient = {
+      getDispatchSignerScope: jest
+        .fn()
+        .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+      verifyDispatchFinality: jest.fn(),
+      assertFundedBinding: jest.fn().mockResolvedValue(undefined),
       getTrade: jest.fn().mockResolvedValue({
         ...buildTrade(2),
         arrivalTimestamp: new Date('2026-01-02T00:00:00.000Z'),
@@ -210,6 +186,7 @@ describe('TriggerManager retry and idempotency states', () => {
       tradeId: '1',
       requestId: 'req-buyer-acceptance',
       triggerType: TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
+      fundedBinding: fundedBindingFixture(TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE),
     });
 
     expect(result.status).toBe(TriggerStatus.TERMINAL_FAILURE);
@@ -223,7 +200,7 @@ describe('TriggerManager retry and idempotency states', () => {
     expect(sdkClient.finalizeTrade).not.toHaveBeenCalled();
   });
 
-  it('transitions to exhausted when retry ceiling is reached', async () => {
+  it('retains an ambiguous send once without automatic retry', async () => {
     mockedGetLatestTriggerByActionKey.mockResolvedValue(null);
     mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
     mockedCreateTrigger.mockResolvedValue({
@@ -232,6 +209,11 @@ describe('TriggerManager retry and idempotency states', () => {
     });
 
     const sdkClient: TriggerManagerSdkClient = {
+      getDispatchSignerScope: jest
+        .fn()
+        .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+      verifyDispatchFinality: jest.fn(),
+      assertFundedBinding: jest.fn().mockResolvedValue(undefined),
       getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
       releaseFundsStage1: jest
         .fn()
@@ -246,22 +228,23 @@ describe('TriggerManager retry and idempotency states', () => {
       tradeId: '1',
       requestId: 'req-retry',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
     });
 
-    expect(sdkClient.releaseFundsStage1).toHaveBeenCalledTimes(2);
-    expect(response.status).toBe(TriggerStatus.EXHAUSTED_NEEDS_REDRIVE);
+    expect(sdkClient.releaseFundsStage1).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(TriggerStatus.EXECUTING);
+    expect(response.message).toContain('unresolved');
     expect(mockedUpdateTrigger).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ status: TriggerStatus.FAILED, attempt_count: 1 }),
+      expect.objectContaining({
+        status: TriggerStatus.EXECUTING,
+        last_error: expect.stringContaining('Resubmission is blocked'),
+      }),
     );
-    expect(mockedUpdateTrigger).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ status: TriggerStatus.EXHAUSTED_NEEDS_REDRIVE, attempt_count: 2 }),
-    );
-    expect(mockedIncrementOracleExhaustedRetries).toHaveBeenCalledWith('RELEASE_STAGE_1:1');
+    expect(mockedIncrementOracleExhaustedRetries).not.toHaveBeenCalled();
   });
 
-  it('transitions immediately to terminal failure for terminal errors without retrying', async () => {
+  it('does not infer non-execution from a post-claim contract error', async () => {
     mockedGetLatestTriggerByActionKey.mockResolvedValue(null);
     mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
     mockedCreateTrigger.mockResolvedValue({
@@ -270,6 +253,11 @@ describe('TriggerManager retry and idempotency states', () => {
     });
 
     const sdkClient: TriggerManagerSdkClient = {
+      getDispatchSignerScope: jest
+        .fn()
+        .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+      verifyDispatchFinality: jest.fn(),
+      assertFundedBinding: jest.fn().mockResolvedValue(undefined),
       getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
       releaseFundsStage1: jest
         .fn()
@@ -284,15 +272,15 @@ describe('TriggerManager retry and idempotency states', () => {
       tradeId: '1',
       requestId: 'req-terminal',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
     });
 
     expect(sdkClient.releaseFundsStage1).toHaveBeenCalledTimes(1);
-    expect(response.status).toBe(TriggerStatus.TERMINAL_FAILURE);
+    expect(response.status).toBe(TriggerStatus.EXECUTING);
     expect(mockedUpdateTrigger).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ status: TriggerStatus.TERMINAL_FAILURE, attempt_count: 1 }),
+      expect.objectContaining({ status: TriggerStatus.EXECUTING }),
     );
-    expect(mockedIncrementOracleExhaustedRetries).not.toHaveBeenCalled();
   });
 
   it('declines to submit and creates no trigger when the trade is admin-paused', async () => {
@@ -300,6 +288,11 @@ describe('TriggerManager retry and idempotency states', () => {
     mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
 
     const sdkClient: TriggerManagerSdkClient = {
+      getDispatchSignerScope: jest
+        .fn()
+        .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+      verifyDispatchFinality: jest.fn(),
+      assertFundedBinding: jest.fn().mockResolvedValue(undefined),
       getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
       releaseFundsStage1: jest.fn(),
       confirmInspectionAvailable: jest.fn(),
@@ -314,6 +307,7 @@ describe('TriggerManager retry and idempotency states', () => {
         tradeId: '1',
         requestId: 'req-paused',
         triggerType: TriggerType.RELEASE_STAGE_1,
+        fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
       }),
     ).rejects.toThrow(/paused/);
 
@@ -328,6 +322,11 @@ describe('TriggerManager retry and idempotency states', () => {
     );
 
     const sdkClient: TriggerManagerSdkClient = {
+      getDispatchSignerScope: jest
+        .fn()
+        .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+      verifyDispatchFinality: jest.fn(),
+      assertFundedBinding: jest.fn().mockResolvedValue(undefined),
       getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
       releaseFundsStage1: jest.fn(),
       confirmInspectionAvailable: jest.fn(),
@@ -342,6 +341,7 @@ describe('TriggerManager retry and idempotency states', () => {
         tradeId: '1',
         requestId: 'req-redrive-paused',
         triggerType: TriggerType.RELEASE_STAGE_1,
+        fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
         isRedrive: true,
       }),
     ).rejects.toThrow(/paused/);
@@ -350,6 +350,122 @@ describe('TriggerManager retry and idempotency states', () => {
     expect(sdkClient.releaseFundsStage1).not.toHaveBeenCalled();
     expect(mockedCreateTrigger).not.toHaveBeenCalled();
     // The re-drive catch must not misread the pause as "already executed on-chain".
+    expect(mockedUpdateTrigger).not.toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ status: TriggerStatus.CONFIRMED }),
+    );
+  });
+  it('revalidates retained funding before retrying and never broadcasts after witness failure', async () => {
+    mockedGetLatestTriggerByActionKey.mockResolvedValue(null);
+    mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
+    mockedCreateTrigger.mockResolvedValue(buildTrigger());
+    const verifier = jest
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValue(new Error('controlled original funding witness outage'));
+    const send = jest.fn();
+    const manager = new TriggerManager(
+      {
+        assertFundedBinding: verifier,
+        getTrade: async () => buildTrade(),
+        isTradePaused: async () => false,
+        releaseFundsStage1: send,
+      } as never,
+      2,
+      0,
+    );
+    const result = await manager.executeTrigger({
+      tradeId: '1',
+      requestId: 'req-1',
+      triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(),
+    });
+    expect(result.status).toBe(TriggerStatus.EXHAUSTED_NEEDS_REDRIVE);
+    expect(send).not.toHaveBeenCalled();
+  });
+  it('persists an observed hash before a lost receipt response and retains the original after restart', async () => {
+    mockedGetLatestTriggerByActionKey.mockResolvedValue(null);
+    mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
+    mockedCreateTrigger.mockResolvedValue(buildTrigger());
+    const hash = `0x${'d'.repeat(64)}`;
+    const send = jest.fn(async (_id, observed) => {
+      await observed(hash);
+      throw new Error('controlled receipt timeout');
+    });
+    const manager = new TriggerManager(
+      {
+        getDispatchSignerScope: async () => '31337:0x3333333333333333333333333333333333333333',
+        assertFundedBinding: async () => {},
+        getTrade: async () => buildTrade(),
+        isTradePaused: async () => false,
+        releaseFundsStage1: send,
+      } as never,
+      5,
+      0,
+    );
+    const req = {
+      tradeId: '1',
+      requestId: 'req-1',
+      triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(),
+    };
+    const response = await manager.executeTrigger(req);
+    expect(response).toMatchObject({ status: TriggerStatus.SUBMITTED, txHash: hash });
+    expect(mockedUpdateTrigger).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        tx_hash: hash,
+        status: TriggerStatus.SUBMITTED,
+        submitted_at: expect.any(Date),
+      }),
+    );
+    mockedGetLatestTriggerByActionKey.mockResolvedValue({
+      ...buildTrigger(TriggerStatus.EXECUTING),
+      dispatch_started_at: new Date(),
+    });
+    expect((await manager.executeTrigger({ ...req, requestId: 'retry' })).status).toBe(
+      TriggerStatus.EXECUTING,
+    );
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+  it('rejects missing original scope and legacy recovery before making a new reservation', async () => {
+    mockedGetLatestTriggerByActionKey.mockResolvedValue(null);
+    mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
+    const manager = new TriggerManager({} as never);
+    await expect(
+      manager.executeTrigger({
+        tradeId: '1',
+        requestId: 'new',
+        triggerType: TriggerType.RELEASE_STAGE_1,
+      }),
+    ).rejects.toThrow('original funded binding');
+    expect(mockedCreateTrigger).not.toHaveBeenCalled();
+  });
+  it('does not reinterpret a changed trade state as successful original execution during re-drive', async () => {
+    mockedGetLatestTriggerByActionKey.mockResolvedValue(
+      buildTrigger(TriggerStatus.EXHAUSTED_NEEDS_REDRIVE),
+    );
+    const send = jest.fn();
+    const manager = new TriggerManager(
+      {
+        assertFundedBinding: async () => {},
+        isTradePaused: async () => false,
+        getTrade: async () => buildTrade(1),
+        releaseFundsStage1: send,
+      } as never,
+      1,
+      0,
+    );
+    await expect(
+      manager.executeTrigger({
+        tradeId: '1',
+        requestId: 'redrive',
+        triggerType: TriggerType.RELEASE_STAGE_1,
+        fundedBinding: fundedBindingFixture(),
+        isRedrive: true,
+      }),
+    ).rejects.toThrow('expected LOCKED');
+    expect(send).not.toHaveBeenCalled();
     expect(mockedUpdateTrigger).not.toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ status: TriggerStatus.CONFIRMED }),

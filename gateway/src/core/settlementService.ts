@@ -1,9 +1,11 @@
+import { FUNDED_SETTLEMENT_PHASES } from '@agroasys/sdk';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createHash } from 'crypto';
 import { GatewayConfig } from '../config/env';
 import { GatewayError } from '../errors';
+import { parseSettlementExecutionBinding } from './settlementExecutionBinding';
 import {
   ASSET_AMOUNT_SPEC,
   DISPLAY_AMOUNT_SPEC,
@@ -191,6 +193,75 @@ export class SettlementService {
   ) {}
 
   async createHandoff(input: CreateSettlementHandoffInput): Promise<SettlementHandoffRecord> {
+    if (input.phase === 'gasless_create_trade') {
+      input.executionBinding = parseSettlementExecutionBinding(
+        input.executionBinding,
+        input.sourceApiKeyId,
+      );
+      if (input.executionBinding.scopeVersion !== 'agroasys.cotsel-execution-binding.v1')
+        throw new GatewayError(400, 'VALIDATION_ERROR', 'Create-trade requires a funding binding');
+      if (
+        input.executionBinding.sourceOperationId !== input.externalReference ||
+        input.executionBinding.ricardianHash !== input.ricardianHash?.toLowerCase()
+      ) {
+        throw new GatewayError(
+          409,
+          'CONFLICT',
+          'Execution binding correlation differs from handoff identity',
+        );
+      }
+    } else if ((FUNDED_SETTLEMENT_PHASES as readonly string[]).includes(input.phase)) {
+      input.executionBinding = parseSettlementExecutionBinding(
+        input.executionBinding,
+        input.sourceApiKeyId,
+      );
+      const binding = input.executionBinding;
+      if (
+        binding.scopeVersion !== 'agroasys.funded-settlement-binding.v1' ||
+        binding.phase !== input.phase ||
+        binding.sourceOperationId !== input.platformHandoffId ||
+        binding.tradeId !== input.tradeId ||
+        binding.ricardianHash !== input.ricardianHash?.toLowerCase()
+      )
+        throw new GatewayError(
+          409,
+          'CONFLICT',
+          'Progression differs from its original funded instruction',
+        );
+      const amount =
+        BigInt(binding.supplierPayoutAmount) +
+        BigInt(binding.treasuryAccrualAmount) +
+        BigInt(binding.buyerRefundAmount);
+      const display = parseSettlementAmount(
+        input.displayAmount,
+        'displayAmount',
+        DISPLAY_AMOUNT_SPEC,
+      );
+      const asset = parseOptionalSettlementAmount(
+        input.assetAmount,
+        'assetAmount',
+        ASSET_AMOUNT_SPEC,
+      );
+      if (
+        input.displayCurrency !== 'USD' ||
+        input.assetSymbol !== 'USDC' ||
+        asset === null ||
+        asset === undefined ||
+        BigInt(display.replace('.', '')) * 10000n !== amount ||
+        BigInt(asset.replace('.', '')) !== amount
+      )
+        throw new GatewayError(
+          409,
+          'CONFLICT',
+          'Progression amount differs from its immutable funded instruction',
+        );
+    } else if (input.executionBinding) {
+      throw new GatewayError(
+        400,
+        'VALIDATION_ERROR',
+        'Execution binding is unsupported for this handoff phase',
+      );
+    }
     return this.store.createHandoff({
       ...input,
       platformId: requireNonEmpty(input.platformId, 'platformId'),

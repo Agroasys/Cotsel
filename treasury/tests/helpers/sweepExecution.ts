@@ -5,6 +5,7 @@
  * claim that should execute it, and a settlement chain whose receipt carries
  * the matching `TreasuryClaimed` log, encoded with the escrow ABI.
  */
+import { Interface } from 'ethers';
 import { AgroasysEscrow__factory } from '@agroasys/sdk';
 import { FinalizedTransactionVerifier } from '../../src/core/finalizedTransaction';
 import {
@@ -14,6 +15,7 @@ import {
   type StubReceipt,
 } from './chainCanonicality';
 
+export const USDC = `0x${'ee'.repeat(20)}`;
 export const TREASURY = `0x${'aa'.repeat(20)}`;
 export const PAYOUT = `0x${'bb'.repeat(20)}`;
 export const OTHER = `0x${'dd'.repeat(20)}`;
@@ -43,11 +45,54 @@ export function claimVerifier(options?: {
   receipts?: StubReceipt[];
   finalizedBlockNumber?: number;
 }) {
+  const reader = stubChainReader({
+    receipts: options?.receipts ?? [CANONICAL_CLAIM_RECEIPT],
+    finalizedBlockNumber: options?.finalizedBlockNumber,
+  });
+  const views = new Interface([
+    'function treasuryAddress() view returns(address)',
+    'function usdcToken() view returns(address)',
+    'event Transfer(address indexed from,address indexed to,uint256 value)',
+  ]);
+  const witness = () => ({
+    getBlock: reader.getBlock,
+    getNetwork: async () => ({ chainId: 31337n }),
+    call: async (request: { data: string }) =>
+      request.data === views.encodeFunctionData('treasuryAddress')
+        ? views.encodeFunctionResult('treasuryAddress', [TREASURY])
+        : views.encodeFunctionResult('usdcToken', [USDC]),
+    getTransactionReceipt: async (hash: string) => {
+      const receipt = await reader.getTransactionReceipt(hash);
+      if (!receipt) return null;
+      const logs = [...(receipt.logs ?? [])];
+      try {
+        const escrow = AgroasysEscrow__factory.createInterface();
+        const claim = escrow.parseLog({
+          topics: [...(logs[0]?.topics ?? [])],
+          data: logs[0]?.data ?? '0x',
+        });
+        if (claim?.name === 'TreasuryClaimed')
+          logs.push({
+            address: USDC,
+            index: 9,
+            ...views.encodeEventLog(views.getEvent('Transfer')!, [
+              TEST_LOG_ADDRESS,
+              claim.args.payoutReceiver,
+              claim.args.amount,
+            ]),
+          });
+      } catch {
+        /* Invalid semantic event fixtures deliberately have no matching movement. */
+      }
+      return { ...receipt, hash, to: TEST_LOG_ADDRESS, logs };
+    },
+  });
   return new FinalizedTransactionVerifier({
-    provider: stubChainReader({
-      receipts: options?.receipts ?? [CANONICAL_CLAIM_RECEIPT],
-      finalizedBlockNumber: options?.finalizedBlockNumber,
-    }),
+    witnesses: [
+      { id: 'a'.repeat(64), provider: witness() },
+      { id: 'b'.repeat(64), provider: witness() },
+    ] as never,
+    rail: { chainId: 31337, escrowAddress: TEST_LOG_ADDRESS, usdcAddress: USDC },
   });
 }
 
@@ -101,6 +146,14 @@ export const batchDetailFixture = {
 export const executedBatchFixture = {
   ...batchDetailFixture.batch,
   status: 'EXECUTED',
+  metadata: {
+    settlementFinalizedEvidence: {
+      policyVersion: 'treasury_dual_rpc_finalized_v1',
+      chainId: '31337',
+      blockHash: TEST_BLOCK_HASH,
+      transactionHash: '0xclaim',
+    },
+  },
   matched_sweep_tx_hash: '0xclaim',
   matched_sweep_block_number: '101',
   matched_swept_at: new Date('2026-04-15T11:00:00.000Z'),

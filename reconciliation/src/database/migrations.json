@@ -22,6 +22,13 @@
       "file": "003_run_leases.sql",
       "sha256": "cae84129639aa0fe050e37ea8e9e147127f1858b9312af0f5db591f4f343322a",
       "schema_sha256": "f4994364c7f05ada1e6d61f2c18851d5a8a75a9ab245357ef2dd5a1f89eb3959"
+    },
+    {
+      "version": "202610150004",
+      "name": "financial_coverage_evidence",
+      "file": "004_financial_coverage_evidence.sql",
+      "sha256": "320f034458d47d60fc90fee944b88e86b0bc0494854918fcc0386e20b3526d67",
+      "schema_sha256": "eb94aa25cddd09f97484862b074bd2f7751f5f1083b23b514be397305ecc844c"
     }
   ]
 }

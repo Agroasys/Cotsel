@@ -20,6 +20,7 @@ export function buildConfirmedMetadata(
     payloadHash,
     txHash: receipt.txHash,
     blockNumber: receipt.blockNumber,
+    finalityEvidence: receipt.finalityEvidence ?? null,
     gasUsed: receipt.gasUsed,
     effectiveGasPriceWei: receipt.effectiveGasPriceWei,
     nativeCostWei: receipt.nativeCostWei,

@@ -48,7 +48,7 @@ export async function executeCreateTradeWorkflow(
       handoffId: normalized.handoffId,
     });
   }
-  assertHandoffMatchesExecution(handoff, normalized);
+  assertHandoffMatchesExecution(handoff, normalized, context.usdcAddress);
 
   const accepted = await context.settlementService.recordExecutionEvent({
     handoffId: normalized.handoffId,

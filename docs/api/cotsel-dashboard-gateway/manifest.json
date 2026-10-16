@@ -41,6 +41,7 @@
     "components/schemas-treasury-02.yml",
     "components/schemas-treasury-03.yml",
     "components/schemas-treasury-04.yml",
-    "components/schemas-compliance-01.yml"
+    "components/schemas-compliance-01.yml",
+    "components/schemas-settlement-execution-binding.yml"
   ]
 }
