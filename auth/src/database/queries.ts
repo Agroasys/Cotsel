@@ -15,6 +15,7 @@ export {
   listAdminAuditEvents,
   listOperatorAuthorityProfiles,
   provisionProfileWithAudit,
+  PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS,
 } from './queries/adminAudit';
 export type { AdminAuditEventRecord, OperatorProfileAuthoritySnapshot } from './queries/adminAudit';
 export {

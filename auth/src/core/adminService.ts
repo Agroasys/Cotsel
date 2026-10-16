@@ -3,6 +3,8 @@
  */
 import {
   AdminActor,
+  AdminAuthorityChangeKind,
+  AdminAuthorityChangeRecord,
   OperatorSignerActionClass,
   OperatorSignerRegisterRecord,
   UserProfile,
@@ -10,7 +12,9 @@ import {
 } from '../types';
 import { ProfileStore } from './profileStore';
 import { OperatorSignerStore } from './operatorSignerStore';
+import { AdminAuthorityStore } from './adminAuthorityStore';
 import type { AdminAuditEventRecord, OperatorProfileAuthoritySnapshot } from '../database/queries';
+import { PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS } from '../database/queries';
 import {
   incrementAdminBreakGlassGranted,
   incrementAdminBreakGlassRevoked,
@@ -65,6 +69,32 @@ interface ApproveSignerInput {
   reason: string;
 }
 
+interface ProposeAuthorityChangeInput {
+  accountId: string;
+  change: AdminAuthorityChangeKind;
+  environment: string;
+  orgId?: string | null;
+  /** Grant only: ISO-8601 instant at which the grant stops conferring authority. */
+  expiresAt?: string | null;
+  /** Revoke only: the non-admin role the account returns to. */
+  resultingRole?: UserRole | null;
+  approvalTicket: string;
+  actor: AdminActor;
+  reason: string;
+}
+
+interface DecideAuthorityChangeInput {
+  changeId: string;
+  actor: AdminActor;
+  reason: string;
+}
+
+/** Two-person admin authority: the store and the longest grant it may approve. */
+export interface AdminAuthorityControl {
+  store: AdminAuthorityStore;
+  maxGrantTtlSeconds: number;
+}
+
 interface RevokeSignerInput {
   bindingId: string;
   actor: AdminActor;
@@ -87,6 +117,16 @@ export interface AdminService {
   proposeSigner(input: ProposeSignerInput): Promise<OperatorSignerRegisterRecord>;
   approveSigner(input: ApproveSignerInput): Promise<OperatorSignerRegisterRecord>;
   revokeSigner(input: RevokeSignerInput): Promise<OperatorSignerRegisterRecord | null>;
+  listAuthorityChanges(input?: {
+    accountId?: string;
+    state?: AdminAuthorityChangeRecord['state'];
+    limit?: number;
+  }): Promise<AdminAuthorityChangeRecord[]>;
+  proposeAuthorityChange(input: ProposeAuthorityChangeInput): Promise<AdminAuthorityChangeRecord>;
+  approveAuthorityChange(
+    input: DecideAuthorityChangeInput & { evidenceDigest: string },
+  ): Promise<AdminAuthorityChangeRecord>;
+  cancelAuthorityChange(input: DecideAuthorityChangeInput): Promise<AdminAuthorityChangeRecord>;
 }
 
 function normalizeReason(reason: string): string {
@@ -108,16 +148,46 @@ function normalizeRequiredEvidence(value: string, field: string, maxLength = 200
   return normalized;
 }
 
+function normalizeEnvironment(value: string): string {
+  const environment = value.trim().toLowerCase();
+  if (!/^[a-z][a-z0-9-]{0,31}$/.test(environment)) {
+    throw new Error('environment must be a lowercase environment name');
+  }
+  return environment;
+}
+
 export function createAdminService(
   profiles: ProfileStore,
   maxBreakGlassTtlSeconds: number,
   signerStore?: OperatorSignerStore,
+  authority?: AdminAuthorityControl,
 ): AdminService {
   function requireSignerStore(): OperatorSignerStore {
     if (!signerStore) {
       throw new Error('Operator signer register is not configured');
     }
     return signerStore;
+  }
+
+  function requireAuthority(): AdminAuthorityControl {
+    if (!authority) {
+      throw new Error('Admin authority changes are not configured');
+    }
+    return authority;
+  }
+
+  function grantExpiry(value: string | null | undefined, maxTtlSeconds: number): Date {
+    const expiresAt = typeof value === 'string' ? new Date(value) : new Date(NaN);
+    if (Number.isNaN(expiresAt.getTime())) {
+      throw new Error('expiresAt must be an ISO-8601 timestamp for an admin grant');
+    }
+    const remainingSeconds = (expiresAt.getTime() - Date.now()) / 1000;
+    if (remainingSeconds < 3600 || remainingSeconds > maxTtlSeconds) {
+      throw new Error(
+        `expiresAt must be between 1 hour and ${maxTtlSeconds} seconds from now for an admin grant`,
+      );
+    }
+    return expiresAt;
   }
 
   return {
@@ -131,6 +201,10 @@ export function createAdminService(
 
     async provisionProfile(input) {
       const reason = normalizeReason(input.reason);
+      // Fail fast on the request itself; the store re-checks the target under its row lock.
+      if (input.role === 'admin') {
+        throw new Error(PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS);
+      }
       const previous = await profiles.findByAccountId(input.accountId);
       const profile = await profiles.provision({ ...input, reason });
       const previousWasDurableAdmin = previous?.baseRole === 'admin';
@@ -265,6 +339,98 @@ export function createAdminService(
         actor: input.actor,
         reason: normalizeReason(input.reason),
       });
+    },
+
+    async listAuthorityChanges(input = {}) {
+      return requireAuthority().store.list(input);
+    },
+
+    async proposeAuthorityChange(input) {
+      const control = requireAuthority();
+      const environment = normalizeEnvironment(input.environment);
+      const common = {
+        accountId: normalizeRequiredEvidence(input.accountId, 'accountId'),
+        environment,
+        approvalTicket: normalizeRequiredEvidence(input.approvalTicket, 'approvalTicket'),
+        reason: normalizeReason(input.reason),
+        actor: input.actor,
+      };
+      let record: AdminAuthorityChangeRecord;
+      if (input.change === 'grant') {
+        if (input.resultingRole && input.resultingRole !== 'admin') {
+          throw new Error('An admin grant cannot set resultingRole');
+        }
+        record = await control.store.propose({
+          ...common,
+          change: 'grant',
+          orgId: input.orgId?.trim() || null,
+          grantExpiresAt: grantExpiry(input.expiresAt, control.maxGrantTtlSeconds),
+          resultingRole: 'admin',
+        });
+      } else if (input.change === 'revoke') {
+        if (input.resultingRole !== 'buyer' && input.resultingRole !== 'supplier') {
+          throw new Error('An admin revocation requires resultingRole buyer or supplier');
+        }
+        if (input.expiresAt || input.orgId) {
+          throw new Error('An admin revocation cannot set expiresAt or orgId');
+        }
+        record = await control.store.propose({
+          ...common,
+          change: 'revoke',
+          orgId: null,
+          grantExpiresAt: null,
+          resultingRole: input.resultingRole,
+        });
+      } else {
+        throw new Error('change must be grant or revoke');
+      }
+      Logger.warn('Admin authority change proposed', {
+        eventType: 'auth.admin_authority_change_proposed',
+        changeId: record.changeId,
+        change: record.change,
+        environment: record.environment,
+      });
+      return record;
+    },
+
+    async approveAuthorityChange(input) {
+      const evidenceDigest = input.evidenceDigest.trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(evidenceDigest)) {
+        throw new Error('evidenceDigest must be a lowercase SHA-256 digest');
+      }
+      const record = await requireAuthority().store.approve({
+        changeId: normalizeRequiredEvidence(input.changeId, 'changeId'),
+        evidenceDigest,
+        actor: input.actor,
+        reason: normalizeReason(input.reason),
+      });
+      if (record.change === 'grant') {
+        incrementAdminDurableProvisioned();
+      } else {
+        incrementAdminDurableRevoked();
+      }
+      Logger.warn('Admin authority change applied', {
+        eventType:
+          record.change === 'grant'
+            ? 'auth.durable_admin_provisioned'
+            : 'auth.durable_admin_revoked',
+        changeId: record.changeId,
+        environment: record.environment,
+      });
+      return record;
+    },
+
+    async cancelAuthorityChange(input) {
+      const record = await requireAuthority().store.cancel({
+        changeId: normalizeRequiredEvidence(input.changeId, 'changeId'),
+        actor: input.actor,
+        reason: normalizeReason(input.reason),
+      });
+      Logger.warn('Admin authority change cancelled', {
+        eventType: 'auth.admin_authority_change_cancelled',
+        changeId: record.changeId,
+      });
+      return record;
     },
   };
 }

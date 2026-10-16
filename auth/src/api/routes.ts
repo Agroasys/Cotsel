@@ -4,6 +4,10 @@
 import { Router, Request, Response, NextFunction, RequestHandler } from 'express';
 import { SessionController } from './controller';
 import { AdminController } from './adminController';
+import type {
+  DecideAuthorityChangeBody,
+  ProposeAuthorityChangeBody,
+} from './adminAuthorityController';
 import { createSessionMiddleware } from '../middleware/middleware';
 import { SessionService } from '../core/sessionService';
 
@@ -176,6 +180,55 @@ export function createRouter(
       asyncHandler((req, res) =>
         options.adminController!.signers.revoke(
           req as Request<Record<string, never>, unknown, { bindingId?: string; reason?: string }>,
+          res,
+        ),
+      ),
+    );
+
+    router.get(
+      '/admin/authority-changes',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.authority.list(
+          req as Request<
+            Record<string, never>,
+            unknown,
+            unknown,
+            { limit?: string; accountId?: string; state?: string }
+          >,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/authority-changes/propose',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.authority.propose(
+          req as Request<Record<string, never>, unknown, ProposeAuthorityChangeBody>,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/authority-changes/approve',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.authority.approve(
+          req as Request<Record<string, never>, unknown, DecideAuthorityChangeBody>,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/authority-changes/cancel',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.authority.cancel(
+          req as Request<Record<string, never>, unknown, DecideAuthorityChangeBody>,
           res,
         ),
       ),

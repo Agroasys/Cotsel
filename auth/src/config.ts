@@ -69,6 +69,9 @@ export function loadConfig(): AuthConfig {
   const adminControlMaxSkewSeconds = envNumber('AUTH_ADMIN_CONTROL_MAX_SKEW_SECONDS', 300);
   const adminControlNonceTtlSeconds = envNumber('AUTH_ADMIN_CONTROL_NONCE_TTL_SECONDS', 600);
   const adminBreakGlassMaxTtlSeconds = envNumber('AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS', 3600);
+  const adminGrantMaxTtlSeconds = envNumber('AUTH_ADMIN_GRANT_MAX_TTL_SECONDS', 2592000);
+  const environment =
+    process.env.COTSEL_ENVIRONMENT?.trim() || (nodeEnv === 'production' ? '' : 'local');
   const sessionTtlSeconds = envNumber('SESSION_TTL_SECONDS', 3600);
   const sessionAbsoluteLifetimeSeconds = envNumber('SESSION_ABSOLUTE_LIFETIME_SECONDS', 86400);
 
@@ -109,11 +112,24 @@ export function loadConfig(): AuthConfig {
     'SESSION_ABSOLUTE_LIFETIME_SECONDS must be between SESSION_TTL_SECONDS and 604800',
   );
   assert(
+    environment !== '',
+    'COTSEL_ENVIRONMENT is required when NODE_ENV=production; admin grants are bound to it',
+  );
+  assert(
+    /^[a-z][a-z0-9-]{0,31}$/.test(environment),
+    'COTSEL_ENVIRONMENT must be a lowercase environment name',
+  );
+  assert(
+    adminGrantMaxTtlSeconds >= 3600 && adminGrantMaxTtlSeconds <= 15552000,
+    'AUTH_ADMIN_GRANT_MAX_TTL_SECONDS must be between 3600 and 15552000',
+  );
+  assert(
     adminBreakGlassMaxTtlSeconds > 0 && adminBreakGlassMaxTtlSeconds <= 86400,
     'AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS must be between 1 and 86400',
   );
   return {
     nodeEnv,
+    environment,
     port: envNumber('PORT', 3005),
     dbHost: env('DB_HOST'),
     dbPort: envNumber('DB_PORT', 5432),
@@ -139,6 +155,7 @@ export function loadConfig(): AuthConfig {
     adminControlMaxSkewSeconds,
     adminControlNonceTtlSeconds,
     adminBreakGlassMaxTtlSeconds,
+    adminGrantMaxTtlSeconds,
   };
 }
 

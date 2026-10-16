@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import { AdminActor, OperatorSignerActionClass, OperatorSignerRegisterRecord } from '../types';
 import { recordAdminAuditEvent } from '../database/queries/adminAudit';
 import { queryProfileByAccountIdForUpdate } from '../database/queries/profileRows';
+import { canonicalControlPrincipal } from './controlPrincipal';
 
 export interface ProposeOperatorSignerInput {
   accountId: string;
@@ -87,7 +88,6 @@ const SIGNER_COLUMNS = `
   revoked_at AS "revokedAt",
   revoked_by AS "revokedBy",
   revoked_reason AS "revokedReason"`;
-const HUMAN_CONTROL_PRINCIPAL_REGEX = /^[a-z0-9][a-z0-9:._@/-]{0,127}$/;
 
 function mapRow(row: SignerBindingRow): OperatorSignerRegisterRecord {
   return {
@@ -112,18 +112,6 @@ function mapRow(row: SignerBindingRow): OperatorSignerRegisterRecord {
     revokedBy: row.revokedBy,
     revokedReason: row.revokedReason,
   };
-}
-
-function canonicalControlPrincipal(actor: AdminActor): string {
-  const humanPrincipalId = actor.humanPrincipalId?.trim() ?? '';
-  if (
-    actor.type !== 'service_auth' ||
-    actor.id.trim() === '' ||
-    !HUMAN_CONTROL_PRINCIPAL_REGEX.test(humanPrincipalId)
-  ) {
-    throw new Error('Signer binding changes require an authenticated human control principal');
-  }
-  return `human:${humanPrincipalId}`;
 }
 
 function signerProposalDigest(
@@ -177,7 +165,7 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const proposerPrincipal = canonicalControlPrincipal(input.actor);
+        const proposerPrincipal = canonicalControlPrincipal(input.actor, 'Signer binding');
         const profile = await queryProfileByAccountIdForUpdate(client, input.accountId);
         if (!profile) throw new Error('Profile not found');
         if (!profile.active) throw new Error('Signer bindings require an active profile');
@@ -265,7 +253,7 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const approverPrincipal = canonicalControlPrincipal(input.actor);
+        const approverPrincipal = canonicalControlPrincipal(input.actor, 'Signer binding');
         const existing = await client.query<SignerBindingRow>(
           `SELECT ${SIGNER_COLUMNS}
            FROM operator_signer_bindings
@@ -340,7 +328,7 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const revokingPrincipal = canonicalControlPrincipal(input.actor);
+        const revokingPrincipal = canonicalControlPrincipal(input.actor, 'Signer binding');
         const existing = await client.query<SignerBindingRow>(
           `SELECT ${SIGNER_COLUMNS}
            FROM operator_signer_bindings

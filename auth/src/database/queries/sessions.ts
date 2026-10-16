@@ -3,7 +3,7 @@
  */
 import { Pool, PoolClient } from 'pg';
 import { UserProfile, UserSession } from '../../types';
-import { AUDITED_ADMIN_SQL } from './profileRows';
+import { activeAdminGrantSql } from './profileRows';
 import { normalizeSessionRow, SessionRow } from './sessionNormalization';
 
 export interface SessionInsert {
@@ -38,9 +38,11 @@ export async function insertSession(
   );
 }
 
+/** `environment` selects which admin grants back an `admin` profile's authority. */
 export async function findSessionByTokenHash(
   pool: Pool,
   tokenHash: string,
+  environment: string,
 ): Promise<UserSession | null> {
   const result = await pool.query<SessionRow>(
     `SELECT user_sessions.session_token_hash AS "sessionId",
@@ -59,9 +61,9 @@ export async function findSessionByTokenHash(
             user_sessions.role AS "issuedRole",
             user_profiles.active AS active,
             CASE
-              WHEN user_profiles.role = 'admin' THEN NOT ${AUDITED_ADMIN_SQL}
+              WHEN user_profiles.role = 'admin' THEN NOT ${activeAdminGrantSql('$2')}
               ELSE FALSE
-            END AS "unauditedAdmin",
+            END AS "adminGrantMissing",
             user_profiles.break_glass_role AS "breakGlassRole",
             user_profiles.break_glass_expires_at AS "breakGlassExpiresAt",
             user_profiles.break_glass_granted_at AS "breakGlassGrantedAt",
@@ -102,7 +104,7 @@ export async function findSessionByTokenHash(
      FROM user_sessions
      JOIN user_profiles ON user_profiles.id = user_sessions.user_id
      WHERE user_sessions.session_token_hash = $1`,
-    [tokenHash],
+    [tokenHash, environment],
   );
   const row = result.rows[0];
   return row ? normalizeSessionRow(row) : null;

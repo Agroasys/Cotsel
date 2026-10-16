@@ -10,6 +10,7 @@ import {
   findTrustedProfileByWalletAddress,
   insertTrustedProfileRow,
   isLegacyAccountIdPlaceholder,
+  queryActiveAdminGrant,
   updateTrustedProfileRow,
 } from './profileRows';
 
@@ -46,18 +47,27 @@ export async function upsertTrustedProfile(
     walletAddress: string | null;
   },
   authority: ExchangeAuthority,
+  environment: string,
 ): Promise<UserProfile> {
-  const authorize = (target: UserProfile | null, absorbed?: UserProfile) => ({
+  const client = await pool.connect();
+  // Admin authority is read inside this transaction, after the profile locks,
+  // so a concurrent grant or revocation cannot interleave with the decision.
+  const withGrant = async (profile: UserProfile): Promise<UserProfile> => ({
+    ...profile,
+    adminProvisioned:
+      profile.baseRole === 'admin' &&
+      (await queryActiveAdminGrant(client, profile.accountId, environment)),
+  });
+  const authorize = async (target: UserProfile | null, absorbed?: UserProfile) => ({
     ...input,
     ...authorizeExchange({
       authority,
       requestedRole: input.role,
       requestedOrgId: input.orgId,
-      target,
-      absorbed,
+      target: target && (await withGrant(target)),
+      absorbed: absorbed && (await withGrant(absorbed)),
     }),
   });
-  const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
@@ -73,7 +83,7 @@ export async function upsertTrustedProfile(
       if (accountMatch.walletAddress && accountMatch.walletAddress !== input.walletAddress) {
         throw new Error('trusted account already has a different linked wallet');
       }
-      const merged = authorize(accountMatch, walletMatch);
+      const merged = await authorize(accountMatch, walletMatch);
 
       await client.query(
         `UPDATE user_sessions
@@ -92,7 +102,7 @@ export async function upsertTrustedProfile(
       const updatedProfile = await updateTrustedProfileRow(
         client,
         accountMatch.id,
-        authorize(accountMatch),
+        await authorize(accountMatch),
       );
       await client.query('COMMIT');
       return updatedProfile;
@@ -109,14 +119,14 @@ export async function upsertTrustedProfile(
       const relinkedProfile = await updateTrustedProfileRow(
         client,
         walletMatch.id,
-        authorize(walletMatch),
+        await authorize(walletMatch),
       );
       await client.query('COMMIT');
       return relinkedProfile;
     }
 
     // A null target admits only non-administrator roles, so a role is always set.
-    const inserted = authorize(null);
+    const inserted = await authorize(null);
     const insertedProfile = await insertTrustedProfileRow(client, {
       ...inserted,
       role: inserted.role as UserRole,

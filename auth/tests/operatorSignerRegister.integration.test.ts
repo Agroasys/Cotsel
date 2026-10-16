@@ -120,6 +120,12 @@ async function withPostgres(
           'utf8',
         ),
       );
+      await pool.query(
+        fs.readFileSync(
+          path.resolve(__dirname, '../src/database/schema/005_admin_authority_changes.sql'),
+          'utf8',
+        ),
+      );
       await fn(pool);
     } finally {
       await pool.end();
@@ -221,7 +227,7 @@ describe('operator signer register persistence', () => {
         );
 
         const store = createPostgresOperatorSignerStore(pool);
-        const service = createAdminService(createPostgresProfileStore(pool), 3600, store);
+        const service = createAdminService(createPostgresProfileStore(pool, 'test'), 3600, store);
         const input = {
           accountId: 'acct-admin-1',
           walletAddress: '0x00000000000000000000000000000000000000AA',
@@ -251,7 +257,7 @@ describe('operator signer register persistence', () => {
         const created = await service.proposeSigner(input);
         expect(created).toMatchObject({ state: 'pending', active: false });
         await expect(service.proposeSigner(input)).resolves.toEqual(created);
-        await expect(findSessionByTokenHash(pool, SESSION_ADMIN_HASH)).resolves.toEqual(
+        await expect(findSessionByTokenHash(pool, SESSION_ADMIN_HASH, 'test')).resolves.toEqual(
           expect.objectContaining({ signerAuthorizations: [] }),
         );
 
@@ -345,7 +351,7 @@ describe('operator signer register persistence', () => {
             reason: 'Attempt replay of signer approval.',
           }),
         ).rejects.toThrow('not pending');
-        const session = await findSessionByTokenHash(pool, SESSION_ADMIN_HASH);
+        const session = await findSessionByTokenHash(pool, SESSION_ADMIN_HASH, 'test');
         expect(session?.signerAuthorizations).toEqual([
           expect.objectContaining({
             bindingId: created.bindingId,
@@ -388,7 +394,7 @@ describe('operator signer register persistence', () => {
             reason: 'Attempt activation after signer revocation.',
           }),
         ).rejects.toThrow('not pending');
-        await expect(findSessionByTokenHash(pool, SESSION_ADMIN_HASH)).resolves.toEqual(
+        await expect(findSessionByTokenHash(pool, SESSION_ADMIN_HASH, 'test')).resolves.toEqual(
           expect.objectContaining({ signerAuthorizations: [] }),
         );
         await expect(
@@ -426,7 +432,7 @@ describe('operator signer register persistence', () => {
             }),
           ]),
         );
-        await expect(findSessionByTokenHash(pool, SESSION_ADMIN_HASH)).resolves.toEqual(
+        await expect(findSessionByTokenHash(pool, SESSION_ADMIN_HASH, 'test')).resolves.toEqual(
           expect.objectContaining({ role: 'buyer', signerAuthorizations: [] }),
         );
 
