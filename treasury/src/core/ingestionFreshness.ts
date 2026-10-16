@@ -45,6 +45,9 @@ export interface IngestionFreshnessAssessment {
   blockedReasons: string[];
 }
 
+const LAST_FAILED_ATTEMPT_MESSAGE =
+  'Last ingestion attempt failed; use the ingestion run evidence or service logs for details.';
+
 interface CursorStateReader {
   listStates(cursorNames: string[]): Promise<IngestionCursorState[]>;
 }
@@ -131,9 +134,7 @@ export class TreasuryIngestionFreshnessService {
         lastBlockedReason,
         blockedReasons: [
           `Treasury ingestion has never completed a run for ${namedCursors.join(', ')}; chain evidence coverage is unproven.`,
-          ...(lastBlockedReason
-            ? [`Last ingestion attempt was refused: ${lastBlockedReason}`]
-            : []),
+          ...(lastBlockedReason ? [LAST_FAILED_ATTEMPT_MESSAGE] : []),
         ],
       };
     }
@@ -161,7 +162,10 @@ export class TreasuryIngestionFreshnessService {
     }
 
     if (blockedReasons.length > 0 && lastBlockedReason) {
-      blockedReasons.push(`Last ingestion attempt was refused: ${lastBlockedReason}`);
+      // A failed run can persist raw database, indexer, or RPC text. Keep that
+      // evidence for restricted diagnostics, but never project it into an API
+      // response through readiness or payout eligibility.
+      blockedReasons.push(LAST_FAILED_ATTEMPT_MESSAGE);
     }
 
     // A worker that is running but permanently capped is a different outage
