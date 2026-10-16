@@ -14,6 +14,7 @@ import { ProfileStore } from './profileStore';
 import { OperatorSignerStore } from './operatorSignerStore';
 import { AdminAuthorityStore } from './adminAuthorityStore';
 import type { AdminAuditEventRecord, OperatorProfileAuthoritySnapshot } from '../database/queries';
+import { PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS } from '../database/queries';
 import {
   incrementAdminBreakGlassGranted,
   incrementAdminBreakGlassRevoked,
@@ -128,9 +129,6 @@ export interface AdminService {
   cancelAuthorityChange(input: DecideAuthorityChangeInput): Promise<AdminAuthorityChangeRecord>;
 }
 
-const PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS =
-  'Administrator authority is granted and removed only through a two-person admin authority change';
-
 function normalizeReason(reason: string): string {
   const trimmed = reason.trim();
   if (trimmed.length < 8) {
@@ -203,15 +201,11 @@ export function createAdminService(
 
     async provisionProfile(input) {
       const reason = normalizeReason(input.reason);
+      // Fail fast on the request itself; the store re-checks the target under its row lock.
       if (input.role === 'admin') {
         throw new Error(PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS);
       }
       const previous = await profiles.findByAccountId(input.accountId);
-      // Deactivation, not provisioning, is the single-person containment path for
-      // an active administrator.
-      if (previous?.baseRole === 'admin' && previous.active) {
-        throw new Error(PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS);
-      }
       const profile = await profiles.provision({ ...input, reason });
       const previousWasDurableAdmin = previous?.baseRole === 'admin';
       const nowDurableAdmin = profile.baseRole === 'admin';

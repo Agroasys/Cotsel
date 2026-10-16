@@ -18,6 +18,7 @@ const PROPOSE_PATH = '/api/auth/v1/admin/authority-changes/propose';
 const APPROVE_PATH = '/api/auth/v1/admin/authority-changes/approve';
 const CANCEL_PATH = '/api/auth/v1/admin/authority-changes/cancel';
 const EXCHANGE_PATH = '/api/auth/v1/session/exchange/agroasys';
+const PROVISION_PATH = '/api/auth/v1/admin/profiles/provision';
 
 type App = Awaited<ReturnType<typeof startAdminApp>>;
 
@@ -61,6 +62,19 @@ async function insertAppliedGrant(
        'applied', 'human:proposer', 'key-a', 'human:approver', 'key-b', clock_timestamp())`,
     [accountId, environment, expiresAt, 'f'.repeat(64)],
   );
+}
+
+async function waitForLockWaiters(pool: Pool, count: number): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const waiting = await pool.query<{ waiters: number }>(
+      `SELECT COUNT(*)::int AS waiters FROM pg_stat_activity WHERE wait_event_type = 'Lock'`,
+    );
+    if (waiting.rows[0].waiters >= count) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`expected ${count} requests waiting on the profile row lock`);
 }
 
 describe('two-person admin authority integration', () => {
@@ -242,6 +256,63 @@ describe('two-person admin authority integration', () => {
           expect((await exchangeAdmin(foreign)).status).toBe(403);
           await insertAppliedGrant(pool, foreign, TEST_ENVIRONMENT, inDays(7));
           expect((await exchangeAdmin(foreign)).status).toBe(201);
+        } finally {
+          await app.close();
+        }
+      });
+    },
+    120000,
+  );
+
+  integrationTest(
+    'provisioning that loses the profile lock to a grant cannot overwrite the administrator',
+    async () => {
+      await withPostgres(async (pool) => {
+        const app = await startAdminApp(pool);
+        try {
+          const accountId = 'agroasys-user:ops-race';
+          const provision = () =>
+            postAdminControl(app.baseUrl, PROVISION_PATH, {
+              accountId,
+              role: 'buyer',
+              reason: 'Single-person provisioning racing a grant',
+            });
+          expect((await provision()).status).toBe(201);
+          const proposed = await proposeGrant(app, accountId);
+          expect(proposed.status).toBe(201);
+
+          const holder = await pool.connect();
+          let approval: ReturnType<typeof postAdminControl>;
+          let racingProvision: ReturnType<typeof postAdminControl>;
+          try {
+            await holder.query('BEGIN');
+            await holder.query(`SELECT 1 FROM user_profiles WHERE account_id = $1 FOR UPDATE`, [
+              accountId,
+            ]);
+            // The grant queues on the profile row first, then provisioning queues behind it.
+            approval = postAdminControl(
+              app.baseUrl,
+              APPROVE_PATH,
+              {
+                changeId: proposed.json.data!.changeId,
+                evidenceDigest: proposed.json.data!.evidenceDigest,
+                reason: 'Second human approves while provisioning is in flight',
+              },
+              ADMIN_CONTROL_APPROVER,
+            );
+            await waitForLockWaiters(pool, 1);
+            racingProvision = provision();
+            await waitForLockWaiters(pool, 2);
+            await holder.query('COMMIT');
+          } finally {
+            holder.release();
+          }
+
+          expect((await approval).status).toBe(200);
+          const refused = await racingProvision;
+          expect(refused.status).toBe(403);
+          expect(refused.json.message).toContain('two-person admin authority change');
+          expect(await storedRole(pool, accountId)).toBe('admin');
         } finally {
           await app.close();
         }
