@@ -17,6 +17,8 @@ import {
   classifyError,
   determineNextStatus,
   getErrorMessage,
+  publicFailureMessage,
+  storedFailureMessage,
   ValidationError,
 } from '../utils/errors';
 import { Logger } from '../utils/logger';
@@ -173,9 +175,8 @@ export class TriggerManager {
         errorMessage.includes('trade not found') ||
         errorMessage.includes('execution reverted')
       ) {
-        throw new ValidationError(
-          `Trade ${request.tradeId} does not exist on-chain: ${errorMessage}`,
-        );
+        Logger.warn('Trade lookup refused on-chain', { tradeId: request.tradeId, errorMessage });
+        throw new ValidationError(`Trade ${request.tradeId} does not exist on-chain`);
       }
       throw error;
     }
@@ -317,7 +318,7 @@ export class TriggerManager {
         requestId: trigger.request_id,
         status: trigger.status,
         idempotent: false,
-        message: trigger.last_error || 'Trigger failed with terminal error',
+        message: storedFailureMessage(trigger.error_type),
       };
     }
 
@@ -495,8 +496,8 @@ export class TriggerManager {
           isTerminal: oracleError.isTerminal,
           message: oracleError.message,
         });
-
         const nextStatus = determineNextStatus(oracleError, attempt, this.maxAttempts);
+        const publicReason = publicFailureMessage(oracleError);
 
         await updateTrigger(trigger.idempotency_key, {
           status: nextStatus,
@@ -519,7 +520,7 @@ export class TriggerManager {
             requestId: trigger.request_id,
             status: nextStatus,
             idempotent: false,
-            message: oracleError.message,
+            message: publicReason,
           };
         }
 
@@ -539,7 +540,7 @@ export class TriggerManager {
             requestId: trigger.request_id,
             status: nextStatus,
             idempotent: false,
-            message: exhaustedMessage,
+            message: `Exhausted ${this.maxAttempts} attempts: ${publicReason}. Use re-drive endpoint to retry.`,
           };
         }
 

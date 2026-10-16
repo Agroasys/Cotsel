@@ -19,7 +19,7 @@ export type FinalizedTransactionVerdict =
       finalizedBlockNumber: number;
       logs: ReadonlyArray<SettlementLog> | null;
     }
-  | { finalized: false; detail: string };
+  | { finalized: false; detail: string; unavailable?: true };
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -48,7 +48,11 @@ export class FinalizedTransactionVerifier {
       receipt =
         finalizedBlockNumber === null ? null : await this.provider.getTransactionReceipt(txHash);
     } catch (error) {
-      return { finalized: false, detail: `Settlement RPC did not answer: ${describeError(error)}` };
+      return {
+        finalized: false,
+        unavailable: true,
+        detail: `Settlement RPC did not answer: ${describeError(error)}`,
+      };
     }
 
     if (finalizedBlockNumber === null) {

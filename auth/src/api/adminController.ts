@@ -180,6 +180,7 @@ export class AdminController {
       );
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'AdminAuthorityListFailed',
@@ -206,6 +207,7 @@ export class AdminController {
       );
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'AdminAuditListFailed',
@@ -236,6 +238,7 @@ export class AdminController {
       res.status(201).json(success(profilePayload(profile)));
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'AdminProvisionFailed',
@@ -277,6 +280,7 @@ export class AdminController {
       res.status(201).json(success(profilePayload(profile)));
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'BreakGlassGrantFailed',
@@ -305,6 +309,7 @@ export class AdminController {
       res.json(success(profilePayload(profile)));
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'BreakGlassRevokeFailed',
@@ -329,6 +334,7 @@ export class AdminController {
       res.json(success(profilePayload(profile)));
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'BreakGlassReviewFailed',
@@ -353,6 +359,7 @@ export class AdminController {
       res.json(success(profilePayload(profile)));
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'ProfileDeactivateFailed',

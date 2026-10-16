@@ -93,12 +93,13 @@ function statusForError(error: unknown): number {
 }
 
 function fail(
+  req: Pick<Request, 'headers'>,
   res: Response<ApiSuccessResponse | ApiErrorResponse>,
   error: unknown,
   code: string,
   message: string,
 ): void {
-  handleControllerError(res, error, code, statusForError(error), message);
+  handleControllerError(req, res, error, code, statusForError(error), message);
 }
 
 export class AdminSignerController {
@@ -116,7 +117,7 @@ export class AdminSignerController {
       });
       res.json(success({ items, generatedAt: new Date().toISOString() }));
     } catch (error) {
-      fail(res, error, 'SignerListFailed', 'Signer register list failed');
+      fail(req, res, error, 'SignerListFailed', 'Signer register list failed');
     }
   }
 
@@ -142,7 +143,7 @@ export class AdminSignerController {
       });
       res.status(201).json(success(binding));
     } catch (error) {
-      fail(res, error, 'SignerProposalFailed', 'Signer proposal failed');
+      fail(req, res, error, 'SignerProposalFailed', 'Signer proposal failed');
     }
   }
 
@@ -160,7 +161,7 @@ export class AdminSignerController {
       });
       res.json(success(binding));
     } catch (error) {
-      fail(res, error, 'SignerApprovalFailed', 'Signer approval failed');
+      fail(req, res, error, 'SignerApprovalFailed', 'Signer approval failed');
     }
   }
 
@@ -178,7 +179,7 @@ export class AdminSignerController {
       if (!binding) throw new HttpError(404, 'SignerBindingNotFound', 'No open binding found');
       res.json(success(binding));
     } catch (error) {
-      fail(res, error, 'SignerRevokeFailed', 'Signer revocation failed');
+      fail(req, res, error, 'SignerRevokeFailed', 'Signer revocation failed');
     }
   }
 }

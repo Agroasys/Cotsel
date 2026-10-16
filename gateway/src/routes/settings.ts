@@ -7,7 +7,7 @@ import { AuthSessionClient } from '../core/authSessionClient';
 import { decodeAuditFeedCursor } from '../core/auditFeedStore';
 import { OperatorSettingsReadService } from '../core/operatorSettingsReadService';
 import { decodeRoleAssignmentCursor } from '../core/roleAssignmentStore';
-import { GatewayError } from '../errors';
+import { diagnosticReason, GatewayError } from '../errors';
 import { createAuthenticationMiddleware, requireGatewayRole } from '../middleware/auth';
 import { successResponse } from '../responses';
 
@@ -70,9 +70,13 @@ function parseCursor(raw: unknown, decoder: (cursor: string) => unknown): string
   try {
     decoder(raw);
   } catch (error) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'cursor' is invalid", {
-      reason: error instanceof Error ? error.message : String(error),
-    });
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'cursor' is invalid",
+      undefined,
+      { reason: diagnosticReason(error) },
+    );
   }
 
   return raw;

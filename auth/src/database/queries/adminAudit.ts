@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { Pool, PoolClient } from 'pg';
 import { AdminActor, AdminAuditAction, UserProfile, UserRole } from '../../types';
 import {
@@ -195,7 +196,7 @@ export async function provisionProfileWithAudit(
     // is seen here, so provisioning can never write over an administrator.
     // Deactivation, not provisioning, is the single-person containment path.
     if (input.role === 'admin' || (previous?.baseRole === 'admin' && previous.active)) {
-      throw new Error(PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS);
+      throw new CallerSafeError(PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS);
     }
     const profile = previous
       ? await updateTrustedProfileRow(client, previous.id, {
@@ -274,7 +275,7 @@ export async function deactivateProfileWithAudit(
     await client.query('BEGIN');
     const previous = await queryProfileByAccountIdForUpdate(client, accountId);
     if (!previous) {
-      throw new Error('Profile not found');
+      throw new CallerSafeError('Profile not found');
     }
 
     await client.query(

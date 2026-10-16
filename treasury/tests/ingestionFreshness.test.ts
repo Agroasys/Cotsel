@@ -123,12 +123,13 @@ describe('TreasuryIngestionFreshnessService', () => {
     );
   });
 
-  it('carries the refusal reason of the last attempt into the blocked output', async () => {
+  it('does not expose the stored failure reason in blocked output', async () => {
+    const internalFailure = 'connect ECONNREFUSED https://rpc.internal.example/provider-key-9f2';
     const service = makeService([
       cursor({
         cursorName: 'trade_events',
         lastSuccessAt: secondsAgo(3600),
-        lastBlockedReason: 'Settlement RPC did not report a finalized head',
+        lastBlockedReason: internalFailure,
         consecutiveFailureCount: 12,
       }),
       cursor({ cursorName: 'claim_events', lastSuccessAt: secondsAgo(3600) }),
@@ -138,8 +139,29 @@ describe('TreasuryIngestionFreshnessService', () => {
 
     expect(assessment.consecutiveFailureCount).toBe(12);
     expect(assessment.blockedReasons).toContain(
-      'Last ingestion attempt was refused: Settlement RPC did not report a finalized head',
+      'Last ingestion attempt failed; use the ingestion run evidence or service logs for details.',
     );
+    expect(JSON.stringify(assessment.blockedReasons)).not.toContain(internalFailure);
+  });
+
+  it('does not expose a stored failure reason before the first successful run', async () => {
+    const internalFailure = 'relation "treasury_ingestion_state" does not exist at db.internal';
+    const service = makeService([
+      cursor({
+        cursorName: 'trade_events',
+        lastSuccessAt: null,
+        lastBlockedReason: internalFailure,
+      }),
+      cursor({ cursorName: 'claim_events', lastSuccessAt: null }),
+    ]);
+
+    const assessment = await service.assess();
+
+    expect(assessment.status).toBe('NEVER_RUN');
+    expect(assessment.blockedReasons).toContain(
+      'Last ingestion attempt failed; use the ingestion run evidence or service logs for details.',
+    );
+    expect(JSON.stringify(assessment.blockedReasons)).not.toContain(internalFailure);
   });
 
   it('separates a deployment that never ingested from one that stopped', async () => {

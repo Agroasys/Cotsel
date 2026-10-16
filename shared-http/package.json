@@ -6,7 +6,7 @@
   "types": "index.d.ts",
   "scripts": {
     "lint": "eslint --max-warnings=0 .",
-    "test": "node --test validation.test.js"
+    "test": "node --test validation.test.js response.test.js"
   },
   "files": [
     "index.js",
@@ -15,7 +15,8 @@
     "response.d.ts",
     "validation.js",
     "validation.d.ts",
-    "validation.test.js"
+    "validation.test.js",
+    "response.test.js"
   ],
   "license": "Apache-2.0"
 }

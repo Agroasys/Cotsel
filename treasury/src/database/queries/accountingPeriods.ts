@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import {
   accountingPeriodActorRole,
   assertAccountingPeriodRoleSeparation,
@@ -110,7 +111,7 @@ export async function updateAccountingPeriodStatus(data: {
     const existing = existingResult.rows[0];
 
     if (!existing) {
-      throw new Error('Accounting period not found');
+      throw new CallerSafeError('Accounting period not found');
     }
 
     const transitionChain = await listTransitionActors(client, 'ACCOUNTING_PERIOD', data.periodId);

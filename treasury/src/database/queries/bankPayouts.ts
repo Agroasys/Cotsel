@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import {
   assertBankPayoutTransition,
   BankPayoutConflictError,
@@ -74,7 +75,7 @@ async function upsertBankPayoutConfirmationOnce(
 
     const ledgerEntry = ledgerEntryResult.rows[0];
     if (!ledgerEntry) {
-      throw new Error('Ledger entry not found');
+      throw new CallerSafeError('Ledger entry not found');
     }
 
     const payoutStateResult = await client.query<PayoutLifecycleEvent>(

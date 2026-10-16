@@ -98,6 +98,36 @@ Data-classification enforcement is governed by
 `docs/security/data-classification-policy.md` and the release-gate guard
 `scripts/tests/data-classification-guard.mjs`.
 
+## Public error responses
+
+WP-10 I-06. A response never carries internal failure text: no stack trace,
+SQL or query text, host or RPC URL, signer or provider output, or secret. The
+full error goes to the service log under the `correlationId` the caller is given.
+
+| Failure                                                          | Response                                                                                                           |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Request validation, domain refusal, conflict                     | Its existing stable code and caller-facing message.                                                                |
+| Database, network, RPC, signer, provider, timeout, or unexpected | `InternalError` (gateway: `INTERNAL_ERROR`, or `UPSTREAM_UNAVAILABLE` for a named upstream) and a generic message. |
+
+- `ricardian`, `treasury`, `oracle` and `auth` answer unexpected failures through
+  `sendInternalFailure` in `@agroasys/shared-http`. The body carries
+  `correlationId`, and the same value is set as the `x-correlation-id` header.
+- The correlation ID reuses a well-formed inbound `x-correlation-id` or
+  `x-request-id` (8 to 128 characters of `A-Za-z0-9._:-`), so a gateway request
+  can be followed into the service log. Anything else gets a fresh UUID; caller
+  text is never echoed.
+- Only an explicitly caller-safe error keeps its message: `HttpError`, a
+  `CallerSafeError` from `@agroasys/shared-http`, or a named domain error class a
+  service maps itself. Every other error is internal, including a plain `Error`:
+  database drivers and GraphQL clients raise those with raw upstream text
+  (`isCallerSafeError`).
+- The gateway returns `requestId` and `traceId`. Raw upstream text goes in
+  `GatewayError.diagnostics`, which is logged by the error handler and never
+  serialized; `details` holds only stable, non-sensitive fields.
+- Oracle trigger results keep domain refusal text. Network and contract failures
+  return `Oracle <type> failure; detail is recorded on the trigger`; the full
+  text stays in the trigger's `last_error` and the logs.
+
 ## Service adoption status
 
 `AuditEnvelopeV1` is the canonical contract, but current service implementations

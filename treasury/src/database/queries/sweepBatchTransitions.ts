@@ -4,6 +4,7 @@
  * Sweep batch status transitions, including the WP-4 B-08 execution match,
  * which binds the on-chain claim and moves the batch to EXECUTED in one commit.
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import type { PoolClient } from 'pg';
 import {
   assertSweepBatchRoleSeparation,
@@ -62,7 +63,7 @@ async function applySweepBatchStatusUpdate(
   const existing = existingResult.rows[0];
 
   if (!existing) {
-    throw new Error('Sweep batch not found');
+    throw new CallerSafeError('Sweep batch not found');
   }
 
   const transitionChain = await listTransitionActors(client, 'SWEEP_BATCH', data.batchId);

@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { assertBatchAllocationAllowed } from '../../core/accountingPolicy';
 import {
   assertAllocationWithinLedgerAmount,
@@ -52,11 +53,11 @@ export async function createSweepBatch(data: {
     const period = periodResult.rows[0];
 
     if (!period) {
-      throw new Error('Accounting period not found');
+      throw new CallerSafeError('Accounting period not found');
     }
 
     if (period.status !== 'OPEN') {
-      throw new Error(
+      throw new CallerSafeError(
         `Sweep batch creation requires an OPEN accounting period; received ${period.status}`,
       );
     }
@@ -255,7 +256,7 @@ export async function addSweepBatchEntry(data: {
     );
 
     if (!periodLookup.rows[0]) {
-      throw new Error('Sweep batch not found');
+      throw new CallerSafeError('Sweep batch not found');
     }
 
     await client.query(`SELECT id FROM accounting_periods WHERE id = $1 FOR UPDATE`, [
@@ -275,7 +276,7 @@ export async function addSweepBatchEntry(data: {
     const batch = batchResult.rows[0];
 
     if (!batch) {
-      throw new Error('Sweep batch not found');
+      throw new CallerSafeError('Sweep batch not found');
     }
 
     assertBatchAllocationAllowed({
@@ -292,7 +293,7 @@ export async function addSweepBatchEntry(data: {
     const ledgerEntry = ledgerEntryResult.rows[0];
 
     if (!ledgerEntry) {
-      throw new Error('Ledger entry not found');
+      throw new CallerSafeError('Ledger entry not found');
     }
     await assertLedgerEntryCanonical(client, data.ledgerEntryId);
 
@@ -305,7 +306,7 @@ export async function addSweepBatchEntry(data: {
     );
 
     if (existingAllocation.rows[0]) {
-      throw new Error('Ledger entry is already allocated to an active sweep batch');
+      throw new CallerSafeError('Ledger entry is already allocated to an active sweep batch');
     }
 
     // Both rows are read inside this transaction, so the bound is checked

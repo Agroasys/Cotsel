@@ -83,7 +83,7 @@ class ReconciliationContainmentGuard implements ContainmentGuard {
       throw new TradeContainedError(
         tradeId,
         null,
-        `Cannot confirm trade ${tradeId} is clear of a reconciliation containment: ${message}`,
+        `Cannot confirm trade ${tradeId} is clear of a reconciliation containment`,
       );
     }
 

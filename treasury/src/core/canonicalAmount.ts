@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 
 /**
  * Treasury monetary values are scaled integers in the asset's smallest unit —
@@ -144,13 +145,13 @@ export function assertAllocationWithinLedgerAmount(input: {
   const available = parseRawAmount(input.ledgerAmountRaw, 'ledgerAmountRaw');
 
   if (allocated === 0n) {
-    throw new Error(
+    throw new CallerSafeError(
       `Sweep allocation for ledger entry ${input.ledgerEntryId} must be greater than zero`,
     );
   }
 
   if (allocated > available) {
-    throw new Error(
+    throw new CallerSafeError(
       `Sweep allocation ${input.entryAmountRaw} exceeds the eligible ledger amount ${input.ledgerAmountRaw} for entry ${input.ledgerEntryId}`,
     );
   }
@@ -171,7 +172,7 @@ export function assertAllocationTotalMatchesExpected(input: {
   );
 
   if (expected !== allocated) {
-    throw new Error(
+    throw new CallerSafeError(
       `Sweep batch expected total ${input.expectedTotalRaw} does not equal the allocated total ${allocated.toString()}`,
     );
   }

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { failure } from '@agroasys/shared-http';
+import { failure, sendInternalFailure } from '@agroasys/shared-http';
 import { config } from '../config';
 import { consumeHmacNonce } from '../database/queries';
 import { Logger } from '../utils/logger';
@@ -117,14 +117,15 @@ export function errorHandler(
   res: Response<ErrorResponse>,
   _next: NextFunction,
 ): void {
-  Logger.error('Unhandled error', err);
-
-  res
-    .status(500)
-    .json(
-      failure(
-        'InternalServerError',
-        err instanceof Error ? err.message : 'An unexpected error occurred',
-      ),
-    );
+  // WP-10 I-06: the raw error is logged under the correlation ID, never returned.
+  sendInternalFailure(req, res, err, {
+    code: 'InternalServerError',
+    log: (correlationId, cause) =>
+      Logger.error('Unhandled error', {
+        correlationId,
+        route: req.path,
+        error: cause instanceof Error ? cause.message : String(cause),
+        stack: cause instanceof Error ? cause.stack : undefined,
+      }),
+  });
 }

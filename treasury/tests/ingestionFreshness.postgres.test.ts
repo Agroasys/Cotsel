@@ -149,7 +149,7 @@ describePostgres('treasury stopped-ingestion drill (postgres)', () => {
    * changes; the clock does the rest. What must move is the verdict, not the
    * data.
    */
-  it('goes stale and blocks once the ingester stops, naming the refusal', async () => {
+  it('goes stale and blocks once the ingester stops without exposing the refusal', async () => {
     const worker = makeWorker(async () => completedResult(), 'worker-a:1');
     await worker.runOnce('WORKER');
 
@@ -172,7 +172,10 @@ describePostgres('treasury stopped-ingestion drill (postgres)', () => {
     expect(assessment.status).toBe('STALE');
     expect(assessment.consecutiveFailureCount).toBe(2);
     expect(assessment.blockedReasons).toContain(
-      'Last ingestion attempt was refused: Settlement RPC did not report a finalized head',
+      'Last ingestion attempt failed; use the ingestion run evidence or service logs for details.',
+    );
+    expect(JSON.stringify(assessment.blockedReasons)).not.toContain(
+      'Settlement RPC did not report a finalized head',
     );
   });
 

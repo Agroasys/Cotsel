@@ -11,7 +11,7 @@ import {
 } from '../core/complianceService';
 import { decodeComplianceDecisionCursor } from '../core/complianceStore';
 import { IdempotencyStore } from '../core/idempotencyStore';
-import { GatewayError } from '../errors';
+import { diagnosticReason, GatewayError } from '../errors';
 import {
   createAuthenticationMiddleware,
   requireGatewayRole,
@@ -98,9 +98,13 @@ function parseCursor(raw: unknown): string | undefined {
   try {
     decodeComplianceDecisionCursor(raw);
   } catch (error) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'cursor' is invalid", {
-      reason: error instanceof Error ? error.message : String(error),
-    });
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'cursor' is invalid",
+      undefined,
+      { reason: diagnosticReason(error) },
+    );
   }
 
   return raw;

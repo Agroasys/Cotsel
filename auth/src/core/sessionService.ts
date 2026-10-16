@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import {
   TrustedSessionIdentity,
   UserRole,
@@ -88,7 +89,9 @@ export function createSessionService(
       return lifetime.ttlSeconds;
     }
     if (!Number.isSafeInteger(requested) || requested <= 0 || requested > lifetime.ttlSeconds) {
-      throw new Error(`ttlSeconds must be an integer between 1 and ${lifetime.ttlSeconds}`);
+      throw new CallerSafeError(
+        `ttlSeconds must be an integer between 1 and ${lifetime.ttlSeconds}`,
+      );
     }
     return requested;
   }
@@ -141,13 +144,13 @@ export function createSessionService(
   return {
     async login(walletAddress, role, orgId, ttlSeconds) {
       if (role === 'admin' || role === 'oracle') {
-        throw new Error('Privileged roles must be provisioned server-side');
+        throw new CallerSafeError('Privileged roles must be provisioned server-side');
       }
       const ttl = resolveTtl(ttlSeconds);
       const normalized = walletAddress.toLowerCase();
       const profile = await profiles.upsert(normalized, role, orgId);
       if (!profile.active) {
-        throw new Error('User profile is deactivated');
+        throw new CallerSafeError('User profile is deactivated');
       }
       const result = await sessions.issue(profile, ttl);
       incrementSessionIssued();
@@ -162,7 +165,7 @@ export function createSessionService(
       const ttl = resolveTtl(ttlSeconds);
       const profile = await profiles.upsertTrustedIdentity(identity, authority);
       if (!profile.active) {
-        throw new Error('User profile is deactivated');
+        throw new CallerSafeError('User profile is deactivated');
       }
 
       const result = await sessions.issue(profile, ttl);
@@ -178,11 +181,11 @@ export function createSessionService(
     async refresh(sessionId) {
       const existing = await resolveActive(sessionId);
       if (!existing) {
-        throw new Error('Session is invalid, expired, or revoked');
+        throw new CallerSafeError('Session is invalid, expired, or revoked');
       }
       const profile = await profiles.findById(existing.userId);
       if (!profile || !profile.active) {
-        throw new Error('User profile is inactive or not found');
+        throw new CallerSafeError('User profile is inactive or not found');
       }
 
       const rotation = await sessions.rotate(sessionId, profile, lifetime);
@@ -190,10 +193,10 @@ export function createSessionService(
         Logger.info('Session refresh refused because lineage lifetime is exhausted', {
           userId: profile.id,
         });
-        throw new Error('Session lifetime is exhausted; exchange a new session');
+        throw new CallerSafeError('Session lifetime is exhausted; exchange a new session');
       }
       if (rotation.status !== 'rotated') {
-        throw new Error('Session is invalid, expired, or revoked');
+        throw new CallerSafeError('Session is invalid, expired, or revoked');
       }
       incrementSessionRefreshed();
       Logger.info('Session refreshed', {

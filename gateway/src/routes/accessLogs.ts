@@ -7,7 +7,7 @@ import { AuthSessionClient } from '../core/authSessionClient';
 import { type AccessLogReader, validateAccessLogCreateRequest } from '../core/accessLogService';
 import { decodeAccessLogCursor } from '../core/accessLogStore';
 import { IdempotencyStore } from '../core/idempotencyStore';
-import { GatewayError } from '../errors';
+import { diagnosticReason, GatewayError } from '../errors';
 import {
   createAuthenticationMiddleware,
   requireGatewayRole,
@@ -84,9 +84,13 @@ function parseCursor(raw: unknown): string | undefined {
   try {
     decodeAccessLogCursor(raw);
   } catch (error) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'cursor' is invalid", {
-      reason: error instanceof Error ? error.message : String(error),
-    });
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'cursor' is invalid",
+      undefined,
+      { reason: diagnosticReason(error) },
+    );
   }
 
   return raw;

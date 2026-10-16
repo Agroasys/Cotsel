@@ -94,12 +94,13 @@ function statusForError(error: unknown): number {
 }
 
 function fail(
+  req: Pick<Request, 'headers'>,
   res: Response<ApiSuccessResponse | ApiErrorResponse>,
   error: unknown,
   code: string,
   message: string,
 ): void {
-  handleControllerError(res, error, code, statusForError(error), message);
+  handleControllerError(req, res, error, code, statusForError(error), message);
 }
 
 /**
@@ -122,7 +123,7 @@ export class AdminAuthorityController {
       });
       res.json(success({ items, generatedAt: new Date().toISOString() }));
     } catch (error) {
-      fail(res, error, 'AuthorityChangeListFailed', 'Admin authority change list failed');
+      fail(req, res, error, 'AuthorityChangeListFailed', 'Admin authority change list failed');
     }
   }
 
@@ -150,7 +151,7 @@ export class AdminAuthorityController {
       });
       res.status(201).json(success(record));
     } catch (error) {
-      fail(res, error, 'AuthorityChangeProposalFailed', 'Admin authority proposal failed');
+      fail(req, res, error, 'AuthorityChangeProposalFailed', 'Admin authority proposal failed');
     }
   }
 
@@ -168,7 +169,7 @@ export class AdminAuthorityController {
       });
       res.json(success(record));
     } catch (error) {
-      fail(res, error, 'AuthorityChangeApprovalFailed', 'Admin authority approval failed');
+      fail(req, res, error, 'AuthorityChangeApprovalFailed', 'Admin authority approval failed');
     }
   }
 
@@ -185,7 +186,7 @@ export class AdminAuthorityController {
       });
       res.json(success(record));
     } catch (error) {
-      fail(res, error, 'AuthorityChangeCancelFailed', 'Admin authority cancellation failed');
+      fail(req, res, error, 'AuthorityChangeCancelFailed', 'Admin authority cancellation failed');
     }
   }
 }

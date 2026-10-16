@@ -1,3 +1,4 @@
+import { CallerSafeError } from '@agroasys/shared-http';
 import { config } from '../config';
 import {
   getSweepBatchDetail,
@@ -41,14 +42,16 @@ export class SweepExecutionMatcherService {
   }): Promise<SweepBatch> {
     const detail = await getSweepBatchDetail(params.batchId);
     if (!detail) {
-      throw new Error('Sweep batch not found');
+      throw new CallerSafeError('Sweep batch not found');
     }
 
     const normalizedTxHash = params.txHash.trim().toLowerCase();
     const existingClaimEvent = await getTreasuryClaimEventByBatchId(params.batchId);
     if (existingClaimEvent) {
       if (existingClaimEvent.tx_hash.toLowerCase() !== normalizedTxHash) {
-        throw new Error('Sweep batch is already matched to a different treasury claim tx');
+        throw new CallerSafeError(
+          'Sweep batch is already matched to a different treasury claim tx',
+        );
       }
 
       // A claim bound by a match whose transition never committed is finished
@@ -73,13 +76,17 @@ export class SweepExecutionMatcherService {
         }
       : await this.indexerClient.fetchTreasuryClaimEventByTxHash(normalizedTxHash);
     if (!observedClaimEvent) {
-      throw new Error('No authoritative TreasuryClaimed event was found for the supplied tx hash');
+      throw new CallerSafeError(
+        'No authoritative TreasuryClaimed event was found for the supplied tx hash',
+      );
     }
 
     // Everything below is checked against this event, so it has to be the one
     // the caller asked about and not whatever the indexer returned.
     if (observedClaimEvent.txHash.trim().toLowerCase() !== normalizedTxHash) {
-      throw new Error('Indexed TreasuryClaimed event does not belong to the supplied tx hash');
+      throw new CallerSafeError(
+        'Indexed TreasuryClaimed event does not belong to the supplied tx hash',
+      );
     }
 
     assertBatchExecutionMatchable({
@@ -98,7 +105,7 @@ export class SweepExecutionMatcherService {
     const emitters = await listSweepBatchEntryLogAddresses(params.batchId);
     const [emitter] = emitters;
     if (emitters.length !== 1 || !emitter) {
-      throw new Error(
+      throw new CallerSafeError(
         'Sweep batch entries do not resolve to a single settlement emitter, so the claim log cannot be bound to the batch',
       );
     }
@@ -111,9 +118,9 @@ export class SweepExecutionMatcherService {
       Number(observedClaimEvent.blockNumber),
     );
     if (!claimVerdict.finalized) {
-      throw new Error(
-        `TreasuryClaimed transaction is not finalized canonical evidence: ${claimVerdict.detail}`,
-      );
+      const message = `TreasuryClaimed transaction is not finalized canonical evidence: ${claimVerdict.detail}`;
+      // An unanswered RPC carries provider text and is an outage, not a refusal.
+      throw claimVerdict.unavailable ? new Error(message) : new CallerSafeError(message);
     }
 
     // A finalized receipt proves a transaction landed, not that it was this
@@ -129,7 +136,9 @@ export class SweepExecutionMatcherService {
       },
     });
     if (!claimLog.matched) {
-      throw new Error(`TreasuryClaimed transaction does not prove this claim: ${claimLog.detail}`);
+      throw new CallerSafeError(
+        `TreasuryClaimed transaction does not prove this claim: ${claimLog.detail}`,
+      );
     }
 
     return recordSweepBatchExecution({
