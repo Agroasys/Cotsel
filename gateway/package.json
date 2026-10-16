@@ -36,11 +36,11 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
     "ajv": "^8.20.0",
     "jest": "^30.5.2",
-    "js-yaml": "^5.4.1",
+    "js-yaml": "^5.4.3",
     "ts-jest": "^29.4.14",
     "ts-node": "^10.9.2",
     "typescript": ">=6.0.2 <6.1.0"
