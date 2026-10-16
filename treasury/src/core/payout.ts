@@ -1,3 +1,4 @@
+import { CallerSafeError } from '@agroasys/shared-http';
 import { PayoutState } from '../types';
 
 const ALLOWED_TRANSITIONS: Record<PayoutState, PayoutState[]> = {
@@ -10,7 +11,7 @@ const ALLOWED_TRANSITIONS: Record<PayoutState, PayoutState[]> = {
 
 export function assertValidTransition(current: PayoutState, next: PayoutState): void {
   if (!ALLOWED_TRANSITIONS[current].includes(next)) {
-    throw new Error(`Invalid payout state transition: ${current} -> ${next}`);
+    throw new CallerSafeError(`Invalid payout state transition: ${current} -> ${next}`);
   }
 }
 

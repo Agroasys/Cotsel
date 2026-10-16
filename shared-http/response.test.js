@@ -3,7 +3,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { correlationIdFor, isCallerFacingError, sendInternalFailure } = require('./index');
+const {
+  CallerSafeError,
+  HttpError,
+  correlationIdFor,
+  isCallerSafeError,
+  sendInternalFailure,
+} = require('./index');
 
 function recordingResponse() {
   const recorded = { headers: {} };
@@ -81,11 +87,16 @@ test('sendInternalFailure accepts a fixed code, message, and status', () => {
   assert.equal(res.recorded.body.message, 'Chain data is unavailable');
 });
 
-test('isCallerFacingError accepts only bare domain errors', () => {
-  assert.equal(isCallerFacingError(new Error('Sweep batch not found')), true);
-  assert.equal(isCallerFacingError(Object.assign(new Error('x'), { code: '23505' })), false);
-  assert.equal(isCallerFacingError(new TypeError('fetch failed')), false);
-  class DatabaseError extends Error {}
-  assert.equal(isCallerFacingError(new DatabaseError('relation missing')), false);
-  assert.equal(isCallerFacingError('plain string'), false);
+test('isCallerSafeError accepts only explicitly caller-safe errors', () => {
+  assert.equal(isCallerSafeError(new CallerSafeError('Sweep batch not found')), true);
+  assert.equal(isCallerSafeError(new HttpError(400, 'BadRequest', 'limit is invalid')), true);
+  // A plain Error is never trusted, whatever it says: pg and GraphQL clients emit these.
+  assert.equal(isCallerSafeError(new Error('Connection terminated unexpectedly')), false);
+  assert.equal(
+    isCallerSafeError(new Error('Indexer GraphQL errors: relation "x" at https://h')),
+    false,
+  );
+  assert.equal(isCallerSafeError(Object.assign(new Error('x'), { code: '23505' })), false);
+  assert.equal(isCallerSafeError(new TypeError('fetch failed')), false);
+  assert.equal(isCallerSafeError('plain string'), false);
 });

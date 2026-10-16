@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { createHash } from 'crypto';
 import { Pool, PoolClient } from 'pg';
 import {
@@ -165,8 +166,8 @@ async function lockPendingChange(client: PoolClient, changeId: string): Promise<
     [changeId],
   );
   const row = existing.rows[0];
-  if (!row) throw new Error('Admin authority change not found');
-  if (row.state !== 'pending') throw new Error('Admin authority change is not pending');
+  if (!row) throw new CallerSafeError('Admin authority change not found');
+  if (row.state !== 'pending') throw new CallerSafeError('Admin authority change is not pending');
   return row;
 }
 
@@ -208,16 +209,16 @@ export function createPostgresAdminAuthorityStore(
       return withTransaction(pool, async (client) => {
         const proposer = canonicalControlPrincipal(input.actor, SUBJECT);
         if (input.environment !== environment) {
-          throw new Error(
+          throw new CallerSafeError(
             `Admin authority changes for environment ${input.environment} cannot be made in ${environment}`,
           );
         }
         const profile = await queryProfileByAccountIdForUpdate(client, input.accountId);
         if (input.change === 'grant' && profile && !profile.active) {
-          throw new Error('Admin grants require an active profile; reactivate it first');
+          throw new CallerSafeError('Admin grants require an active profile; reactivate it first');
         }
         if (input.change === 'revoke' && profile?.baseRole !== 'admin') {
-          throw new Error('Admin revocation requires a durable admin profile');
+          throw new CallerSafeError('Admin revocation requires a durable admin profile');
         }
 
         const evidenceDigest = changeDigest(input, proposer);
@@ -230,7 +231,7 @@ export function createPostgresAdminAuthorityStore(
         );
         if (pending.rows[0]) {
           if (pending.rows[0].evidenceDigest !== evidenceDigest) {
-            throw new Error(
+            throw new CallerSafeError(
               'Admin authority change conflict: another change is pending for this account',
             );
           }
@@ -288,16 +289,22 @@ export function createPostgresAdminAuthorityStore(
         const approver = canonicalControlPrincipal(input.actor, SUBJECT);
         const row = await lockPendingChange(client, input.changeId);
         if (row.proposedBy === approver) {
-          throw new Error('Admin authority change proposer cannot approve the same change');
+          throw new CallerSafeError(
+            'Admin authority change proposer cannot approve the same change',
+          );
         }
         if (row.evidenceDigest !== input.evidenceDigest) {
-          throw new Error('Admin authority approval digest does not match the pending change');
+          throw new CallerSafeError(
+            'Admin authority approval digest does not match the pending change',
+          );
         }
         if (row.environment !== environment) {
-          throw new Error(`Admin authority change is bound to environment ${row.environment}`);
+          throw new CallerSafeError(
+            `Admin authority change is bound to environment ${row.environment}`,
+          );
         }
         if (row.change === 'grant' && row.grantExpiresAt!.getTime() <= Date.now()) {
-          throw new Error('Admin authority grant expired before approval');
+          throw new CallerSafeError('Admin authority grant expired before approval');
         }
 
         const profile = await queryProfileByAccountIdForUpdate(client, row.accountId);
@@ -306,7 +313,9 @@ export function createPostgresAdminAuthorityStore(
         let revokedSessions = 0;
         if (row.change === 'grant') {
           if (profile && !profile.active) {
-            throw new Error('Admin grants require an active profile; reactivate it first');
+            throw new CallerSafeError(
+              'Admin grants require an active profile; reactivate it first',
+            );
           }
           const fields = {
             accountId: row.accountId,
@@ -332,7 +341,7 @@ export function createPostgresAdminAuthorityStore(
           targetUserId = granted.id;
         } else {
           if (profile?.baseRole !== 'admin') {
-            throw new Error('Admin revocation requires a durable admin profile');
+            throw new CallerSafeError('Admin revocation requires a durable admin profile');
           }
           await updateTrustedProfileRow(client, profile.id, {
             accountId: row.accountId,

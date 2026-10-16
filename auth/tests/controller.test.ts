@@ -3,6 +3,7 @@
  * Unit tests for SessionController.
  */
 import { Request, Response } from 'express';
+import { CallerSafeError } from '@agroasys/shared-http';
 import { SessionController } from '../src/api/controller';
 import { SessionService } from '../src/core/sessionService';
 import { ExchangeAuthorityError } from '../src/core/exchangeAuthority';
@@ -241,9 +242,9 @@ describe('SessionController.refresh', () => {
     );
   });
 
-  test('returns 401 when service throws', async () => {
+  test('returns 401 when the service refuses the session', async () => {
     const svc = mockSessionService();
-    svc.refresh.mockRejectedValue(new Error('Session invalid'));
+    svc.refresh.mockRejectedValue(new CallerSafeError('Session invalid'));
     const ctrl = new SessionController(svc);
     const req = { userSession: makeSession() } as unknown as Request;
     const res = mockRes();
@@ -251,6 +252,23 @@ describe('SessionController.refresh', () => {
     await ctrl.refresh(req, res);
 
     expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  test('a database failure is internal, not a 401 carrying the driver message', async () => {
+    const svc = mockSessionService();
+    svc.refresh.mockRejectedValue(new Error('Connection terminated unexpectedly'));
+    const ctrl = new SessionController(svc);
+    const req = { userSession: makeSession(), headers: {} } as unknown as Request;
+    const res = mockRes();
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await ctrl.refresh(req, res);
+
+    errorLog.mockRestore();
+    expect(res.status).toHaveBeenCalledWith(500);
+    const body = (res.json as jest.Mock).mock.calls[0][0];
+    expect(body).toMatchObject({ error: 'InternalError', correlationId: expect.any(String) });
+    expect(JSON.stringify(body)).not.toContain('Connection terminated');
   });
 });
 

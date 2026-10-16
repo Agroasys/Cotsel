@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { createHash } from 'crypto';
 import { Pool } from 'pg';
 import { AdminActor, OperatorSignerActionClass, OperatorSignerRegisterRecord } from '../types';
@@ -167,10 +168,10 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
         await client.query('BEGIN');
         const proposerPrincipal = canonicalControlPrincipal(input.actor, 'Signer binding');
         const profile = await queryProfileByAccountIdForUpdate(client, input.accountId);
-        if (!profile) throw new Error('Profile not found');
-        if (!profile.active) throw new Error('Signer bindings require an active profile');
+        if (!profile) throw new CallerSafeError('Profile not found');
+        if (!profile.active) throw new CallerSafeError('Signer bindings require an active profile');
         if (profile.baseRole !== 'admin') {
-          throw new Error('Signer bindings require a durable admin profile');
+          throw new CallerSafeError('Signer bindings require a durable admin profile');
         }
 
         const evidenceDigest = signerProposalDigest(input, proposerPrincipal);
@@ -192,7 +193,7 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
             record.approvalTicket !== input.approvalTicket ||
             record.evidenceDigest !== evidenceDigest
           ) {
-            throw new Error(
+            throw new CallerSafeError(
               'An open signer binding already exists with different proposal evidence',
             );
           }
@@ -262,21 +263,25 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
           [input.bindingId],
         );
         if (!existing.rows[0]) {
-          throw new Error('Signer binding not found');
+          throw new CallerSafeError('Signer binding not found');
         }
         const record = mapRow(existing.rows[0]);
         if (record.state !== 'pending') {
-          throw new Error('Signer binding is not pending approval');
+          throw new CallerSafeError('Signer binding is not pending approval');
         }
         if (record.createdBy === approverPrincipal) {
-          throw new Error('Signer binding proposer cannot approve the same binding');
+          throw new CallerSafeError('Signer binding proposer cannot approve the same binding');
         }
         if (record.evidenceDigest !== input.evidenceDigest) {
-          throw new Error('Signer binding approval digest does not match the pending proposal');
+          throw new CallerSafeError(
+            'Signer binding approval digest does not match the pending proposal',
+          );
         }
         const profile = await queryProfileByAccountIdForUpdate(client, record.accountId);
         if (!profile?.active || profile.baseRole !== 'admin') {
-          throw new Error('Signer binding approval requires an active durable admin profile');
+          throw new CallerSafeError(
+            'Signer binding approval requires an active durable admin profile',
+          );
         }
 
         const updated = await client.query<SignerBindingRow>(
@@ -296,7 +301,7 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
            RETURNING ${SIGNER_COLUMNS}`,
           [input.bindingId, approverPrincipal, input.evidenceDigest],
         );
-        if (!updated.rows[0]) throw new Error('Signer binding activation conflict');
+        if (!updated.rows[0]) throw new CallerSafeError('Signer binding activation conflict');
         const activated = mapRow(updated.rows[0]);
         await recordAdminAuditEvent(client, {
           accountId: activated.accountId,
@@ -342,7 +347,7 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
         }
         const record = mapRow(existing.rows[0]);
         const profile = await queryProfileByAccountIdForUpdate(client, record.accountId);
-        if (!profile) throw new Error('Profile not found');
+        if (!profile) throw new CallerSafeError('Profile not found');
 
         const updated = await client.query<SignerBindingRow>(
           `UPDATE operator_signer_bindings

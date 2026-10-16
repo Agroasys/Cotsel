@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { AdminActor } from '../types';
 
 const HUMAN_CONTROL_PRINCIPAL_REGEX = /^[a-z0-9][a-z0-9:._@/-]{0,127}$/;
@@ -17,7 +18,9 @@ export function canonicalControlPrincipal(actor: AdminActor, subject: string): s
     actor.id.trim() === '' ||
     !HUMAN_CONTROL_PRINCIPAL_REGEX.test(humanPrincipalId)
   ) {
-    throw new Error(`${subject} changes require an authenticated human control principal`);
+    throw new CallerSafeError(
+      `${subject} changes require an authenticated human control principal`,
+    );
   }
   return `human:${humanPrincipalId}`;
 }

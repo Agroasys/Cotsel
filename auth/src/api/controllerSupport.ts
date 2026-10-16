@@ -5,7 +5,7 @@ import { Request, Response } from 'express';
 import {
   HttpError,
   failure,
-  isCallerFacingError,
+  isCallerSafeError,
   requireEnum,
   requireInteger,
   sendInternalFailure,
@@ -63,7 +63,7 @@ export function handleControllerError(
     return;
   }
 
-  if (isCallerFacingError(error)) {
+  if (isCallerSafeError(error)) {
     res.status(defaultStatusCode).json(failure(defaultCode, error.message || defaultMessage));
     return;
   }

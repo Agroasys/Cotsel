@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { Pool } from 'pg';
 import { authorizeExchange, ExchangeAuthority } from '../../core/exchangeAuthority';
 import { UserProfile, UserRole } from '../../types';
@@ -78,10 +79,10 @@ export async function upsertTrustedProfile(
 
     if (accountMatch && walletMatch && accountMatch.id !== walletMatch.id) {
       if (!isLegacyAccountIdPlaceholder(walletMatch.accountId)) {
-        throw new Error('walletAddress is already linked to a different account');
+        throw new CallerSafeError('walletAddress is already linked to a different account');
       }
       if (accountMatch.walletAddress && accountMatch.walletAddress !== input.walletAddress) {
-        throw new Error('trusted account already has a different linked wallet');
+        throw new CallerSafeError('trusted account already has a different linked wallet');
       }
       const merged = await authorize(accountMatch, walletMatch);
 
@@ -113,7 +114,7 @@ export async function upsertTrustedProfile(
         walletMatch.accountId !== input.accountId &&
         !isLegacyAccountIdPlaceholder(walletMatch.accountId)
       ) {
-        throw new Error('walletAddress is already linked to a different account');
+        throw new CallerSafeError('walletAddress is already linked to a different account');
       }
 
       const relinkedProfile = await updateTrustedProfileRow(

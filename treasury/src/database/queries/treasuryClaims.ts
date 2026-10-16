@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { createHash } from 'node:crypto';
 import {
   assertRealizationAllowed,
@@ -96,7 +97,7 @@ export async function upsertTreasuryClaimEventWith(
     data.matchedSweepBatchId !== null &&
     existing.matched_sweep_batch_id !== data.matchedSweepBatchId
   ) {
-    throw new Error('Treasury claim event is already matched to a different sweep batch');
+    throw new CallerSafeError('Treasury claim event is already matched to a different sweep batch');
   }
 
   const result = existing
@@ -187,11 +188,13 @@ export async function upsertPartnerHandoff(data: {
     const batch = batchResult.rows[0];
 
     if (!batch) {
-      throw new Error('Sweep batch not found');
+      throw new CallerSafeError('Sweep batch not found');
     }
 
     if (!batch.matched_sweep_tx_hash || !batch.matched_swept_at) {
-      throw new Error('External handoff requires matched on-chain treasury claim evidence');
+      throw new CallerSafeError(
+        'External handoff requires matched on-chain treasury claim evidence',
+      );
     }
 
     // WP-4 B-09 / FAIL-11. The batch handoff was last-write-wins: any status
@@ -393,7 +396,7 @@ export async function createRevenueRealization(data: {
 
     const facts = await getLedgerEntryAccountingFacts(data.ledgerEntryId, client);
     if (!facts) {
-      throw new Error('Ledger entry accounting facts not found');
+      throw new CallerSafeError('Ledger entry accounting facts not found');
     }
 
     const entryBlock = await client.query<{ block_number: number }>(
@@ -402,7 +405,7 @@ export async function createRevenueRealization(data: {
     );
     const entryBlockNumber = Number(entryBlock.rows[0]?.block_number);
     if (!Number.isFinite(entryBlockNumber)) {
-      throw new Error('Ledger entry block number is unavailable');
+      throw new CallerSafeError('Ledger entry block number is unavailable');
     }
 
     // The caller supplies the run it read; the entry's block is re-derived here
@@ -421,7 +424,7 @@ export async function createRevenueRealization(data: {
     });
 
     if (data.accountingPeriodId !== facts.accounting_period_id) {
-      throw new Error(
+      throw new CallerSafeError(
         'Revenue realization accounting period does not match the ledger entry batch',
       );
     }
@@ -431,7 +434,9 @@ export async function createRevenueRealization(data: {
       data.sweepBatchId !== null &&
       data.sweepBatchId !== facts.sweep_batch_id
     ) {
-      throw new Error('Revenue realization sweep batch does not match the ledger entry batch');
+      throw new CallerSafeError(
+        'Revenue realization sweep batch does not match the ledger entry batch',
+      );
     }
 
     if (
@@ -439,7 +444,7 @@ export async function createRevenueRealization(data: {
       data.partnerHandoffId !== null &&
       data.partnerHandoffId !== facts.partner_handoff_id
     ) {
-      throw new Error(
+      throw new CallerSafeError(
         'Revenue realization external handoff does not match the ledger entry sweep batch',
       );
     }

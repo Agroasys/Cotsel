@@ -47,7 +47,12 @@ export interface InternalFailureOptions {
   fields?: Record<string, string | number | boolean | null>;
 }
 
-export function isCallerFacingError(error: unknown): error is Error;
+/** A refusal whose message was written for the caller; see response.js. */
+export class CallerSafeError extends Error {
+  constructor(message: string);
+}
+
+export function isCallerSafeError(error: unknown): error is Error;
 export function correlationIdFor(req: CorrelatedRequest | undefined): string;
 export function sendInternalFailure(
   req: CorrelatedRequest | undefined,

@@ -1,3 +1,4 @@
+import { CallerSafeError } from '@agroasys/shared-http';
 import crypto from 'node:crypto';
 import { BankPayoutConfirmationUpsertInput, BankPayoutState, PayoutState } from '../types';
 
@@ -14,14 +15,14 @@ export const BANK_PAYOUT_STATES: BankPayoutState[] = ['PENDING', 'CONFIRMED', 'R
 
 export function assertBankPayoutState(value: string): asserts value is BankPayoutState {
   if (!BANK_PAYOUT_STATES.includes(value as BankPayoutState)) {
-    throw new Error('Invalid bank payout state');
+    throw new CallerSafeError('Invalid bank payout state');
   }
 }
 
 function assertNonEmpty(name: string, value: string): string {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
-    throw new Error(`${name} is required`);
+    throw new CallerSafeError(`${name} is required`);
   }
   return trimmed;
 }
@@ -75,17 +76,19 @@ export function assertBankPayoutTransition(
     currentPayoutState === 'PENDING_REVIEW' ||
     currentPayoutState === 'READY_FOR_EXTERNAL_HANDOFF'
   ) {
-    throw new Error(
+    throw new CallerSafeError(
       `External execution evidence is not valid while payout state is ${currentPayoutState}`,
     );
   }
 
   if (currentPayoutState === 'CANCELLED') {
-    throw new Error('External execution evidence is not valid for cancelled payout entries');
+    throw new CallerSafeError(
+      'External execution evidence is not valid for cancelled payout entries',
+    );
   }
 
   if (bankState === 'PENDING' && currentPayoutState !== 'AWAITING_EXTERNAL_CONFIRMATION') {
-    throw new Error(
+    throw new CallerSafeError(
       'Pending external execution evidence requires state AWAITING_EXTERNAL_CONFIRMATION',
     );
   }

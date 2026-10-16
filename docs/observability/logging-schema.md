@@ -116,9 +116,11 @@ full error goes to the service log under the `correlationId` the caller is given
   `x-request-id` (8 to 128 characters of `A-Za-z0-9._:-`), so a gateway request
   can be followed into the service log. Anything else gets a fresh UUID; caller
   text is never echoed.
-- A domain refusal is a bare `Error` thrown by service code. Errors that are
-  subclasses or carry a `code` (SQLSTATE, errno, ethers) are treated as internal
-  (`isCallerFacingError`).
+- Only an explicitly caller-safe error keeps its message: `HttpError`, a
+  `CallerSafeError` from `@agroasys/shared-http`, or a named domain error class a
+  service maps itself. Every other error is internal, including a plain `Error`:
+  database drivers and GraphQL clients raise those with raw upstream text
+  (`isCallerSafeError`).
 - The gateway returns `requestId` and `traceId`. Raw upstream text goes in
   `GatewayError.diagnostics`, which is logged by the error handler and never
   serialized; `details` holds only stable, non-sensitive fields.

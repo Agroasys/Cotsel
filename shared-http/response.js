@@ -52,15 +52,23 @@ function correlationIdFor(req) {
   return randomUUID();
 }
 
+const CALLER_SAFE = Symbol.for('agroasys.shared-http.callerSafeError');
+
 /**
- * Domain checks throw a bare `Error` whose message is written for the caller.
- * Driver, network, RPC, signer and timeout failures are subclasses or carry a
- * `code` (SQLSTATE, errno, ethers), and their text can hold queries, hosts or URLs.
+ * A refusal whose message was written for the caller. Throwing it is the only
+ * way a non-HTTP error keeps its text in a response: every other error, however
+ * plain it looks, may carry driver, network, RPC or provider output.
  */
-function isCallerFacingError(error) {
-  return (
-    error instanceof Error && Object.getPrototypeOf(error) === Error.prototype && !('code' in error)
-  );
+class CallerSafeError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'CallerSafeError';
+    Object.defineProperty(this, CALLER_SAFE, { value: true });
+  }
+}
+
+function isCallerSafeError(error) {
+  return error instanceof HttpError || (error instanceof Error && error[CALLER_SAFE] === true);
 }
 
 /**
@@ -86,7 +94,8 @@ module.exports = {
   HttpError,
   INTERNAL_ERROR_MESSAGE,
   correlationIdFor,
-  isCallerFacingError,
+  CallerSafeError,
+  isCallerSafeError,
   sendInternalFailure,
   success,
   failure,

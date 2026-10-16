@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import {
   failure,
   HttpError,
-  isCallerFacingError,
+  isCallerSafeError,
   optionalEnum,
   optionalInteger,
   optionalNullableString,
@@ -813,7 +813,7 @@ export class TreasuryController {
           metadata: optionalRecord(body.metadata, 'metadata'),
         });
       } catch (error) {
-        if (isCallerFacingError(error)) {
+        if (isCallerSafeError(error)) {
           throw new HttpError(409, 'ExecutionMatchFailed', error.message);
         }
         throw error;

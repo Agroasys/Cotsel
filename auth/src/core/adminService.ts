@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import {
   AdminActor,
   AdminAuthorityChangeKind,
@@ -132,10 +133,10 @@ export interface AdminService {
 function normalizeReason(reason: string): string {
   const trimmed = reason.trim();
   if (trimmed.length < 8) {
-    throw new Error('Reason must be at least 8 characters');
+    throw new CallerSafeError('Reason must be at least 8 characters');
   }
   if (trimmed.length > 500) {
-    throw new Error('Reason must be 500 characters or fewer');
+    throw new CallerSafeError('Reason must be 500 characters or fewer');
   }
   return trimmed;
 }
@@ -143,7 +144,7 @@ function normalizeReason(reason: string): string {
 function normalizeRequiredEvidence(value: string, field: string, maxLength = 200): string {
   const normalized = value.trim();
   if (normalized.length < 2 || normalized.length > maxLength) {
-    throw new Error(`${field} must be between 2 and ${maxLength} characters`);
+    throw new CallerSafeError(`${field} must be between 2 and ${maxLength} characters`);
   }
   return normalized;
 }
@@ -151,7 +152,7 @@ function normalizeRequiredEvidence(value: string, field: string, maxLength = 200
 function normalizeEnvironment(value: string): string {
   const environment = value.trim().toLowerCase();
   if (!/^[a-z][a-z0-9-]{0,31}$/.test(environment)) {
-    throw new Error('environment must be a lowercase environment name');
+    throw new CallerSafeError('environment must be a lowercase environment name');
   }
   return environment;
 }
@@ -179,11 +180,11 @@ export function createAdminService(
   function grantExpiry(value: string | null | undefined, maxTtlSeconds: number): Date {
     const expiresAt = typeof value === 'string' ? new Date(value) : new Date(NaN);
     if (Number.isNaN(expiresAt.getTime())) {
-      throw new Error('expiresAt must be an ISO-8601 timestamp for an admin grant');
+      throw new CallerSafeError('expiresAt must be an ISO-8601 timestamp for an admin grant');
     }
     const remainingSeconds = (expiresAt.getTime() - Date.now()) / 1000;
     if (remainingSeconds < 3600 || remainingSeconds > maxTtlSeconds) {
-      throw new Error(
+      throw new CallerSafeError(
         `expiresAt must be between 1 hour and ${maxTtlSeconds} seconds from now for an admin grant`,
       );
     }
@@ -203,7 +204,7 @@ export function createAdminService(
       const reason = normalizeReason(input.reason);
       // Fail fast on the request itself; the store re-checks the target under its row lock.
       if (input.role === 'admin') {
-        throw new Error(PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS);
+        throw new CallerSafeError(PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS);
       }
       const previous = await profiles.findByAccountId(input.accountId);
       const profile = await profiles.provision({ ...input, reason });
@@ -236,10 +237,10 @@ export function createAdminService(
 
     async grantBreakGlass(input) {
       if (!Number.isInteger(input.ttlSeconds) || input.ttlSeconds <= 0) {
-        throw new Error('ttlSeconds must be a positive integer');
+        throw new CallerSafeError('ttlSeconds must be a positive integer');
       }
       if (input.ttlSeconds > maxBreakGlassTtlSeconds) {
-        throw new Error(`ttlSeconds must be <= ${maxBreakGlassTtlSeconds}`);
+        throw new CallerSafeError(`ttlSeconds must be <= ${maxBreakGlassTtlSeconds}`);
       }
 
       const profile = await profiles.grantBreakGlass({
@@ -304,7 +305,7 @@ export function createAdminService(
     async proposeSigner(input) {
       const normalizedEnvironment = input.environment.trim().toLowerCase();
       if (normalizedEnvironment === '*') {
-        throw new Error('environment wildcard is not allowed for signer bindings');
+        throw new CallerSafeError('environment wildcard is not allowed for signer bindings');
       }
       const environment = normalizeRequiredEvidence(normalizedEnvironment, 'environment', 64);
       return requireSignerStore().propose({
@@ -323,7 +324,7 @@ export function createAdminService(
     async approveSigner(input) {
       const evidenceDigest = input.evidenceDigest.trim().toLowerCase();
       if (!/^[0-9a-f]{64}$/.test(evidenceDigest)) {
-        throw new Error('evidenceDigest must be a lowercase SHA-256 digest');
+        throw new CallerSafeError('evidenceDigest must be a lowercase SHA-256 digest');
       }
       return requireSignerStore().approve({
         bindingId: normalizeRequiredEvidence(input.bindingId, 'bindingId'),
@@ -358,7 +359,7 @@ export function createAdminService(
       let record: AdminAuthorityChangeRecord;
       if (input.change === 'grant') {
         if (input.resultingRole && input.resultingRole !== 'admin') {
-          throw new Error('An admin grant cannot set resultingRole');
+          throw new CallerSafeError('An admin grant cannot set resultingRole');
         }
         record = await control.store.propose({
           ...common,
@@ -369,10 +370,10 @@ export function createAdminService(
         });
       } else if (input.change === 'revoke') {
         if (input.resultingRole !== 'buyer' && input.resultingRole !== 'supplier') {
-          throw new Error('An admin revocation requires resultingRole buyer or supplier');
+          throw new CallerSafeError('An admin revocation requires resultingRole buyer or supplier');
         }
         if (input.expiresAt || input.orgId) {
-          throw new Error('An admin revocation cannot set expiresAt or orgId');
+          throw new CallerSafeError('An admin revocation cannot set expiresAt or orgId');
         }
         record = await control.store.propose({
           ...common,
@@ -382,7 +383,7 @@ export function createAdminService(
           resultingRole: input.resultingRole,
         });
       } else {
-        throw new Error('change must be grant or revoke');
+        throw new CallerSafeError('change must be grant or revoke');
       }
       Logger.warn('Admin authority change proposed', {
         eventType: 'auth.admin_authority_change_proposed',
@@ -396,7 +397,7 @@ export function createAdminService(
     async approveAuthorityChange(input) {
       const evidenceDigest = input.evidenceDigest.trim().toLowerCase();
       if (!/^[0-9a-f]{64}$/.test(evidenceDigest)) {
-        throw new Error('evidenceDigest must be a lowercase SHA-256 digest');
+        throw new CallerSafeError('evidenceDigest must be a lowercase SHA-256 digest');
       }
       const record = await requireAuthority().store.approve({
         changeId: normalizeRequiredEvidence(input.changeId, 'changeId'),

@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { TreasuryPartnerHandoffConflictError } from '../../core/treasuryPartnerHandoff';
 import type { TreasuryPartnerHandoff, TreasuryPartnerHandoffStatus } from '../../types';
 import { pool } from '../connection';
@@ -38,7 +39,7 @@ export async function correctFrozenTreasuryPartnerHandoff(input: {
     );
     const handoff = handoffResult.rows[0];
     if (!handoff) {
-      throw new Error('Treasury partner handoff not found');
+      throw new CallerSafeError('Treasury partner handoff not found');
     }
 
     if (!handoff.frozen_at) {

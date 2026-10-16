@@ -1,3 +1,4 @@
+import { CallerSafeError } from '@agroasys/shared-http';
 import {
   getAccountingPeriodById,
   getSweepBatchDetail,
@@ -370,9 +371,8 @@ export async function loadTreasuryBatchTraceReport(
 ): Promise<TreasuryBatchTraceReport> {
   const detail = await getSweepBatchDetail(batchId);
   if (!detail) {
-    throw new Error('Sweep batch not found');
+    throw new CallerSafeError('Sweep batch not found');
   }
-
   const claimEvent = await getTreasuryClaimEventByBatchId(batchId);
 
   return buildTreasuryBatchTraceReport({
@@ -389,7 +389,7 @@ export async function loadTreasuryAccountingPeriodClosePacket(
 ): Promise<TreasuryAccountingPeriodClosePacket> {
   const period = await getAccountingPeriodById(periodId);
   if (!period) {
-    throw new Error('Accounting period not found');
+    throw new CallerSafeError('Accounting period not found');
   }
 
   const [entries, batches] = await Promise.all([

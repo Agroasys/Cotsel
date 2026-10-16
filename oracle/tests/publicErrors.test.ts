@@ -9,7 +9,12 @@ import { OracleController } from '../src/api/controller';
 import { errorHandler } from '../src/middleware/middleware';
 import { ErrorType } from '../src/types/trigger';
 import type { ErrorResponse, OracleResponse } from '../src/types';
-import { publicFailureMessage } from '../src/utils/errors';
+import {
+  classifyError,
+  publicFailureMessage,
+  storedFailureMessage,
+  ValidationError,
+} from '../src/utils/errors';
 
 jest.mock('../src/config', () => ({ config: {} }));
 jest.mock('../src/database/queries', () => ({ listTriggers: jest.fn() }));
@@ -96,14 +101,18 @@ describe('Oracle public errors', () => {
     expectNoLeak(body);
   });
 
-  it('trigger results keep domain refusals but not network or contract detail', () => {
-    expect(publicFailureMessage(ErrorType.VALIDATION, 'Cannot release stage 1 for trade 42')).toBe(
-      'Cannot release stage 1 for trade 42',
+  it('only refusals the oracle wrote itself keep their message', () => {
+    const explicit = new ValidationError('Cannot release stage 1 for trade 42');
+    expect(publicFailureMessage(explicit)).toBe('Cannot release stage 1 for trade 42');
+
+    const classified = classifyError(new Error(`Cannot finalize: url="${RPC_SECRET}"`));
+    expect(classified.errorType).toBe(ErrorType.VALIDATION);
+    expect(classified.callerSafe).toBe(false);
+    expect(publicFailureMessage(classified)).toBe(
+      'Oracle validation failure; detail is recorded on the trigger',
     );
     for (const errorType of [ErrorType.NETWORK, ErrorType.CONTRACT, null]) {
-      const message = publicFailureMessage(errorType, `could not reach ${RPC_SECRET}`);
-      expect(message).toMatch(/^Oracle \w+ failure; detail is recorded on the trigger$/);
-      expectNoLeak(message);
+      expectNoLeak(storedFailureMessage(errorType));
     }
   });
 });

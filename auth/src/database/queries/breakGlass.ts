@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { Pool } from 'pg';
 import { AdminActor, UserProfile, UserRole } from '../../types';
 import { recordAdminAuditEvent } from './adminAudit';
@@ -28,7 +29,7 @@ export async function grantBreakGlassAdmin(
     await client.query('BEGIN');
     const previous = await queryProfileByAccountIdForUpdate(client, input.accountId);
     if (previous?.baseRole === 'admin') {
-      throw new Error('Break-glass is only valid for non-admin base roles');
+      throw new CallerSafeError('Break-glass is only valid for non-admin base roles');
     }
 
     if (!previous) {
@@ -168,14 +169,14 @@ export async function reviewBreakGlassAdmin(
     await client.query('BEGIN');
     const previous = await queryProfileByAccountIdForUpdate(client, accountId);
     if (!previous?.breakGlassGrantedAt) {
-      throw new Error('No break-glass event found for account');
+      throw new CallerSafeError('No break-glass event found for account');
     }
     const hasClosureEvidence =
       previous.breakGlassRevokedAt !== null ||
       (previous.breakGlassExpiresAt !== null &&
         previous.breakGlassExpiresAt.getTime() <= Date.now());
     if (!hasClosureEvidence) {
-      throw new Error('Break-glass review is only valid for revoked or expired grants');
+      throw new CallerSafeError('Break-glass review is only valid for revoked or expired grants');
     }
 
     await client.query(

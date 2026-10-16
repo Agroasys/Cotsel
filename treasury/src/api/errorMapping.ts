@@ -7,12 +7,7 @@
  * see -- and every route has to apply the same one.
  */
 import type { Request, Response } from 'express';
-import {
-  failure,
-  HttpError,
-  isCallerFacingError,
-  sendInternalFailure,
-} from '@agroasys/shared-http';
+import { failure, HttpError, isCallerSafeError, sendInternalFailure } from '@agroasys/shared-http';
 import { NonCanonicalAmountError } from '../core/canonicalAmount';
 import { ProviderHandoffAuthorityError } from '../core/providerHandoffAuthority';
 import { SweepCanonicalityError } from '../core/sweepCanonicality';
@@ -59,7 +54,7 @@ export function mapValidationError(error: unknown, fallbackMessage: string): Map
     };
   }
 
-  if (isCallerFacingError(error)) {
+  if (isCallerSafeError(error)) {
     return {
       statusCode: 400,
       body: failure('ValidationError', error.message || fallbackMessage),

@@ -2,6 +2,13 @@ import { ErrorType, TriggerStatus } from '../types/trigger';
 import { Logger } from './logger';
 
 export class OracleError extends Error {
+  /**
+   * WP-10 I-06. True when the oracle wrote this message itself. `classifyError`
+   * clears it: text derived from an RPC, signer, or provider failure is never
+   * returned to a caller, whatever type it was classified as.
+   */
+  callerSafe = true;
+
   constructor(
     message: string,
     public errorType: ErrorType,
@@ -10,6 +17,11 @@ export class OracleError extends Error {
     super(message);
     this.name = 'OracleError';
   }
+}
+
+function fromRawFailure<T extends OracleError>(error: T): T {
+  error.callerSafe = false;
+  return error;
 }
 
 export class ValidationError extends OracleError {
@@ -54,15 +66,19 @@ export class TradeContainedError extends OracleError {
 }
 
 /**
- * WP-10 I-06. Text a trigger result may carry back to its caller. Domain
- * refusals keep their message; network and contract failures can carry RPC
- * URLs, request bodies, or signer output, so their detail stays in the
+ * WP-10 I-06. Text a trigger failure may carry back to its caller. Only a
+ * refusal the oracle wrote itself keeps its message; the raw cause stays in the
  * trigger's `last_error` and the logs.
  */
-export function publicFailureMessage(errorType: ErrorType | null, detail: string | null): string {
-  if (errorType === ErrorType.VALIDATION && detail) {
-    return detail;
-  }
+export function publicFailureMessage(error: OracleError): string {
+  return error.callerSafe ? error.message : storedFailureMessage(error.errorType);
+}
+
+/**
+ * A stored `last_error` no longer records whether its text was caller-safe, so
+ * replays and trigger listings return only the stable classification.
+ */
+export function storedFailureMessage(errorType: ErrorType | null): string {
   return `Oracle ${(errorType ?? 'unknown').toLowerCase()} failure; detail is recorded on the trigger`;
 }
 
@@ -98,7 +114,7 @@ export function classifyError(error: unknown): OracleError {
     message.includes('expected ARRIVAL_CONFIRMED')
   ) {
     Logger.warn('Validation error - terminal', { message });
-    return new ValidationError(message);
+    return fromRawFailure(new ValidationError(message));
   }
 
   // Network errors (retryable)
@@ -112,7 +128,7 @@ export function classifyError(error: unknown): OracleError {
     message.includes('connection')
   ) {
     Logger.info('Network error - will retry', { message });
-    return new NetworkError(message);
+    return fromRawFailure(new NetworkError(message));
   }
 
   // Contract errors (some terminal, some retryable)
@@ -133,11 +149,11 @@ export function classifyError(error: unknown): OracleError {
       lowerMessage.includes('timelock not elapsed');
 
     Logger.warn('Contract error', { isTerminal, message });
-    return new ContractError(message, isTerminal);
+    return fromRawFailure(new ContractError(message, isTerminal));
   }
 
   Logger.info('Unclassified error - treating as retryable network error');
-  return new NetworkError(message);
+  return fromRawFailure(new NetworkError(message));
 }
 
 export function determineNextStatus(

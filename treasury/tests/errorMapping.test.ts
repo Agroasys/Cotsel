@@ -6,7 +6,7 @@
  * for the caller keep their message.
  */
 import type { Request, Response } from 'express';
-import { HttpError } from '@agroasys/shared-http';
+import { CallerSafeError, HttpError } from '@agroasys/shared-http';
 import { mapValidationError, sendMappedError } from '../src/api/errorMapping';
 import { NonCanonicalAmountError } from '../src/core/canonicalAmount';
 import { TreasuryConcurrentTransitionError } from '../src/core/transitionConcurrency';
@@ -24,6 +24,14 @@ function withCode(message: string, code: string): Error {
 }
 
 const INTERNAL_FAILURES: Array<[string, unknown]> = [
+  // Plain errors are never trusted: pg and the GraphQL client both raise them.
+  ['uncoded database', new Error('Connection terminated unexpectedly to 10.0.4.12')],
+  [
+    'GraphQL',
+    new Error(
+      `Indexer GraphQL errors: relation "treasury_ledger_entries" missing at ${SECRET_URL}`,
+    ),
+  ],
   ['SQL', new FakeDatabaseError('relation "treasury_ledger_entries" does not exist')],
   ['network', withCode('connect ECONNREFUSED 10.0.4.12:5432', 'ECONNREFUSED')],
   ['RPC', withCode(`missing response (requestBody="{}", url="${SECRET_URL}")`, 'SERVER_ERROR')],
@@ -98,7 +106,7 @@ describe('treasury error mapping', () => {
   );
 
   test('domain refusals keep their caller-facing message', () => {
-    expect(mapValidationError(new Error('Sweep batch not found'), 'fallback')).toEqual({
+    expect(mapValidationError(new CallerSafeError('Sweep batch not found'), 'fallback')).toEqual({
       statusCode: 400,
       body: expect.objectContaining({
         error: 'ValidationError',

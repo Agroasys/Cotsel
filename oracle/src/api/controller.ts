@@ -23,7 +23,7 @@ import {
 } from '../types';
 import { Trigger, TriggerStatus, TriggerType } from '../types/trigger';
 import { listTriggers } from '../database/queries';
-import { ValidationError } from '../utils/errors';
+import { storedFailureMessage, ValidationError } from '../utils/errors';
 
 type TriggerRequestBody = {
   tradeId?: string;
@@ -109,7 +109,7 @@ function sendOracleError(
     return;
   }
 
-  if (error instanceof ValidationError) {
+  if (error instanceof ValidationError && error.callerSafe) {
     res.status(400).json(failure('ValidationError', error.message));
     return;
   }
@@ -201,7 +201,7 @@ function serializeTrigger(trigger: Trigger) {
     indexerConfirmed: trigger.indexer_confirmed,
     indexerConfirmedAt: trigger.indexer_confirmed_at?.toISOString() ?? null,
     indexerEventId: trigger.indexer_event_id,
-    lastError: trigger.last_error,
+    lastError: trigger.last_error ? storedFailureMessage(trigger.error_type) : null,
     errorType: trigger.error_type,
     onChainVerified: trigger.on_chain_verified,
     onChainVerifiedAt: trigger.on_chain_verified_at?.toISOString() ?? null,
