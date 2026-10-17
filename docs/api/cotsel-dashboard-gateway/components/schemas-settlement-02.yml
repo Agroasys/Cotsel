@@ -108,7 +108,11 @@ components:
           format: date-time
     SettlementGaslessUserActionExecutionRequest:
       type: object
+      description: Typed request contract retained for compatibility. Execution remains disabled.
       required:
+        - actionPackageId
+        - sourceOperationId
+        - approvalScopeFingerprint
         - action
         - handoffId
         - chainId
@@ -119,6 +123,13 @@ components:
         - tradeId
         - userAuthorization
       properties:
+        actionPackageId:
+          type: string
+        sourceOperationId:
+          type: string
+        approvalScopeFingerprint:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
         action:
           type: string
           enum:
@@ -146,7 +157,7 @@ components:
           type: string
         userAddress:
           type: string
-          description: Buyer wallet that signed the requested escrow action.
+          description: Original authorized wallet that signed this exact action; unsupported journeys remain disabled.
         tradeId:
           type: string
           pattern: ^[0-9]+$

@@ -112,7 +112,7 @@ paths:
   /settlement/handoffs/{handoffId}/execution-events:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1settlement~1handoffs~1{handoffId}~1execution-events
   /settlement/transactions/{transactionHash}/finality:
-    $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1settlement~1transactions~1{transactionHash}~1finality
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-observation.yml#/paths/~1settlement~1transactions~1{transactionHash}~1finality
   /governance/status:
     $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1status
   /governance/actions:
@@ -442,3 +442,4 @@ components:
     SettlementFinalityEvidence: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-execution-binding.yml#/components/schemas/SettlementFinalityEvidence}
     SettlementCreateTradeBinding: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-execution-binding.yml#/components/schemas/SettlementCreateTradeBinding}
     SettlementFundedBinding: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-execution-binding.yml#/components/schemas/SettlementFundedBinding}
+    SettlementUserActionBinding: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-user-action-binding.yml#/components/schemas/SettlementUserActionBinding}

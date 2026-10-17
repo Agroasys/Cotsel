@@ -5754,7 +5754,11 @@ components:
           format: date-time
     SettlementGaslessUserActionExecutionRequest:
       type: object
+      description: Typed request contract retained for compatibility. Execution remains disabled.
       required:
+        - actionPackageId
+        - sourceOperationId
+        - approvalScopeFingerprint
         - action
         - handoffId
         - chainId
@@ -5765,6 +5769,13 @@ components:
         - tradeId
         - userAuthorization
       properties:
+        actionPackageId:
+          type: string
+        sourceOperationId:
+          type: string
+        approvalScopeFingerprint:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
         action:
           type: string
           enum:
@@ -5792,7 +5803,7 @@ components:
           type: string
         userAddress:
           type: string
-          description: Buyer wallet that signed the requested escrow action.
+          description: Original authorized wallet that signed this exact action; unsupported journeys remain disabled.
         tradeId:
           type: string
           pattern: ^[0-9]+$
@@ -8763,6 +8774,7 @@ components:
       oneOf:
         - $ref: '#/components/schemas/SettlementCreateTradeBinding'
         - $ref: '#/components/schemas/SettlementFundedBinding'
+        - $ref: '#/components/schemas/SettlementUserActionBinding'
     SettlementFinalityEvidence:
       type: object
       required:
@@ -9085,3 +9097,128 @@ components:
           type: string
           pattern: ^[0-9a-f]{64}$
       description: Immutable original finalized funding and exact progression instruction. Retained Oracle execution revalidates this scope on every submission and retry.
+    SettlementUserActionBinding:
+      type: object
+      additionalProperties: false
+      description: Immutable owned user-action instructions. Storage compatibility does not enable execution. All user actions remain disabled pending complete approved journeys and activation evidence.
+      required:
+        - scopeVersion
+        - ownerServiceId
+        - packageId
+        - sourceOperationId
+        - approvalScopeFingerprint
+        - originalFundingFingerprint
+        - phase
+        - action
+        - signerRole
+        - signerAddress
+        - buyerAddress
+        - supplierAddress
+        - chainId
+        - escrowAddress
+        - tokenAddress
+        - deploymentIdentity
+        - tradeId
+        - nonce
+        - deadline
+        - expiresAt
+        - recipient
+        - amount
+        - totalAmount
+        - supplierSecondTranche
+        - fundingTransactionHash
+        - fundingBlockNumber
+        - fundingBlockHash
+        - executionScopeHash
+      properties:
+        scopeVersion:
+          const: agroasys.cotsel-user-action-binding.v1
+        ownerServiceId:
+          type: string
+          minLength: 1
+        packageId:
+          type: string
+          minLength: 1
+        sourceOperationId:
+          type: string
+          minLength: 1
+        approvalScopeFingerprint:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        originalFundingFingerprint:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        phase:
+          const: gasless_user_action
+        action:
+          type: string
+          enum:
+            - open_dispute
+            - cancel_locked_timeout
+            - refund_in_transit_timeout
+            - finalize_after_dispute_window
+            - finalize_after_inspection_acceptance
+        signerRole:
+          type: string
+          enum:
+            - buyer
+            - supplier
+        signerAddress:
+          type: string
+          pattern: ^0x[0-9a-f]{40}$
+        buyerAddress:
+          type: string
+          pattern: ^0x[0-9a-f]{40}$
+        supplierAddress:
+          type: string
+          pattern: ^0x[0-9a-f]{40}$
+        chainId:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        escrowAddress:
+          type: string
+          pattern: ^0x[0-9a-f]{40}$
+        tokenAddress:
+          type: string
+          pattern: ^0x[0-9a-f]{40}$
+        deploymentIdentity:
+          type: string
+          minLength: 1
+        tradeId:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        nonce:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        deadline:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        expiresAt:
+          type: string
+          format: date-time
+        recipient:
+          type:
+            - string
+            - 'null'
+          pattern: ^0x[0-9a-f]{40}$
+        amount:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        totalAmount:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        supplierSecondTranche:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        fundingTransactionHash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        fundingBlockNumber:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        fundingBlockHash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        executionScopeHash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
