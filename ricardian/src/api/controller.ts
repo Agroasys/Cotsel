@@ -1,5 +1,12 @@
 import { Request, Response } from 'express';
-import { failure, HttpError, requireObject, requireString, success } from '@agroasys/shared-http';
+import {
+  failure,
+  HttpError,
+  requireObject,
+  requireString,
+  sendInternalFailure,
+  success,
+} from '@agroasys/shared-http';
 import { createDocument, getDocument, getTenantDocument } from '../database/documentStore';
 import { DocumentConflictError, DocumentNotFoundError, DocumentStoreError } from '../errors';
 import {
@@ -10,6 +17,7 @@ import {
 } from '../types';
 import { resolveTenant, type TenantResolutionOptions } from '../auth/tenantBinding';
 import { buildRicardianHash } from '../utils/hash';
+import { Logger } from '../utils/logger';
 
 function mapRowToResponse(row: RicardianHashRow, tenantId: string): RicardianHashResponse {
   return {
@@ -56,6 +64,27 @@ function parseHashParam(value: unknown): string {
   return hash;
 }
 
+/** Store and unexpected failures answer with a stable code; the raw error is only logged. */
+function sendStoreFailure(req: Request, res: Response, error: unknown, operation: string): void {
+  const storeCode = error instanceof DocumentStoreError ? error.code : undefined;
+  sendInternalFailure(req, res, error, {
+    log: (correlationId, cause) =>
+      Logger.error('Ricardian request failed', {
+        operation,
+        correlationId,
+        code: storeCode ?? null,
+        error: cause instanceof Error ? cause.message : String(cause),
+      }),
+    ...(storeCode
+      ? {
+          code: 'DocumentStoreError',
+          message: 'Ricardian document store is unavailable',
+          fields: { code: storeCode },
+        }
+      : {}),
+  });
+}
+
 export class RicardianController {
   constructor(private readonly tenantOptions: TenantResolutionOptions) {}
 
@@ -88,22 +117,7 @@ export class RicardianController {
           return;
         }
 
-        if (error instanceof DocumentStoreError) {
-          res.status(500).json({
-            ...failure('DocumentStoreError', error.message),
-            code: error.code,
-          });
-          return;
-        }
-
-        res
-          .status(500)
-          .json(
-            failure(
-              'InternalError',
-              error instanceof Error ? error.message : 'Failed to persist Ricardian hash',
-            ),
-          );
+        sendStoreFailure(req, res, error, 'createHash');
       }
     } catch (error: unknown) {
       if (error instanceof HttpError) {
@@ -124,14 +138,14 @@ export class RicardianController {
 
   /** Generic lookup: minimal public attestation only, never terms or metadata. */
   async getHash(req: Request<{ hash: string }>, res: Response): Promise<void> {
-    await this.respondWithRow(res, 'Failed to fetch Ricardian hash', async () =>
+    await this.respondWithRow(req, res, 'getHash', async () =>
       mapRowToAttestation(await getDocument(parseHashParam(req.params.hash))),
     );
   }
 
   /** Complete canonical terms and metadata, only for the tenant that registered them. */
   async getTenantDocument(req: Request<{ hash: string }>, res: Response): Promise<void> {
-    await this.respondWithRow(res, 'Failed to fetch Ricardian document', async () => {
+    await this.respondWithRow(req, res, 'getTenantDocument', async () => {
       const hash = parseHashParam(req.params.hash);
       const tenantId = resolveTenant(req, req.query.tenantId, this.tenantOptions);
       return mapRowToResponse(await getTenantDocument(hash, tenantId), tenantId);
@@ -139,8 +153,9 @@ export class RicardianController {
   }
 
   private async respondWithRow(
+    req: Request<{ hash: string }>,
     res: Response,
-    fallbackMessage: string,
+    operation: string,
     load: () => Promise<RicardianHashAttestation | RicardianHashResponse>,
   ): Promise<void> {
     try {
@@ -159,17 +174,7 @@ export class RicardianController {
         return;
       }
 
-      if (error instanceof DocumentStoreError) {
-        res.status(500).json({
-          ...failure('DocumentStoreError', error.message),
-          code: error.code,
-        });
-        return;
-      }
-
-      res
-        .status(500)
-        .json(failure('InternalError', error instanceof Error ? error.message : fallbackMessage));
+      sendStoreFailure(req, res, error, operation);
     }
   }
 }

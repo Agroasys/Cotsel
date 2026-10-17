@@ -6,9 +6,7 @@ import os from 'os';
 import path from 'path';
 import { Pool } from 'pg';
 import { assertMigrationHistory, runVersionedMigrations } from '@agroasys/shared-db/migrate';
-import { createPostgresProfileStore } from '../src/core/profileStore';
-import { createPostgresSessionStore } from '../src/core/sessionStore';
-import { createSessionService } from '../src/core/sessionService';
+import { hashSessionToken } from '../src/core/sessionStore';
 import { dockerAvailable, withPostgres } from './helpers/adminControlsIntegrationHarness';
 
 const DATABASE_ROOT = path.resolve(__dirname, '../src/database');
@@ -16,20 +14,20 @@ const REVERT_SQL = fs.readFileSync(
   path.resolve(__dirname, '../recovery/004_session_token_hash_lineage.revert.sql'),
   'utf8',
 );
-const LIFETIME = { ttlSeconds: 3600, absoluteLifetimeSeconds: 86400 };
 const LEGACY_TOKEN = 'b'.repeat(64);
 const RUNTIME_ROLE = 'cotsel_auth_app';
 
 /**
- * Writes the manifest the previous auth image ships: every migration up to,
- * but excluding, 202610100004.
+ * Writes the manifest an auth image ships when every migration before
+ * `beforeVersion` is its head: the previous image stops before 202610100004 and
+ * the 202610100004 candidate stops before 202610140005.
  */
-function writePreviousManifest(directory: string): string {
+function writeManifestPrefix(directory: string, beforeVersion: string): string {
   const manifest = JSON.parse(fs.readFileSync(path.join(DATABASE_ROOT, 'migrations.json'), 'utf8'));
   const previous = manifest.migrations.filter(
-    (migration: { version: string }) => migration.version < '202610100004',
+    (migration: { version: string }) => migration.version < beforeVersion,
   );
-  fs.mkdirSync(path.join(directory, 'schema'));
+  fs.mkdirSync(path.join(directory, 'schema'), { recursive: true });
   for (const migration of previous) {
     fs.copyFileSync(path.join(DATABASE_ROOT, migration.file), path.join(directory, migration.file));
   }
@@ -77,8 +75,14 @@ describe('auth session cutover and recovery', () => {
           options: `-c app.service_name=auth -c app.runtime_db_user=${RUNTIME_ROLE}`,
         });
         const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'auth-cutover-'));
-        const previousManifest = writePreviousManifest(scratch);
-        const candidateManifest = path.join(DATABASE_ROOT, 'migrations.json');
+        const previousManifest = writeManifestPrefix(
+          path.join(scratch, 'previous'),
+          '202610100004',
+        );
+        const candidateManifest = writeManifestPrefix(
+          path.join(scratch, 'candidate'),
+          '202610140005',
+        );
         const migrate = (manifestPath: string) =>
           runVersionedMigrations({
             pool: db,
@@ -112,14 +116,14 @@ describe('auth session cutover and recovery', () => {
             code: '42703',
           });
 
-          // Candidate image: starts and keeps the pre-migration session valid.
+          // Candidate image: starts, and the pre-migration session survives as
+          // its verifier.
           await startupCheck(candidateManifest);
-          const candidate = createSessionService(
-            createPostgresSessionStore(db),
-            createPostgresProfileStore(db),
-            LIFETIME,
+          const preserved = await db.query(
+            `SELECT 1 FROM user_sessions WHERE session_token_hash = $1 AND revoked_at IS NULL`,
+            [hashSessionToken(LEGACY_TOKEN)],
           );
-          await expect(candidate.resolve(LEGACY_TOKEN)).resolves.not.toBeNull();
+          expect(preserved.rowCount).toBe(1);
 
           const sessionGrants = () =>
             db.query(

@@ -38,7 +38,41 @@ export type AdminAuditAction =
   | 'signer_binding_provisioned'
   | 'signer_binding_proposed'
   | 'signer_binding_activated'
-  | 'signer_binding_revoked';
+  | 'signer_binding_revoked'
+  | 'admin_authority_change_proposed'
+  | 'admin_authority_change_applied'
+  | 'admin_authority_change_cancelled';
+
+export type AdminAuthorityChangeKind = 'grant' | 'revoke';
+
+/**
+ * A two-person change to durable administrator authority. A `grant` makes the
+ * account an administrator in one environment until `grantExpiresAt`; a
+ * `revoke` returns it to `resultingRole`. It applies only when a principal
+ * other than the proposer approves its exact `evidenceDigest`.
+ */
+export interface AdminAuthorityChangeRecord {
+  changeId: string;
+  accountId: string;
+  change: AdminAuthorityChangeKind;
+  environment: string;
+  orgId: string | null;
+  grantExpiresAt: string | null;
+  resultingRole: UserRole;
+  approvalTicket: string;
+  reason: string;
+  evidenceDigest: string;
+  state: 'pending' | 'applied' | 'cancelled';
+  proposedBy: string;
+  proposedByKey: string;
+  proposedAt: string;
+  appliedBy: string | null;
+  appliedByKey: string | null;
+  appliedAt: string | null;
+  cancelledBy: string | null;
+  cancelledAt: string | null;
+  cancelledReason: string | null;
+}
 
 export interface UserProfile {
   id: string;
@@ -48,8 +82,9 @@ export interface UserProfile {
   role: UserRole;
   baseRole: UserRole;
   /**
-   * True when a durable `admin` base role has audited control-plane
-   * provenance. Absent or false means the base role confers no admin authority.
+   * True when a durable `admin` base role is backed by an active, unexpired
+   * two-person admin grant in this environment. Absent or false means the base
+   * role confers no admin authority.
    */
   adminProvisioned?: boolean;
   orgId: string | null;
@@ -78,8 +113,8 @@ export interface UserSession {
   signerAuthorizations: OperatorSignerAuthorization[];
   issuedRole?: UserRole;
   active?: boolean;
-  /** The profile's durable `admin` base role lacks audited provenance. */
-  unauditedAdmin?: boolean;
+  /** The profile's durable `admin` base role has no active grant in this environment. */
+  adminGrantMissing?: boolean;
   breakGlass?: BreakGlassSessionContext;
   issuedAt: number;
   expiresAt: number;
@@ -154,6 +189,8 @@ export interface SessionLifetimePolicy {
 
 export interface AuthConfig {
   nodeEnv: string;
+  /** Cotsel environment (`COTSEL_ENVIRONMENT`); admin grants are bound to it. */
+  environment: string;
   port: number;
   dbHost: string;
   dbPort: number;
@@ -179,6 +216,7 @@ export interface AuthConfig {
   adminControlMaxSkewSeconds: number;
   adminControlNonceTtlSeconds: number;
   adminBreakGlassMaxTtlSeconds: number;
+  adminGrantMaxTtlSeconds: number;
 }
 
 export interface TrustedSessionIdentity {

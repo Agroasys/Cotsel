@@ -5,19 +5,22 @@ import { Pool, PoolClient } from 'pg';
 import { UserProfile, UserRole } from '../../types';
 
 /**
- * True when the latest audited control-plane role decision for the profile in
- * `user_profiles` granted durable admin. The admin control plane records one
- * in the same transaction as every provisioning or role change; nothing else
- * does, so an `admin` row without it has no audited provenance.
+ * SQL that is true when the profile in `user_profiles` holds durable
+ * administrator authority in the environment bound to `environmentParam`: the
+ * latest applied two-person authority change for that account and environment
+ * is a grant that has not expired. Nothing else confers it.
  */
-export const AUDITED_ADMIN_SQL = `COALESCE((
-    SELECT audit_event.new_role = 'admin'
-    FROM auth_admin_audit_events AS audit_event
-    WHERE audit_event.account_id = user_profiles.account_id
-      AND audit_event.action IN ('profile_provisioned', 'profile_role_updated')
-    ORDER BY audit_event.created_at DESC
+export function activeAdminGrantSql(environmentParam: string): string {
+  return `COALESCE((
+    SELECT change_row.change = 'grant' AND change_row.grant_expires_at > NOW()
+    FROM admin_authority_changes AS change_row
+    WHERE change_row.account_id = user_profiles.account_id
+      AND change_row.environment = ${environmentParam}
+      AND change_row.state = 'applied'
+    ORDER BY change_row.applied_at DESC
     LIMIT 1
   ), FALSE)`;
+}
 
 export const USER_PROFILE_FIELDS = `
   id,
@@ -33,7 +36,6 @@ export const USER_PROFILE_FIELDS = `
     ELSE role
   END AS role,
   role AS "baseRole",
-  CASE WHEN role = 'admin' THEN ${AUDITED_ADMIN_SQL} ELSE FALSE END AS "adminProvisioned",
   org_id AS "orgId",
   created_at AS "createdAt",
   updated_at AS "updatedAt",
@@ -128,6 +130,21 @@ export async function insertTrustedProfileRow(
     [input.accountId, input.walletAddress, input.email, input.role, input.orgId],
   );
   return result.rows[0];
+}
+
+/** Whether the account holds an active, unexpired admin grant in `environment`. */
+export async function queryActiveAdminGrant(
+  client: Pool | PoolClient,
+  accountId: string,
+  environment: string,
+): Promise<boolean> {
+  const result = await client.query<{ granted: boolean }>(
+    `SELECT ${activeAdminGrantSql('$2')} AS granted
+     FROM user_profiles
+     WHERE account_id = $1`,
+    [accountId, environment],
+  );
+  return result.rows[0]?.granted === true;
 }
 
 export async function queryProfileByAccountIdForUpdate(

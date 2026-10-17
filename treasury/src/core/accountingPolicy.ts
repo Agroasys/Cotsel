@@ -1,3 +1,4 @@
+import { CallerSafeError } from '@agroasys/shared-http';
 import {
   AccountingPeriodStatus,
   BankPayoutState,
@@ -27,7 +28,7 @@ export function assertAccountingPeriodTransition(
   next: AccountingPeriodStatus,
 ): void {
   if (!ACCOUNTING_PERIOD_TRANSITIONS[current].includes(next)) {
-    throw new Error(`Invalid accounting period transition: ${current} -> ${next}`);
+    throw new CallerSafeError(`Invalid accounting period transition: ${current} -> ${next}`);
   }
 }
 
@@ -36,7 +37,7 @@ export function assertSweepBatchTransition(
   next: SweepBatchStatus,
 ): void {
   if (!SWEEP_BATCH_TRANSITIONS[current].includes(next)) {
-    throw new Error(`Invalid sweep batch transition: ${current} -> ${next}`);
+    throw new CallerSafeError(`Invalid sweep batch transition: ${current} -> ${next}`);
   }
 }
 
@@ -45,13 +46,15 @@ export function assertBatchAllocationAllowed(params: {
   batchStatus: SweepBatchStatus;
 }): void {
   if (params.periodStatus !== 'OPEN') {
-    throw new Error(
+    throw new CallerSafeError(
       `Sweep allocation requires an OPEN accounting period; received ${params.periodStatus}`,
     );
   }
 
   if (params.batchStatus !== 'DRAFT') {
-    throw new Error(`Sweep allocation requires a DRAFT batch; received ${params.batchStatus}`);
+    throw new CallerSafeError(
+      `Sweep allocation requires a DRAFT batch; received ${params.batchStatus}`,
+    );
   }
 }
 
@@ -73,38 +76,46 @@ export function assertBatchExecutionMatchable(params: {
       ['EXECUTED', 'HANDED_OFF', 'CLOSED'].includes(params.batchStatus)
     )
   ) {
-    throw new Error(
+    throw new CallerSafeError(
       `Matched sweep execution requires batch status APPROVED; received ${params.batchStatus}`,
     );
   }
 
   if (!params.payoutReceiverAddress) {
-    throw new Error('Matched sweep execution requires a recorded payout receiver address');
+    throw new CallerSafeError(
+      'Matched sweep execution requires a recorded payout receiver address',
+    );
   }
 
   if (params.assetSymbol.trim().toUpperCase() !== 'USDC') {
-    throw new Error(
+    throw new CallerSafeError(
       `Matched sweep execution only supports the escrow USDC asset; received ${params.assetSymbol}`,
     );
   }
 
   if (params.expectedTotalRaw !== params.allocatedTotalRaw) {
-    throw new Error('Sweep batch expected total does not match allocated amount total');
+    throw new CallerSafeError('Sweep batch expected total does not match allocated amount total');
   }
 
   if (params.observedAmountRaw !== params.allocatedTotalRaw) {
-    throw new Error('Observed treasury claim amount does not match allocated amount total');
+    throw new CallerSafeError(
+      'Observed treasury claim amount does not match allocated amount total',
+    );
   }
 
   if (
     params.observedPayoutReceiver.trim().toLowerCase() !==
     params.payoutReceiverAddress.trim().toLowerCase()
   ) {
-    throw new Error('Observed treasury claim destination does not match the batch payout receiver');
+    throw new CallerSafeError(
+      'Observed treasury claim destination does not match the batch payout receiver',
+    );
   }
 
   if (!params.observedTxHash.trim()) {
-    throw new Error('Matched sweep execution requires an observed treasury claim tx hash');
+    throw new CallerSafeError(
+      'Matched sweep execution requires an observed treasury claim tx hash',
+    );
   }
 }
 
@@ -178,14 +189,14 @@ export function assertSweepBatchRoleSeparation(params: {
     params.nextStatus === 'APPROVED' &&
     ([params.createdBy, params.approvalRequestedBy].includes(params.actor) || held.has('MAKER'))
   ) {
-    throw new Error('Sweep batch approval requires a different actor than preparation');
+    throw new CallerSafeError('Sweep batch approval requires a different actor than preparation');
   }
 
   if (
     params.nextStatus === 'EXECUTED' &&
     (params.approvedBy === params.actor || held.has('CHECKER'))
   ) {
-    throw new Error('Sweep batch execution requires a different actor than approval');
+    throw new CallerSafeError('Sweep batch execution requires a different actor than approval');
   }
 
   if (
@@ -194,7 +205,9 @@ export function assertSweepBatchRoleSeparation(params: {
       held.has('CHECKER') ||
       held.has('EXECUTOR'))
   ) {
-    throw new Error('Sweep batch close requires a different actor than approval or execution');
+    throw new CallerSafeError(
+      'Sweep batch close requires a different actor than approval or execution',
+    );
   }
 }
 
@@ -216,7 +229,7 @@ export function assertAccountingPeriodRoleSeparation(params: {
   const held = heldRoles(params.transitionChain ?? [], params.actor);
 
   if (held.has('MAKER') || params.createdBy === params.actor) {
-    throw new Error(
+    throw new CallerSafeError(
       'Accounting period close requires a different actor than the close request or period creation',
     );
   }
@@ -241,27 +254,29 @@ export function assertRealizationAllowed(params: {
   reconciliationBinding: RealizationReconciliationBinding | null;
 }): void {
   if (!params.batchStatus || !['HANDED_OFF', 'CLOSED'].includes(params.batchStatus)) {
-    throw new Error('Revenue realization requires a handed-off or closed sweep batch');
+    throw new CallerSafeError('Revenue realization requires a handed-off or closed sweep batch');
   }
 
   if (params.partnerHandoffStatus !== 'COMPLETED') {
-    throw new Error('Revenue realization requires completed external handoff evidence');
+    throw new CallerSafeError('Revenue realization requires completed external handoff evidence');
   }
 
   if (params.bankPayoutState !== 'CONFIRMED') {
-    throw new Error('Revenue realization requires confirmed bank settlement evidence');
+    throw new CallerSafeError('Revenue realization requires confirmed bank settlement evidence');
   }
 
   if (params.revenueRealizationStatus === 'REALIZED') {
-    throw new Error('Ledger entry is already realized');
+    throw new CallerSafeError('Ledger entry is already realized');
   }
 
   if (params.revenueRealizationStatus === 'REVERSED') {
-    throw new Error('Ledger entry has a reversed realization and needs controlled remediation');
+    throw new CallerSafeError(
+      'Ledger entry has a reversed realization and needs controlled remediation',
+    );
   }
 
   if (!params.reconciliationBinding) {
-    throw new Error(
+    throw new CallerSafeError(
       'Revenue realization requires an accepted reconciliation run bound to the entry block',
     );
   }
@@ -269,7 +284,7 @@ export function assertRealizationAllowed(params: {
   if (
     params.reconciliationBinding.entryBlockNumber > params.reconciliationBinding.coverageToBlock
   ) {
-    throw new Error(
+    throw new CallerSafeError(
       `Revenue realization requires reconciliation coverage through block ${params.reconciliationBinding.entryBlockNumber}; run ${params.reconciliationBinding.runKey} reached only ${params.reconciliationBinding.coverageToBlock}`,
     );
   }

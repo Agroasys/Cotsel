@@ -1,11 +1,13 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { createHash } from 'crypto';
 import { Pool } from 'pg';
 import { AdminActor, OperatorSignerActionClass, OperatorSignerRegisterRecord } from '../types';
 import { recordAdminAuditEvent } from '../database/queries/adminAudit';
 import { queryProfileByAccountIdForUpdate } from '../database/queries/profileRows';
+import { canonicalControlPrincipal } from './controlPrincipal';
 
 export interface ProposeOperatorSignerInput {
   accountId: string;
@@ -87,7 +89,6 @@ const SIGNER_COLUMNS = `
   revoked_at AS "revokedAt",
   revoked_by AS "revokedBy",
   revoked_reason AS "revokedReason"`;
-const HUMAN_CONTROL_PRINCIPAL_REGEX = /^[a-z0-9][a-z0-9:._@/-]{0,127}$/;
 
 function mapRow(row: SignerBindingRow): OperatorSignerRegisterRecord {
   return {
@@ -112,18 +113,6 @@ function mapRow(row: SignerBindingRow): OperatorSignerRegisterRecord {
     revokedBy: row.revokedBy,
     revokedReason: row.revokedReason,
   };
-}
-
-function canonicalControlPrincipal(actor: AdminActor): string {
-  const humanPrincipalId = actor.humanPrincipalId?.trim() ?? '';
-  if (
-    actor.type !== 'service_auth' ||
-    actor.id.trim() === '' ||
-    !HUMAN_CONTROL_PRINCIPAL_REGEX.test(humanPrincipalId)
-  ) {
-    throw new Error('Signer binding changes require an authenticated human control principal');
-  }
-  return `human:${humanPrincipalId}`;
 }
 
 function signerProposalDigest(
@@ -177,12 +166,12 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const proposerPrincipal = canonicalControlPrincipal(input.actor);
+        const proposerPrincipal = canonicalControlPrincipal(input.actor, 'Signer binding');
         const profile = await queryProfileByAccountIdForUpdate(client, input.accountId);
-        if (!profile) throw new Error('Profile not found');
-        if (!profile.active) throw new Error('Signer bindings require an active profile');
+        if (!profile) throw new CallerSafeError('Profile not found');
+        if (!profile.active) throw new CallerSafeError('Signer bindings require an active profile');
         if (profile.baseRole !== 'admin') {
-          throw new Error('Signer bindings require a durable admin profile');
+          throw new CallerSafeError('Signer bindings require a durable admin profile');
         }
 
         const evidenceDigest = signerProposalDigest(input, proposerPrincipal);
@@ -204,7 +193,7 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
             record.approvalTicket !== input.approvalTicket ||
             record.evidenceDigest !== evidenceDigest
           ) {
-            throw new Error(
+            throw new CallerSafeError(
               'An open signer binding already exists with different proposal evidence',
             );
           }
@@ -265,7 +254,7 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const approverPrincipal = canonicalControlPrincipal(input.actor);
+        const approverPrincipal = canonicalControlPrincipal(input.actor, 'Signer binding');
         const existing = await client.query<SignerBindingRow>(
           `SELECT ${SIGNER_COLUMNS}
            FROM operator_signer_bindings
@@ -274,21 +263,25 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
           [input.bindingId],
         );
         if (!existing.rows[0]) {
-          throw new Error('Signer binding not found');
+          throw new CallerSafeError('Signer binding not found');
         }
         const record = mapRow(existing.rows[0]);
         if (record.state !== 'pending') {
-          throw new Error('Signer binding is not pending approval');
+          throw new CallerSafeError('Signer binding is not pending approval');
         }
         if (record.createdBy === approverPrincipal) {
-          throw new Error('Signer binding proposer cannot approve the same binding');
+          throw new CallerSafeError('Signer binding proposer cannot approve the same binding');
         }
         if (record.evidenceDigest !== input.evidenceDigest) {
-          throw new Error('Signer binding approval digest does not match the pending proposal');
+          throw new CallerSafeError(
+            'Signer binding approval digest does not match the pending proposal',
+          );
         }
         const profile = await queryProfileByAccountIdForUpdate(client, record.accountId);
         if (!profile?.active || profile.baseRole !== 'admin') {
-          throw new Error('Signer binding approval requires an active durable admin profile');
+          throw new CallerSafeError(
+            'Signer binding approval requires an active durable admin profile',
+          );
         }
 
         const updated = await client.query<SignerBindingRow>(
@@ -308,7 +301,7 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
            RETURNING ${SIGNER_COLUMNS}`,
           [input.bindingId, approverPrincipal, input.evidenceDigest],
         );
-        if (!updated.rows[0]) throw new Error('Signer binding activation conflict');
+        if (!updated.rows[0]) throw new CallerSafeError('Signer binding activation conflict');
         const activated = mapRow(updated.rows[0]);
         await recordAdminAuditEvent(client, {
           accountId: activated.accountId,
@@ -340,7 +333,7 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const revokingPrincipal = canonicalControlPrincipal(input.actor);
+        const revokingPrincipal = canonicalControlPrincipal(input.actor, 'Signer binding');
         const existing = await client.query<SignerBindingRow>(
           `SELECT ${SIGNER_COLUMNS}
            FROM operator_signer_bindings
@@ -354,7 +347,7 @@ export function createPostgresOperatorSignerStore(pool: Pool): OperatorSignerSto
         }
         const record = mapRow(existing.rows[0]);
         const profile = await queryProfileByAccountIdForUpdate(client, record.accountId);
-        if (!profile) throw new Error('Profile not found');
+        if (!profile) throw new CallerSafeError('Profile not found');
 
         const updated = await client.query<SignerBindingRow>(
           `UPDATE operator_signer_bindings

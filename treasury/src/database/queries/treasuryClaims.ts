@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { createHash } from 'node:crypto';
 import {
   classifyProviderHandoffTransition,
@@ -89,7 +90,7 @@ export async function upsertTreasuryClaimEventWith(
     data.matchedSweepBatchId !== null &&
     existing.matched_sweep_batch_id !== data.matchedSweepBatchId
   ) {
-    throw new Error('Treasury claim event is already matched to a different sweep batch');
+    throw new CallerSafeError('Treasury claim event is already matched to a different sweep batch');
   }
 
   const result = existing
@@ -180,11 +181,13 @@ export async function upsertPartnerHandoff(data: {
     const batch = batchResult.rows[0];
 
     if (!batch) {
-      throw new Error('Sweep batch not found');
+      throw new CallerSafeError('Sweep batch not found');
     }
 
     if (!batch.matched_sweep_tx_hash || !batch.matched_swept_at) {
-      throw new Error('External handoff requires matched on-chain treasury claim evidence');
+      throw new CallerSafeError(
+        'External handoff requires matched on-chain treasury claim evidence',
+      );
     }
 
     // WP-4 B-09 / FAIL-11. The batch handoff was last-write-wins: any status

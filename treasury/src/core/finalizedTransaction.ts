@@ -42,7 +42,7 @@ export type FinalizedTransactionVerdict =
       finalizedEvidence: TreasuryFinalizedEvidence;
       logs: ReadonlyArray<SettlementLog>;
     }
-  | { finalized: false; detail: string };
+  | { finalized: false; detail: string; unavailable?: true };
 
 /** Independent readers for the existing matcher. No observer or fallback to a single RPC is introduced. */
 export function createTreasurySweepWitnesses(urls: string[]): TreasurySweepWitness[] {

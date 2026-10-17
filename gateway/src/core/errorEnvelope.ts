@@ -64,9 +64,6 @@ export function createGatewayErrorEnvelope(
     message: 'An unexpected error occurred',
     requestId: requestContext?.requestId,
     traceId: requestContext?.correlationId,
-    details: {
-      reason: error instanceof Error ? error.message : String(error),
-    },
     failureClass: 'unexpected',
     retryable: true,
     replayable: true,

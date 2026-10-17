@@ -14,6 +14,7 @@ import {
 } from '@agroasys/shared-auth/serviceAuth';
 import { createPostgresNonceStore } from '@agroasys/shared-auth/nonceStore';
 import { createAdminService } from '../../src/core/adminService';
+import { createPostgresAdminAuthorityStore } from '../../src/core/adminAuthorityStore';
 import { createExchangeAuthorityLookup } from '../../src/core/exchangeAuthority';
 import { createPostgresProfileStore } from '../../src/core/profileStore';
 import { createPostgresSessionStore } from '../../src/core/sessionStore';
@@ -27,6 +28,14 @@ const POSTGRES_IMAGE = process.env.AUTH_TEST_POSTGRES_IMAGE || 'postgres:16-alpi
 const API_KEY_ID = 'ops-admin-control-test';
 const API_SECRET = 'admin-control-test-secret';
 const HUMAN_PRINCIPAL_ID = 'agroasys-user:ops-admin-control-test';
+/** The Cotsel environment the harness runs auth in; admin grants bind to it. */
+export const TEST_ENVIRONMENT = 'test';
+/** A second admin-control key, held by a different human, for two-person approval. */
+export const ADMIN_CONTROL_APPROVER = {
+  id: 'ops-admin-control-approver',
+  secret: 'admin-control-approver-secret',
+  humanPrincipalId: 'agroasys-user:ops-admin-control-approver',
+} as const;
 export let dockerAvailable = true;
 
 try {
@@ -139,6 +148,12 @@ export async function withPostgres(fn: (pool: Pool) => Promise<void>): Promise<v
         'utf8',
       );
       await pool.query(sessionLineageMigration);
+      await pool.query(
+        fs.readFileSync(
+          path.resolve(__dirname, '../../src/database/schema/005_admin_authority_changes.sql'),
+          'utf8',
+        ),
+      );
       await fn(pool);
     } finally {
       await pool.end();
@@ -203,8 +218,8 @@ export function signedHeaders(input: {
 }
 
 export async function startAdminApp(pool: Pool) {
-  const profiles = createPostgresProfileStore(pool);
-  const sessions = createPostgresSessionStore(pool);
+  const profiles = createPostgresProfileStore(pool, TEST_ENVIRONMENT);
+  const sessions = createPostgresSessionStore(pool, TEST_ENVIRONMENT);
   const sessionService = createSessionService(sessions, profiles, {
     ttlSeconds: 3600,
     absoluteLifetimeSeconds: 86400,
@@ -217,15 +232,19 @@ export async function startAdminApp(pool: Pool) {
     enabled: true,
     maxSkewSeconds: 300,
     nonceTtlSeconds: 600,
-    lookupApiKey: (key) =>
-      key === API_KEY_ID
-        ? {
-            id: API_KEY_ID,
-            secret: API_SECRET,
-            active: true,
-            humanPrincipalId: HUMAN_PRINCIPAL_ID,
-          }
-        : undefined,
+    lookupApiKey: (key) => {
+      if (key === API_KEY_ID) {
+        return {
+          id: API_KEY_ID,
+          secret: API_SECRET,
+          active: true,
+          humanPrincipalId: HUMAN_PRINCIPAL_ID,
+        };
+      }
+      return key === ADMIN_CONTROL_APPROVER.id
+        ? { ...ADMIN_CONTROL_APPROVER, active: true }
+        : undefined;
+    },
     consumeNonce: nonceStore.consume,
   });
   const exchangeKeys = Object.values(EXCHANGE_KEYS);
@@ -254,7 +273,10 @@ export async function startAdminApp(pool: Pool) {
     sessionService,
     {
       adminController: new AdminController(
-        createAdminService(profiles, 3600, createPostgresOperatorSignerStore(pool)),
+        createAdminService(profiles, 3600, createPostgresOperatorSignerStore(pool), {
+          store: createPostgresAdminAuthorityStore(pool, TEST_ENVIRONMENT),
+          maxGrantTtlSeconds: 2592000,
+        }),
       ),
       adminControlMiddleware: adminMiddleware,
       trustedSessionExchangeMiddleware,
@@ -280,4 +302,103 @@ export async function startAdminApp(pool: Pool) {
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
     sessionService,
   };
+}
+
+let controlNonce = 0;
+
+/** Sends a signed admin-control POST, by default as the proposing human. */
+export async function postAdminControl(
+  baseUrl: string,
+  path: string,
+  payload: Record<string, unknown>,
+  apiKey?: { id: string; secret: string },
+): Promise<{ status: number; json: { data?: Record<string, unknown>; message?: string } }> {
+  const body = JSON.stringify(payload);
+  controlNonce += 1;
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: signedHeaders({
+      method: 'POST',
+      path,
+      body,
+      nonce: `admin-control-${process.pid}-${Date.now()}-${controlNonce}`,
+      apiKey,
+    }),
+    body,
+  });
+  return { status: response.status, json: await response.json() };
+}
+
+/**
+ * Makes `accountId` a durable administrator the only way auth allows: one human
+ * proposes the grant and a second human approves its evidence digest.
+ */
+export async function grantAdminAuthority(
+  baseUrl: string,
+  accountId: string,
+  options: { orgId?: string | null; expiresAt?: string } = {},
+): Promise<Record<string, unknown>> {
+  const proposed = await postAdminControl(baseUrl, '/api/auth/v1/admin/authority-changes/propose', {
+    accountId,
+    change: 'grant',
+    environment: TEST_ENVIRONMENT,
+    orgId: options.orgId ?? null,
+    expiresAt: options.expiresAt ?? new Date(Date.now() + 7 * 86400 * 1000).toISOString(),
+    approvalTicket: 'SEC-2000',
+    reason: 'Two-person administrator grant for integration proof',
+  });
+  if (proposed.status !== 201) {
+    throw new Error(`admin grant proposal failed: ${proposed.status} ${proposed.json.message}`);
+  }
+  const approved = await postAdminControl(
+    baseUrl,
+    '/api/auth/v1/admin/authority-changes/approve',
+    {
+      changeId: proposed.json.data!.changeId,
+      evidenceDigest: proposed.json.data!.evidenceDigest,
+      reason: 'Second human approves administrator grant',
+    },
+    ADMIN_CONTROL_APPROVER,
+  );
+  if (approved.status !== 200) {
+    throw new Error(`admin grant approval failed: ${approved.status} ${approved.json.message}`);
+  }
+  return approved.json.data!;
+}
+
+/** Returns `accountId` to `resultingRole` through a two-person revocation. */
+export async function revokeAdminAuthority(
+  baseUrl: string,
+  accountId: string,
+  resultingRole: 'buyer' | 'supplier' = 'buyer',
+): Promise<Record<string, unknown>> {
+  const proposed = await postAdminControl(baseUrl, '/api/auth/v1/admin/authority-changes/propose', {
+    accountId,
+    change: 'revoke',
+    environment: TEST_ENVIRONMENT,
+    resultingRole,
+    approvalTicket: 'SEC-2001',
+    reason: 'Two-person administrator revocation for integration proof',
+  });
+  if (proposed.status !== 201) {
+    throw new Error(
+      `admin revocation proposal failed: ${proposed.status} ${proposed.json.message}`,
+    );
+  }
+  const approved = await postAdminControl(
+    baseUrl,
+    '/api/auth/v1/admin/authority-changes/approve',
+    {
+      changeId: proposed.json.data!.changeId,
+      evidenceDigest: proposed.json.data!.evidenceDigest,
+      reason: 'Second human approves administrator revocation',
+    },
+    ADMIN_CONTROL_APPROVER,
+  );
+  if (approved.status !== 200) {
+    throw new Error(
+      `admin revocation approval failed: ${approved.status} ${approved.json.message}`,
+    );
+  }
+  return approved.json.data!;
 }

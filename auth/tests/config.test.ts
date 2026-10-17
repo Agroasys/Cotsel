@@ -114,4 +114,32 @@ describe('auth config', () => {
       expect(loadConfig().trustedSessionExchangeKeyPoliciesJson).toBe(policies);
     });
   });
+
+  test('admin grants bind to an explicit environment with a bounded lifetime', () => {
+    withEnv({ COTSEL_ENVIRONMENT: undefined }, () => {
+      const { loadConfig } = loadConfigModule();
+      const config = loadConfig();
+      expect(config.environment).toBe('local');
+      expect(config.adminGrantMaxTtlSeconds).toBe(2592000);
+    });
+
+    withEnv({ NODE_ENV: 'production', COTSEL_ENVIRONMENT: undefined }, () => {
+      const { loadConfig } = loadConfigModule();
+      expect(() => loadConfig()).toThrow('COTSEL_ENVIRONMENT is required when NODE_ENV=production');
+    });
+
+    withEnv({ COTSEL_ENVIRONMENT: 'Staging Env' }, () => {
+      const { loadConfig } = loadConfigModule();
+      expect(() => loadConfig()).toThrow('COTSEL_ENVIRONMENT must be a lowercase environment name');
+    });
+
+    for (const value of ['3599', '15552001']) {
+      withEnv({ COTSEL_ENVIRONMENT: 'staging', AUTH_ADMIN_GRANT_MAX_TTL_SECONDS: value }, () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow(
+          'AUTH_ADMIN_GRANT_MAX_TTL_SECONDS must be between 3600 and 15552000',
+        );
+      });
+    }
+  });
 });

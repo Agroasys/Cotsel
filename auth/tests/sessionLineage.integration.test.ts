@@ -19,8 +19,8 @@ function nowSeconds(): number {
 
 function createService(pool: Pool) {
   return createSessionService(
-    createPostgresSessionStore(pool),
-    createPostgresProfileStore(pool),
+    createPostgresSessionStore(pool, 'test'),
+    createPostgresProfileStore(pool, 'test'),
     LIFETIME,
   );
 }
@@ -296,12 +296,12 @@ describe('session lineage persistence integration', () => {
             [legacyToken, profile.rows[0].id, issuedAt, issuedAt + 3600],
           );
 
-          await legacyPool.query(
-            fs.readFileSync(
-              path.join(SCHEMA_ROOT, 'schema/004_session_token_hash_lineage.sql'),
-              'utf8',
-            ),
-          );
+          for (const file of [
+            'schema/004_session_token_hash_lineage.sql',
+            'schema/005_admin_authority_changes.sql',
+          ]) {
+            await legacyPool.query(fs.readFileSync(path.join(SCHEMA_ROOT, file), 'utf8'));
+          }
 
           const migrated = await legacyPool.query(
             `SELECT session_token_hash, lineage_started_at FROM user_sessions`,

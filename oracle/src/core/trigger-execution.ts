@@ -11,7 +11,7 @@ import {
   updateTrigger,
 } from '../database/queries';
 import { calculateBackoff } from '../utils/crypto';
-import { classifyError, determineNextStatus, ValidationError } from '../utils/errors';
+import { classifyError, determineNextStatus, publicFailureMessage, storedFailureMessage, ValidationError } from '../utils/errors';
 import { incrementOracleExhaustedRetries } from '../metrics/counters';
 import { Logger } from '../utils/logger';
 import { submitTriggerAction } from './blockchain-actions';
@@ -165,7 +165,7 @@ export async function executeTriggerWithRetry(
         attempt,
         errorType: oracleError.errorType,
         isTerminal: oracleError.isTerminal,
-        message: oracleError.message,
+        message: publicFailureMessage(oracleError),
       });
 
       const nextStatus = determineNextStatus(oracleError, attempt, maxAttempts);
@@ -173,24 +173,24 @@ export async function executeTriggerWithRetry(
       await updateTrigger(trigger.idempotency_key, {
         status: nextStatus,
         attempt_count: attempt,
-        last_error: oracleError.message,
+        last_error: storedFailureMessage(oracleError.errorType),
         error_type: oracleError.errorType,
       });
 
       if (nextStatus === TriggerStatus.TERMINAL_FAILURE) {
-        await notifyTerminalStatus(trigger, actionKey, nextStatus, oracleError.message, attempt);
+        await notifyTerminalStatus(trigger, actionKey, nextStatus, publicFailureMessage(oracleError), attempt);
         return {
           idempotencyKey: trigger.idempotency_key,
           actionKey,
           requestId: trigger.request_id,
           status: nextStatus,
           idempotent: false,
-          message: oracleError.message,
+          message: publicFailureMessage(oracleError),
         };
       }
 
       if (nextStatus === TriggerStatus.EXHAUSTED_NEEDS_REDRIVE) {
-        const exhaustedMessage = `Exhausted ${maxAttempts} attempts: ${oracleError.message}. Use re-drive endpoint to retry.`;
+        const exhaustedMessage = `Exhausted ${maxAttempts} attempts: ${publicFailureMessage(oracleError)}. Use re-drive endpoint to retry.`;
         incrementOracleExhaustedRetries(actionKey);
         await notifyTerminalStatus(trigger, actionKey, nextStatus, exhaustedMessage, attempt);
         return {

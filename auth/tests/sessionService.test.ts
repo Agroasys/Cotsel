@@ -245,10 +245,10 @@ describe('sessionService.resolve', () => {
     expect(await svc.resolve('session-abc')).toBeNull();
   });
 
-  test('revokes a session whose admin authority has no audited provenance', async () => {
+  test('revokes a session whose admin authority has no active grant', async () => {
     const { sessionStore, profileStore } = makeStores(makeProfile());
     sessionStore.lookup.mockResolvedValue(
-      makeActiveSession({ role: 'admin', issuedRole: 'admin', unauditedAdmin: true }),
+      makeActiveSession({ role: 'admin', issuedRole: 'admin', adminGrantMissing: true }),
     );
     const svc = createSessionService(sessionStore, profileStore, LIFETIME);
 

@@ -1,3 +1,4 @@
+import { CallerSafeError } from '@agroasys/shared-http';
 import crypto from 'node:crypto';
 import {
   FiatDepositFailureClass,
@@ -25,14 +26,14 @@ export const FIAT_DEPOSIT_STATES: FiatDepositState[] = [
 
 export function assertFiatDepositState(value: string): asserts value is FiatDepositState {
   if (!FIAT_DEPOSIT_STATES.includes(value as FiatDepositState)) {
-    throw new Error('Invalid fiat deposit state');
+    throw new CallerSafeError('Invalid fiat deposit state');
   }
 }
 
 function assertNonEmpty(name: string, value: string): string {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
-    throw new Error(`${name} is required`);
+    throw new CallerSafeError(`${name} is required`);
   }
   return trimmed;
 }
@@ -40,7 +41,7 @@ function assertNonEmpty(name: string, value: string): string {
 function assertPositiveIntegerString(name: string, value: string): string {
   const trimmed = assertNonEmpty(name, value);
   if (!/^\d+$/u.test(trimmed)) {
-    throw new Error(`${name} must be a non-negative integer string`);
+    throw new CallerSafeError(`${name} must be a non-negative integer string`);
   }
   return trimmed;
 }

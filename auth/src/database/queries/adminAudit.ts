@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import { Pool, PoolClient } from 'pg';
 import { AdminActor, AdminAuditAction, UserProfile, UserRole } from '../../types';
 import {
@@ -172,6 +173,9 @@ export async function listOperatorAuthorityProfiles(
   );
 }
 
+export const PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS =
+  'Administrator authority is granted and removed only through a two-person admin authority change';
+
 export async function provisionProfileWithAudit(
   pool: Pool,
   input: {
@@ -188,6 +192,12 @@ export async function provisionProfileWithAudit(
   try {
     await client.query('BEGIN');
     const previous = await queryProfileByAccountIdForUpdate(client, input.accountId);
+    // Checked under the row lock: a grant that commits while this request waits
+    // is seen here, so provisioning can never write over an administrator.
+    // Deactivation, not provisioning, is the single-person containment path.
+    if (input.role === 'admin' || (previous?.baseRole === 'admin' && previous.active)) {
+      throw new CallerSafeError(PRIVILEGE_CHANGE_REQUIRES_TWO_PERSONS);
+    }
     const profile = previous
       ? await updateTrustedProfileRow(client, previous.id, {
           accountId: input.accountId,
@@ -265,7 +275,7 @@ export async function deactivateProfileWithAudit(
     await client.query('BEGIN');
     const previous = await queryProfileByAccountIdForUpdate(client, accountId);
     if (!previous) {
-      throw new Error('Profile not found');
+      throw new CallerSafeError('Profile not found');
     }
 
     await client.query(

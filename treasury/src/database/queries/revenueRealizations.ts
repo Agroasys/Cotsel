@@ -1,3 +1,4 @@
+import { CallerSafeError } from '@agroasys/shared-http';
 import { assertSweepFinalityForProgression } from '../../core/sweepFinalityProgression';
 import type { TreasuryFinalizedEvidence } from '../../core/finalizedTransaction';
 import {
@@ -30,12 +31,12 @@ export async function createRevenueRealization(data: {
     await client.query('BEGIN');
     const discovered = await getLedgerEntryAccountingFacts(data.ledgerEntryId, client);
     if (!discovered?.sweep_batch_id)
-      throw new Error('Original sweep batch is required for realization');
+      throw new CallerSafeError('Original sweep batch is required for realization');
     const locked = await client.query<SweepBatch>(
       'SELECT * FROM sweep_batches WHERE id=$1 FOR UPDATE',
       [discovered.sweep_batch_id],
     );
-    if (!locked.rows[0]) throw new Error('Original sweep batch is unavailable');
+    if (!locked.rows[0]) throw new CallerSafeError('Original sweep batch is unavailable');
     assertSweepFinalityForProgression(locked.rows[0], data.finalizedSweepEvidence);
 
     // Realization is once-per-entry. Locking the batch, then its entry, makes the
@@ -47,7 +48,7 @@ export async function createRevenueRealization(data: {
 
     const facts = await getLedgerEntryAccountingFacts(data.ledgerEntryId, client);
     if (!facts || facts.sweep_batch_id !== discovered.sweep_batch_id) {
-      throw new Error('Ledger entry accounting facts not found');
+      throw new CallerSafeError('Ledger entry accounting facts not found');
     }
 
     const entryBlock = await client.query<{ block_number: number }>(
@@ -56,7 +57,7 @@ export async function createRevenueRealization(data: {
     );
     const entryBlockNumber = Number(entryBlock.rows[0]?.block_number);
     if (!Number.isFinite(entryBlockNumber)) {
-      throw new Error('Ledger entry block number is unavailable');
+      throw new CallerSafeError('Ledger entry block number is unavailable');
     }
 
     // The caller supplies the run it read; the entry's block is re-derived here
@@ -75,7 +76,7 @@ export async function createRevenueRealization(data: {
     });
 
     if (data.accountingPeriodId !== facts.accounting_period_id) {
-      throw new Error(
+      throw new CallerSafeError(
         'Revenue realization accounting period does not match the ledger entry batch',
       );
     }
@@ -85,7 +86,7 @@ export async function createRevenueRealization(data: {
       data.sweepBatchId !== null &&
       data.sweepBatchId !== facts.sweep_batch_id
     ) {
-      throw new Error('Revenue realization sweep batch does not match the ledger entry batch');
+      throw new CallerSafeError('Revenue realization sweep batch does not match the ledger entry batch');
     }
 
     if (
@@ -93,7 +94,7 @@ export async function createRevenueRealization(data: {
       data.partnerHandoffId !== null &&
       data.partnerHandoffId !== facts.partner_handoff_id
     ) {
-      throw new Error(
+      throw new CallerSafeError(
         'Revenue realization external handoff does not match the ledger entry sweep batch',
       );
     }

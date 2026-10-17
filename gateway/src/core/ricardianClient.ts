@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { GatewayError } from '../errors';
+import { diagnosticReason, GatewayError } from '../errors';
 import type { DownstreamServiceOrchestrator } from './serviceOrchestrator';
 
 export interface RicardianDocumentRecord {
@@ -101,12 +101,13 @@ export class RicardianClient {
       }
 
       if (!response.ok) {
-        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Ricardian service request failed', {
-          upstream: 'ricardian',
-          status: response.status,
-          reason: payload?.error ?? null,
-          code: payload?.code ?? null,
-        });
+        throw new GatewayError(
+          502,
+          'UPSTREAM_UNAVAILABLE',
+          'Ricardian service request failed',
+          { upstream: 'ricardian', status: response.status, code: payload?.code ?? null },
+          { reason: payload?.error ?? null },
+        );
       }
 
       if (!payload?.success || !isDocumentRecord(payload.data)) {
@@ -126,10 +127,15 @@ export class RicardianClient {
         throw error;
       }
 
-      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Ricardian service request failed', {
-        upstream: 'ricardian',
-        reason: error instanceof Error ? error.message : String(error),
-      });
+      throw new GatewayError(
+        502,
+        'UPSTREAM_UNAVAILABLE',
+        'Ricardian service request failed',
+        {
+          upstream: 'ricardian',
+        },
+        { reason: diagnosticReason(error) },
+      );
     }
   }
 
@@ -156,12 +162,13 @@ export class RicardianClient {
       }
 
       if (!response.ok) {
-        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Ricardian service request failed', {
-          upstream: 'ricardian',
-          status: response.status,
-          reason: payload?.error ?? null,
-          code: payload?.code ?? null,
-        });
+        throw new GatewayError(
+          502,
+          'UPSTREAM_UNAVAILABLE',
+          'Ricardian service request failed',
+          { upstream: 'ricardian', status: response.status, code: payload?.code ?? null },
+          { reason: payload?.error ?? null },
+        );
       }
 
       if (!payload?.success || !isDocumentRecord(payload.data)) {
@@ -181,10 +188,15 @@ export class RicardianClient {
         throw error;
       }
 
-      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Ricardian service request failed', {
-        upstream: 'ricardian',
-        reason: error instanceof Error ? error.message : String(error),
-      });
+      throw new GatewayError(
+        502,
+        'UPSTREAM_UNAVAILABLE',
+        'Ricardian service request failed',
+        {
+          upstream: 'ricardian',
+        },
+        { reason: diagnosticReason(error) },
+      );
     }
   }
 

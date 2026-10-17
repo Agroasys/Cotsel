@@ -9,7 +9,7 @@ import {
   updateTrigger,
 } from '../database/queries';
 import { generateActionKey, generateRequestId, generateIdempotencyKey } from '../utils/crypto';
-import { getErrorMessage, ValidationError } from '../utils/errors';
+import { getErrorMessage, publicFailureMessage, storedFailureMessage, ValidationError } from '../utils/errors';
 import { Logger } from '../utils/logger';
 import {
   incrementOracleRedriveAttempts,
@@ -186,9 +186,8 @@ export class TriggerManager {
         errorMessage.includes('trade not found') ||
         errorMessage.includes('execution reverted')
       ) {
-        throw new ValidationError(
-          `Trade ${request.tradeId} does not exist on-chain: ${errorMessage}`,
-        );
+        Logger.warn('Trade lookup refused on-chain', { tradeId: request.tradeId, errorMessage });
+        throw new ValidationError(`Trade ${request.tradeId} does not exist on-chain`);
       }
       throw error;
     }
@@ -327,7 +326,7 @@ export class TriggerManager {
         requestId: trigger.request_id,
         status: trigger.status,
         idempotent: false,
-        message: trigger.last_error || 'Trigger failed with terminal error',
+        message: storedFailureMessage(trigger.error_type),
       };
     }
 

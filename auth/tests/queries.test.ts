@@ -184,6 +184,7 @@ describe('upsertTrustedProfile', () => {
           buildProfile({ id: 'profile-legacy', accountId: 'f62ccf55-b3d8-4b35-a0d0-f8f1daaeb6cb' }),
         ],
       })
+      .mockResolvedValueOnce({ rows: [{ granted: true }] })
       .mockResolvedValueOnce({ rows: [relinkedProfile] })
       .mockResolvedValueOnce({ rows: [] });
     const pool = buildMockPool(query);
@@ -198,10 +199,15 @@ describe('upsertTrustedProfile', () => {
         walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
       },
       ANY_ROLE_AUTHORITY,
+      'test',
     );
 
     expect(profile).toEqual(relinkedProfile);
-    expect(query).toHaveBeenNthCalledWith(4, expect.stringContaining('UPDATE user_profiles'), [
+    expect(query).toHaveBeenNthCalledWith(4, expect.stringContaining('admin_authority_changes'), [
+      'f62ccf55-b3d8-4b35-a0d0-f8f1daaeb6cb',
+      'test',
+    ]);
+    expect(query).toHaveBeenNthCalledWith(5, expect.stringContaining('UPDATE user_profiles'), [
       'profile-legacy',
       'acct-canonical',
       '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
@@ -229,11 +235,15 @@ describe('upsertTrustedProfile', () => {
         baseRole: 'buyer',
       });
       const mergedProfile = buildProfile({ id: 'profile-canonical', accountId: 'acct-canonical' });
+      // An admin target is checked for an active grant before any write.
+      const grantLookups = targetRole === 'admin' ? 1 : 0;
       const query = jest
         .fn()
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [accountProfile] })
-        .mockResolvedValueOnce({ rows: [legacyWalletProfile] })
+        .mockResolvedValueOnce({ rows: [legacyWalletProfile] });
+      if (grantLookups) query.mockResolvedValueOnce({ rows: [{ granted: true }] });
+      query
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [mergedProfile] })
@@ -250,16 +260,17 @@ describe('upsertTrustedProfile', () => {
           walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
         },
         ANY_ROLE_AUTHORITY,
+        'test',
       );
 
       expect(profile).toEqual(mergedProfile);
-      expect(query).toHaveBeenNthCalledWith(4, expect.stringContaining('UPDATE user_sessions'), [
-        'profile-canonical',
-        '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
-        'profile-legacy',
-      ]);
       expect(query).toHaveBeenNthCalledWith(
-        5,
+        4 + grantLookups,
+        expect.stringContaining('UPDATE user_sessions'),
+        ['profile-canonical', '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef', 'profile-legacy'],
+      );
+      expect(query).toHaveBeenNthCalledWith(
+        5 + grantLookups,
         expect.stringContaining('DELETE FROM user_profiles'),
         ['profile-legacy'],
       );
@@ -285,6 +296,8 @@ describe('upsertTrustedProfile', () => {
           buildProfile({ id: 'profile-legacy', accountId: 'f62ccf55-b3d8-4b35-a0d0-f8f1daaeb6cb' }),
         ],
       })
+      .mockResolvedValueOnce({ rows: [{ granted: true }] })
+      .mockResolvedValueOnce({ rows: [{ granted: true }] })
       .mockResolvedValueOnce({ rows: [] });
     const pool = buildMockPool(query);
 
@@ -299,6 +312,7 @@ describe('upsertTrustedProfile', () => {
           walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
         },
         ANY_ROLE_AUTHORITY,
+        'test',
       ),
     ).rejects.toThrow('cannot merge a profile that holds administrator authority');
     expect(query).not.toHaveBeenCalledWith(
@@ -330,6 +344,7 @@ describe('upsertTrustedProfile', () => {
           walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
         },
         ANY_ROLE_AUTHORITY,
+        'test',
       ),
     ).rejects.toThrow('walletAddress is already linked to a different account');
 

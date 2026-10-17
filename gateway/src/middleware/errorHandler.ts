@@ -39,6 +39,7 @@ export async function errorHandler(
       retryable: envelope.retryable,
       replayable: envelope.replayable,
       details: envelope.details,
+      diagnostics: err.diagnostics,
     });
 
     const response = errorResponse(

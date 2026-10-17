@@ -14,6 +14,7 @@ import { ApiErrorResponse, ApiSuccessResponse, UserProfile, UserRole } from '../
 import { resolveBreakGlassReviewStatus } from '../core/breakGlassReviewStatus';
 import { assertWalletAddress, handleControllerError, requireAuthRole } from './controllerSupport';
 import { AdminSignerController } from './adminSignerController';
+import { AdminAuthorityController } from './adminAuthorityController';
 
 const VALID_BREAK_GLASS_BASE_ROLES: Exclude<UserRole, 'admin'>[] = ['buyer', 'supplier', 'oracle'];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -147,14 +148,17 @@ function statusForAdminError(error: unknown): number {
   const message = error instanceof Error ? error.message.toLowerCase() : '';
   if (message.includes('not found')) return 404;
   if (message.includes('only valid for')) return 409;
+  if (message.includes('two-person admin authority change')) return 403;
   return 400;
 }
 
 export class AdminController {
   readonly signers: AdminSignerController;
+  readonly authority: AdminAuthorityController;
 
   constructor(private readonly adminService: AdminService) {
     this.signers = new AdminSignerController(adminService);
+    this.authority = new AdminAuthorityController(adminService);
   }
 
   async listAuthorityProfiles(
@@ -176,6 +180,7 @@ export class AdminController {
       );
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'AdminAuthorityListFailed',
@@ -202,6 +207,7 @@ export class AdminController {
       );
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'AdminAuditListFailed',
@@ -232,6 +238,7 @@ export class AdminController {
       res.status(201).json(success(profilePayload(profile)));
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'AdminProvisionFailed',
@@ -273,6 +280,7 @@ export class AdminController {
       res.status(201).json(success(profilePayload(profile)));
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'BreakGlassGrantFailed',
@@ -301,6 +309,7 @@ export class AdminController {
       res.json(success(profilePayload(profile)));
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'BreakGlassRevokeFailed',
@@ -325,6 +334,7 @@ export class AdminController {
       res.json(success(profilePayload(profile)));
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'BreakGlassReviewFailed',
@@ -349,6 +359,7 @@ export class AdminController {
       res.json(success(profilePayload(profile)));
     } catch (error) {
       handleControllerError(
+        req,
         res,
         error,
         'ProfileDeactivateFailed',

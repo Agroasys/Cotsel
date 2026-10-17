@@ -38,7 +38,7 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 wget --quiet -O "${PGSSLROOTCERT}" 'https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem'
-printf '%s  %s\n' 'fe45bbebf92ad3e27a583bbb2ddd1553c521ed4d49af5514dc0a40372ea5395c' "${PGSSLROOTCERT}" | sha256sum -c -s
+printf '%s  %s\n' '90a6f1a7978a1b1b096dca6c57511ca48d3b8cf052f8e704baf358f34ea2f21b' "${PGSSLROOTCERT}" | sha256sum -c -s
 
 sha256_stream() {
   sha256sum | awk '{print $1}'

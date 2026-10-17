@@ -6,13 +6,14 @@ import { hashSessionToken } from '../src/core/sessionStore';
 import {
   dockerAvailable,
   EXCHANGE_KEYS,
+  grantAdminAuthority,
+  revokeAdminAuthority,
   signedHeaders,
   startAdminApp,
   withPostgres,
 } from './helpers/adminControlsIntegrationHarness';
 
 const EXCHANGE_PATH = '/api/auth/v1/session/exchange/agroasys';
-const PROVISION_PATH = '/api/auth/v1/admin/profiles/provision';
 
 type App = Awaited<ReturnType<typeof startAdminApp>>;
 type ExchangeKey = (typeof EXCHANGE_KEYS)[keyof typeof EXCHANGE_KEYS];
@@ -100,14 +101,9 @@ describe('trusted exchange authority integration', () => {
           );
           expect(await storedRole(pool, 'agroasys-user:member-1')).toBe('buyer');
 
-          // Once provisioned through the audited control plane, the operator key
+          // Once granted through the two-person control plane, the operator key
           // obtains an admin session without rewriting the stored role.
-          const provisioned = await post(app, PROVISION_PATH, {
-            accountId: 'agroasys-user:ops-1',
-            role: 'admin',
-            reason: 'SEC-1100 provision operator before session exchange',
-          });
-          expect(provisioned.status).toBe(201);
+          await grantAdminAuthority(app.baseUrl, 'agroasys-user:ops-1');
           const adminExchange = await exchange(app, operator, 'agroasys-user:ops-1', 'admin');
           expect(adminExchange.status).toBe(201);
           const adminSessionId = adminExchange.json.data!.sessionId;
@@ -121,13 +117,8 @@ describe('trusted exchange authority integration', () => {
           expect(demotion.json.message).toContain('cannot be changed through session exchange');
           expect(await storedRole(pool, 'agroasys-user:ops-1')).toBe('admin');
 
-          // Demotion through the control plane invalidates the admin session.
-          const demoted = await post(app, PROVISION_PATH, {
-            accountId: 'agroasys-user:ops-1',
-            role: 'buyer',
-            reason: 'SEC-1101 remove operator authority',
-          });
-          expect(demoted.status).toBe(201);
+          // Two-person revocation invalidates the admin session.
+          await revokeAdminAuthority(app.baseUrl, 'agroasys-user:ops-1');
           await expect(app.sessionService.resolve(adminSessionId)).resolves.toBeNull();
           expect((await exchange(app, operator, 'agroasys-user:ops-1', 'admin')).status).toBe(403);
         } finally {
@@ -139,7 +130,7 @@ describe('trusted exchange authority integration', () => {
   );
 
   integrationTest(
-    'an admin created by the previous exchange is refused until provisioned',
+    'an admin row without an active grant is refused until granted',
     async () => {
       await withPostgres(async (pool) => {
         const app = await startAdminApp(pool);
@@ -176,12 +167,7 @@ describe('trusted exchange authority integration', () => {
             sessions: 1,
           });
 
-          const provisioned = await post(app, PROVISION_PATH, {
-            accountId,
-            role: 'admin',
-            reason: 'SEC-1102 audit legacy exchange-created administrator',
-          });
-          expect(provisioned.status).toBe(201);
+          await grantAdminAuthority(app.baseUrl, accountId);
           const admitted = await exchange(app, operator, accountId, 'admin');
           expect(admitted.status).toBe(201);
           await expect(
@@ -206,13 +192,7 @@ describe('trusted exchange authority integration', () => {
             ['agroasys-user:org-b-admin', 'org-b'],
             ['agroasys-user:org-a-admin', 'org-a'],
           ]) {
-            const provisioned = await post(app, PROVISION_PATH, {
-              accountId,
-              role: 'admin',
-              orgId,
-              reason: `SEC-1103 provision ${orgId} administrator`,
-            });
-            expect(provisioned.status).toBe(201);
+            await grantAdminAuthority(app.baseUrl, accountId, { orgId });
           }
 
           for (const extra of [{}, { orgId: 'org-b' }]) {

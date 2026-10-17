@@ -9,7 +9,7 @@ import {
   IndexerFreshnessState,
   IndexerGraphqlClient,
 } from './indexerGraphqlClient';
-import { GatewayError } from '../errors';
+import { diagnosticReason, GatewayError } from '../errors';
 import { buildSettlementTransactionReference } from './transactionReference';
 import type {
   SettlementCallbackStatus,
@@ -234,8 +234,8 @@ function asUsdcNumber(raw: string, field: string): number {
       {
         field,
         raw,
-        reason: error instanceof Error ? error.message : String(error),
       },
+      { reason: diagnosticReason(error) },
     );
   }
 }

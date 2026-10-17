@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CallerSafeError } from '@agroasys/shared-http';
 import {
   createTreasuryPartnerHandoffEvidencePayloadHash,
   createTreasuryPartnerHandoffPayloadHash,
@@ -115,7 +116,7 @@ async function upsertTreasuryPartnerHandoffOnce(
       [normalized.ledgerEntryId],
     );
     if (!ledgerEntryResult.rows[0]) {
-      throw new Error('Ledger entry not found');
+      throw new CallerSafeError('Ledger entry not found');
     }
 
     const existing = await client.query<TreasuryPartnerHandoff>(
@@ -296,7 +297,7 @@ async function appendTreasuryPartnerHandoffEvidenceOnce(
 
     const handoff = handoffResult.rows[0];
     if (!handoff) {
-      throw new Error('Treasury partner handoff not found');
+      throw new CallerSafeError('Treasury partner handoff not found');
     }
 
     const eventResult = await client.query<TreasuryPartnerHandoffEvent>(

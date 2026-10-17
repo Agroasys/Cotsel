@@ -3,7 +3,7 @@
  */
 import crypto from 'crypto';
 import type { RequestContext } from '../middleware/requestContext';
-import { GatewayError } from '../errors';
+import { diagnosticReason, GatewayError } from '../errors';
 import { createServiceAuthHeaders } from './serviceAuth';
 import type {
   DownstreamHeaderStyle,
@@ -268,11 +268,16 @@ export async function executeHttpRequestWithPolicy(input: ExecuteRequestInput): 
             })
           : error instanceof GatewayError
             ? error
-            : new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Downstream request failed', {
-                upstream: input.service.key,
-                operation: input.operation,
-                reason: error instanceof Error ? error.message : String(error),
-              });
+            : new GatewayError(
+                502,
+                'UPSTREAM_UNAVAILABLE',
+                'Downstream request failed',
+                {
+                  upstream: input.service.key,
+                  operation: input.operation,
+                },
+                { reason: diagnosticReason(error) },
+              );
 
       lastError = normalizedError;
 
