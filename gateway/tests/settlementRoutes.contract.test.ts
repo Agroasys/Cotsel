@@ -32,10 +32,6 @@ describe('gateway settlement routes contract', () => {
     spec,
     '#/components/schemas/SettlementGaslessCreateTradeExecutionResponse',
   );
-  const validateGaslessUserActionResponse = createSchemaValidator(
-    spec,
-    '#/components/schemas/SettlementGaslessUserActionExecutionResponse',
-  );
   const validateSponsoredWalletTransferResponse = createSchemaValidator(
     spec,
     '#/components/schemas/SponsoredWalletUsdcTransferResponse',
@@ -115,6 +111,8 @@ describe('gateway settlement routes contract', () => {
           ricardianDocumentRegistration: true,
           atomicExecutionEventCallbackOutbox: true,
           durableOracleExecutionEvents: false,
+          immutableUserActionBindings: false,
+          enabledUserActions: [],
         },
       });
     } finally {
@@ -609,8 +607,14 @@ describe('gateway settlement routes contract', () => {
     }
   });
 
-  test.each(['open_dispute', 'finalize_after_inspection_acceptance'] as const)(
-    'service-authenticated %s execution records receipt-backed confirmed events',
+  test.each([
+    'open_dispute',
+    'finalize_after_dispute_window',
+    'cancel_locked_timeout',
+    'refund_in_transit_timeout',
+    'finalize_after_inspection_acceptance',
+  ] as const)(
+    'service-authenticated %s execution rejects a legacy handoff before acceptance or signing',
     async (action) => {
       const { server, baseUrl } = await startServer();
 
@@ -655,12 +659,13 @@ describe('gateway settlement routes contract', () => {
         );
         const gaslessPayload = await gaslessResponse.json();
 
-        expect(gaslessResponse.status).toBe(202);
-        expect(validateGaslessUserActionResponse(gaslessPayload)).toBe(true);
-        expect(gaslessPayload.data.txHash).toBe(
-          '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        expect(gaslessResponse.status).toBe(409);
+        expect(gaslessPayload.error).toEqual(
+          expect.objectContaining({
+            code: 'CONFLICT',
+            message: expect.stringContaining('settlement_client_upgrade_required'),
+          }),
         );
-        expect(gaslessPayload.data.handoff.executionStatus).toBe('confirmed');
 
         const eventPath = `/api/dashboard-gateway/v1/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`;
         const listResponse = await fetch(
@@ -673,28 +678,7 @@ describe('gateway settlement routes contract', () => {
         );
         const listPayload = await listResponse.json();
 
-        expect(listPayload.data.map((event: { eventType: string }) => event.eventType)).toEqual([
-          'confirmed',
-          'submitted',
-          'simulation_completed',
-          'queued',
-          'accepted',
-        ]);
-        expect(listPayload.data[0].metadata).toEqual(
-          expect.objectContaining({
-            action,
-            gasUsed: '210000',
-            effectiveGasPriceWei: '1000000000',
-            nativeCostWei: '210000000000000',
-            executorBalanceWei: '1000000000000000000',
-            executorAddress: '0x1111111111111111111111111111111111111111',
-            chainId: config.chainId,
-            contractAddress: config.escrowAddress,
-            userAddress: gaslessBody.userAddress,
-            tradeId: gaslessBody.tradeId,
-            payloadHash: gaslessBody.payloadHash,
-          }),
-        );
+        expect(listPayload.data).toEqual([]);
       } finally {
         server.close();
       }

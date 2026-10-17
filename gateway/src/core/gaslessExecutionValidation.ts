@@ -142,6 +142,16 @@ export function assertHandoffMatchesExecution(
   assertExecutionMatchesTypedBinding(binding, input, tokenAddress);
 }
 
+/** No user-action binding is accepted by this compatibility release. Observation remains available. */
+export function requireReviewedUserActionCapability(): never {
+  throw new GatewayError(
+    409,
+    'CONFLICT',
+    'settlement_client_upgrade_required: A complete immutable user-action binding is required.',
+    { reason: 'settlement_client_upgrade_required' },
+  );
+}
+
 export function assertContractMatchesRuntime(
   input: GaslessCreateTradeExecutionInput | GaslessUserActionExecutionInput,
   expectedContractAddress: string,

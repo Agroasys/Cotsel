@@ -38,7 +38,6 @@ describe('OracleSettlementProgressionService', () => {
       'inspection_available_packaged_local',
       '/api/oracle/confirm-inspection-available/packaged-local',
     ],
-    ['final_release_after_notice_deadline', '/api/oracle/finalize-trade'],
   ])('maps %s to the authoritative oracle command', async (phase, path) => {
     const store = { getHandoff: jest.fn().mockResolvedValue(handoff(phase)) };
     const orchestrator = {
@@ -84,9 +83,11 @@ describe('OracleSettlementProgressionService', () => {
     );
   });
 
-  it('classifies a converged final release as already completed', async () => {
+  it('classifies a converged initial release as already completed', async () => {
     const store = {
-      getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_notice_deadline')),
+      getHandoff: jest
+        .fn()
+        .mockResolvedValue(handoff('initial_release_after_custody_and_documents')),
     };
     const orchestrator = {
       fetch: jest.fn().mockResolvedValue(
@@ -119,7 +120,9 @@ describe('OracleSettlementProgressionService', () => {
 
   it('records confirmed oracle truth without marking it reconciled', async () => {
     const store = {
-      getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_notice_deadline')),
+      getHandoff: jest
+        .fn()
+        .mockResolvedValue(handoff('initial_release_after_custody_and_documents')),
     };
     const orchestrator = {
       fetch: jest.fn().mockResolvedValue(
@@ -175,23 +178,28 @@ describe('OracleSettlementProgressionService', () => {
     expect(orchestrator.fetch).not.toHaveBeenCalled();
   });
 
-  it('rejects Oracle-only acceptance and requires the signed buyer action', async () => {
-    const store = {
-      getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_inspection_acceptance')),
-    };
-    const orchestrator = { fetch: jest.fn() };
-    const service = new OracleSettlementProgressionService(
-      store as unknown as SettlementStore,
-      orchestrator as unknown as DownstreamServiceOrchestrator,
-      executionRecorder(),
-    );
+  it.each(['final_release_after_inspection_acceptance', 'final_release_after_notice_deadline'])(
+    'rejects unreviewed Oracle-only %s before any remote request or execution event',
+    async (phase) => {
+      const store = {
+        getHandoff: jest.fn().mockResolvedValue(handoff(phase)),
+      };
+      const orchestrator = { fetch: jest.fn() };
+      const recorder = executionRecorder();
+      const service = new OracleSettlementProgressionService(
+        store as unknown as SettlementStore,
+        orchestrator as unknown as DownstreamServiceOrchestrator,
+        recorder,
+      );
 
-    await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
-      statusCode: 409,
-      code: 'CONFLICT',
-    });
-    expect(orchestrator.fetch).not.toHaveBeenCalled();
-  });
+      await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'CONFLICT',
+      });
+      expect(orchestrator.fetch).not.toHaveBeenCalled();
+      expect(recorder.recordExecutionEvent).not.toHaveBeenCalled();
+    },
+  );
 
   it('preserves the approved acceptance purpose after the notice window expires', async () => {
     const store = {
@@ -249,7 +257,9 @@ describe('OracleSettlementProgressionService', () => {
 
   it('fails closed when the oracle rejects or returns malformed truth', async () => {
     const store = {
-      getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_notice_deadline')),
+      getHandoff: jest
+        .fn()
+        .mockResolvedValue(handoff('initial_release_after_custody_and_documents')),
     };
     const orchestrator = {
       fetch: jest
@@ -276,7 +286,9 @@ describe('OracleSettlementProgressionService', () => {
     'does not complete a handoff when the oracle reports %s',
     async (status) => {
       const store = {
-        getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_notice_deadline')),
+        getHandoff: jest
+          .fn()
+          .mockResolvedValue(handoff('initial_release_after_custody_and_documents')),
       };
       const orchestrator = {
         fetch: jest.fn().mockResolvedValue(

@@ -2,6 +2,7 @@ import {
   createGaslessFinalityVerifier,
   type GaslessFinalityVerifier,
 } from './gaslessChainFinality';
+import { requireReviewedUserActionCapability } from './gaslessExecutionValidation';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -22,10 +23,8 @@ import type { GaslessTransactionOutcomeRecorder } from './gaslessTransactionOutc
 import type { GaslessNonceReservationStore } from './gaslessNonceReservationStore';
 import {
   buildManagedCreateTradeTransaction,
-  buildManagedUserActionTransaction,
   buildManagedWalletTransferTransaction,
   createTradePolicyContext,
-  userActionPolicyContext,
   walletTransferPolicyContext,
 } from './gaslessManagedSignerTransactions';
 import {
@@ -410,40 +409,12 @@ export function createManagedSignerGaslessSettlementExecutor(
       };
     },
 
-    async simulateUserAction(input) {
-      const { executorAddress } = await assertSignerBalance();
-      return {
-        gasEstimate: await simulateTransaction(
-          buildManagedUserActionTransaction(transactionConfig, input, executorAddress),
-        ),
-      };
+    async simulateUserAction() {
+      return requireReviewedUserActionCapability();
     },
 
-    async executeUserAction(input) {
-      const { executorAddress } = await assertSignerBalance();
-      const transaction = buildManagedUserActionTransaction(
-        transactionConfig,
-        input,
-        executorAddress,
-      );
-      const gasEstimate = await simulateTransaction(transaction);
-      const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await broadcastManagedTransaction(
-        input.action,
-        userActionPolicyContext(input),
-        {
-          applicationRequestId: input.requestId,
-          resourceType: 'settlement_handoff',
-          resourceId: input.handoffId,
-        },
-        transaction,
-        gasEstimate,
-        feeOverrides,
-      );
-      return {
-        txHash: tx.hash,
-        receipt: await waitForConfirmedReceipt(tx),
-      };
+    async executeUserAction() {
+      return requireReviewedUserActionCapability();
     },
 
     async simulateWalletUsdcTransfer(input) {

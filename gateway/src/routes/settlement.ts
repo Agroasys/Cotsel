@@ -9,7 +9,7 @@ import { createIdempotencyMiddleware } from '../middleware/idempotency';
 import { successResponse } from '../responses';
 import { IdempotencyStore } from '../core/idempotencyStore';
 import { GaslessSettlementExecutionService } from '../core/gaslessSettlementExecutionService';
-import type { GaslessUserAction } from '../core/gaslessSettlementExecutionService';
+import { requireReviewedUserActionCapability } from '../core/gaslessExecutionValidation';
 import type { GaslessTransactionOutcomeStore } from '../core/gaslessTransactionOutcomeStore';
 import { createServiceAuthMiddleware } from '../core/serviceAuth';
 import { SettlementService } from '../core/settlementService';
@@ -290,6 +290,8 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           ricardianDocumentRegistration: Boolean(options.ricardianClient),
           atomicExecutionEventCallbackOutbox: true,
           durableOracleExecutionEvents: Boolean(options.oracleSettlementProgressionService),
+          immutableUserActionBindings: false,
+          enabledUserActions: [],
         },
       }),
     );
@@ -487,46 +489,7 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           });
         }
 
-        const body = requireObject(req.body, 'body');
-        rejectUnexpectedFields(
-          body,
-          [
-            'action',
-            'handoffId',
-            'chainId',
-            'contractAddress',
-            'expiresAt',
-            'payloadHash',
-            'userAddress',
-            'tradeId',
-            'userAuthorization',
-          ],
-          'body',
-        );
-        const userAuthorization = requireObject(body.userAuthorization, 'userAuthorization');
-        rejectUnexpectedFields(
-          userAuthorization,
-          ['nonce', 'deadline', 'signature'],
-          'userAuthorization',
-        );
-
-        return options.gaslessSettlementService.executeUserAction({
-          action: requireString(body.action, 'action') as GaslessUserAction,
-          handoffId: requireString(body.handoffId, 'handoffId'),
-          chainId: requireInteger(body.chainId, 'chainId'),
-          contractAddress: requireString(body.contractAddress, 'contractAddress'),
-          expiresAt: requireString(body.expiresAt, 'expiresAt'),
-          payloadHash: requireString(body.payloadHash, 'payloadHash'),
-          userAddress: requireString(body.userAddress, 'userAddress'),
-          tradeId: requireString(body.tradeId, 'tradeId'),
-          userAuthorization: {
-            nonce: requireString(userAuthorization.nonce, 'userAuthorization.nonce'),
-            deadline: requireString(userAuthorization.deadline, 'userAuthorization.deadline'),
-            signature: requireString(userAuthorization.signature, 'userAuthorization.signature'),
-          },
-          requestId: getRequestId(req),
-          sourceApiKeyId: getServiceApiKeyId(req),
-        });
+        return requireReviewedUserActionCapability();
       },
       res,
       next,
