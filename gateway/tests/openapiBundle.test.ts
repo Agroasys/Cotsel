@@ -41,6 +41,16 @@ describe('dashboard gateway OpenAPI bundle', () => {
 
     const spec = loadOpenApiSpec();
     expect(Object.keys(spec.paths)).toHaveLength(80);
-    expect(Object.keys(spec.components?.schemas ?? {})).toHaveLength(217);
+    expect(Object.keys(spec.components?.schemas ?? {})).toHaveLength(218);
+    expect(spec.components?.schemas?.SettlementUserActionBinding).toEqual(
+      expect.objectContaining({ additionalProperties: false }),
+    );
+    expect(spec.components?.schemas?.SettlementExecutionBinding).toEqual(
+      expect.objectContaining({
+        oneOf: expect.arrayContaining([
+          { $ref: '#/components/schemas/SettlementUserActionBinding' },
+        ]),
+      }),
+    );
   });
 });
