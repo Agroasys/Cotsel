@@ -1,3 +1,6 @@
+import { validateBoundUserAction } from '../src/core/gaslessExecutionValidation';
+import { createGaslessPayloadHash } from '../src/core/gaslessRequestNormalization';
+import type { SettlementHandoffRecord } from '../src/core/settlementStore';
 import { Wallet } from 'ethers';
 import {
   assertUserActionMatchesBinding,
@@ -149,4 +152,33 @@ it('rejects absent owner, unknown fields, fractional expiry and a valid signatur
   input.userAuthorization.signature = other.input.userAuthorization.signature;
   binding.executionScopeHash = createUserActionExecutionScopeHash(input);
   expect(() => assertUserActionMatchesBinding(binding, input, token)).toThrow();
+});
+
+it('requires independent original funding after exact owned binding validation', async () => {
+  const { input, binding, token } = await fixture();
+  const { payloadHash: _hash, requestId: _request, sourceApiKeyId: _owner, ...hashable } = input;
+  input.payloadHash = createGaslessPayloadHash(hashable);
+  const handoff = {
+    handoffId: input.handoffId,
+    sourceApiKeyId: input.sourceApiKeyId,
+    phase: 'gasless_user_action',
+    settlementChannel: 'cotsel_escrow',
+    tradeId: input.tradeId,
+    externalReference: input.sourceOperationId,
+    executionBinding: binding,
+    executionStatus: 'pending',
+  } as SettlementHandoffRecord;
+  const verify = jest.fn().mockRejectedValue(new Error('funding unavailable'));
+  await expect(validateBoundUserAction(input, async () => handoff, token, verify)).rejects.toThrow(
+    'funding unavailable',
+  );
+  expect(verify).toHaveBeenCalledWith(binding);
+  verify.mockClear();
+  await expect(
+    validateBoundUserAction({ ...input, tradeId: '8' }, async () => handoff, token, verify),
+  ).rejects.toThrow();
+  expect(verify).not.toHaveBeenCalled();
+  await expect(validateBoundUserAction(input, async () => handoff, token)).rejects.toThrow(
+    'verifier is required',
+  );
 });

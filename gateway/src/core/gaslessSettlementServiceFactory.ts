@@ -1,3 +1,4 @@
+import { createUserActionFundingVerifier } from './userActionFundingVerification';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -24,16 +25,19 @@ export function createConfiguredGaslessSettlementService(
 ): GaslessSettlementExecutionService | null {
   if (!config.gaslessExecutionEnabled) return null;
 
+  const verifyUserActionFunding = createUserActionFundingVerifier(config);
   return new GaslessSettlementExecutionService(
     settlementService,
     settlementStore,
     createEthersGaslessSettlementExecutor(config, {
+      verifyUserActionFunding,
       loadUserActionHandoff: (id) => settlementStore.getHandoff(id),
       recordValidationEvidence: managedSignerValidationRecorder,
       recordTransactionOutcome: transactionOutcomeRecorder,
       nonceReservationStore: createPostgresGaslessNonceReservationStore(pool),
     }),
     {
+      verifyUserActionFunding,
       chainId: config.chainId,
       escrowAddress: config.escrowAddress,
       usdcAddress: config.usdcAddress,

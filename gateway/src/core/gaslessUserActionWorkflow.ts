@@ -13,6 +13,11 @@ export async function executeUserActionWorkflow(
   context: GaslessWorkflowContext,
   input: GaslessUserActionExecutionInput,
 ): Promise<GaslessCreateTradeExecutionResult> {
-  await validateBoundUserAction(input, (id) => context.store.getHandoff(id), context.usdcAddress);
+  await validateBoundUserAction(
+    input,
+    (id) => context.store.getHandoff(id),
+    context.usdcAddress,
+    context.verifyUserActionFunding,
+  );
   return requireReviewedUserActionCapability();
 }

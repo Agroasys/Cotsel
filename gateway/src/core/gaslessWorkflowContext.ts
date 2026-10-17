@@ -1,3 +1,4 @@
+import type { UserActionFundingVerifier } from './userActionFundingVerification';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -9,6 +10,7 @@ export interface GaslessWorkflowContext {
   settlementService: SettlementService;
   store: SettlementStore;
   executor: GaslessSettlementExecutor;
+  verifyUserActionFunding?: UserActionFundingVerifier;
   chainId: number;
   escrowAddress: string;
   usdcAddress: string;

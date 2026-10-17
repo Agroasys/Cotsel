@@ -1,3 +1,4 @@
+import type { UserActionFundingVerifier } from './userActionFundingVerification';
 import {
   parseSettlementUserActionBinding,
   assertUserActionMatchesBinding,
@@ -196,6 +197,7 @@ export async function validateBoundUserAction(
   input: GaslessUserActionExecutionInput,
   load: LoadUserActionHandoff | undefined,
   tokenAddress: string,
+  verifyFunding?: UserActionFundingVerifier,
 ): Promise<void> {
   if (
     !load ||
@@ -223,4 +225,11 @@ export async function validateBoundUserAction(
   assertUserActionPayloadHash(input);
   if (['submitted', 'confirmed', 'reconciled', 'failed'].includes(handoff.executionStatus))
     throw new GatewayError(409, 'CONFLICT', 'Original user-action execution requires observation');
+  if (!verifyFunding)
+    throw new GatewayError(
+      503,
+      'UPSTREAM_UNAVAILABLE',
+      'Independent user-action funding verifier is required',
+    );
+  await verifyFunding(binding);
 }

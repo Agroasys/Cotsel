@@ -1,4 +1,8 @@
 import {
+  createUserActionFundingVerifier,
+  type UserActionFundingVerifier,
+} from './userActionFundingVerification';
+import {
   createGaslessFinalityVerifier,
   type GaslessFinalityVerifier,
 } from './gaslessChainFinality';
@@ -80,6 +84,7 @@ export function createManagedSignerGaslessSettlementExecutor(
   config: ManagedSignerGaslessConfig,
   dependencies?: {
     loadUserActionHandoff?: LoadUserActionHandoff;
+    verifyUserActionFunding?: UserActionFundingVerifier;
     provider?: GaslessManagedProvider;
     finalityVerifier?: GaslessFinalityVerifier;
     signerTransport?: ManagedSignerTransport;
@@ -88,6 +93,8 @@ export function createManagedSignerGaslessSettlementExecutor(
     nonceReservationStore: GaslessNonceReservationStore;
   },
 ): GaslessSettlementExecutor {
+  const verifyFunding =
+    dependencies?.verifyUserActionFunding ?? createUserActionFundingVerifier(config);
   const configuredCustodyMode = config.gaslessSignerCustodyMode;
   if (configuredCustodyMode !== 'kms' && configuredCustodyMode !== 'mpc') {
     throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Gasless managed signer mode is invalid');
@@ -415,12 +422,22 @@ export function createManagedSignerGaslessSettlementExecutor(
     },
 
     async simulateUserAction(input) {
-      await validateBoundUserAction(input, dependencies?.loadUserActionHandoff, config.usdcAddress);
+      await validateBoundUserAction(
+        input,
+        dependencies?.loadUserActionHandoff,
+        config.usdcAddress,
+        verifyFunding,
+      );
       return requireReviewedUserActionCapability();
     },
 
     async executeUserAction(input) {
-      await validateBoundUserAction(input, dependencies?.loadUserActionHandoff, config.usdcAddress);
+      await validateBoundUserAction(
+        input,
+        dependencies?.loadUserActionHandoff,
+        config.usdcAddress,
+        verifyFunding,
+      );
       return requireReviewedUserActionCapability();
     },
 

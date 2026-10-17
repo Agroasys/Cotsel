@@ -1,3 +1,4 @@
+import type { UserActionFundingVerifier } from './userActionFundingVerification';
 import type { LoadUserActionHandoff } from './gaslessExecutionValidation';
 /**
  * SPDX-License-Identifier: Apache-2.0
@@ -15,6 +16,7 @@ export function createEthersGaslessSettlementExecutor(
   config: GaslessExecutorConfig,
   dependencies?: {
     loadUserActionHandoff?: LoadUserActionHandoff;
+    verifyUserActionFunding?: UserActionFundingVerifier;
     recordValidationEvidence?: ManagedSignerValidationRecorder;
     recordTransactionOutcome: GaslessTransactionOutcomeRecorder;
     nonceReservationStore: GaslessNonceReservationStore;
@@ -35,5 +37,6 @@ export function createEthersGaslessSettlementExecutor(
     config,
     dependencies.recordTransactionOutcome,
     dependencies.loadUserActionHandoff,
+    dependencies.verifyUserActionFunding,
   );
 }

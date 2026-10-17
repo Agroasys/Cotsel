@@ -1,3 +1,4 @@
+import type { UserActionFundingVerifier } from './userActionFundingVerification';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -61,6 +62,7 @@ export class GaslessSettlementExecutionService {
       escrowAddress: string;
       usdcAddress: string;
       requestMaxTtlSeconds: number;
+      verifyUserActionFunding?: UserActionFundingVerifier;
       broadcastPaused?: boolean;
       signerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
       rpcFallbackCount?: number;
@@ -113,6 +115,7 @@ export class GaslessSettlementExecutionService {
       settlementService: this.settlementService,
       store: this.store,
       executor: this.executor,
+      verifyUserActionFunding: this.options.verifyUserActionFunding,
       chainId: this.options.chainId,
       escrowAddress: this.options.escrowAddress,
       usdcAddress: this.options.usdcAddress,

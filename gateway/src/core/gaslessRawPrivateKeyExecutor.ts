@@ -1,3 +1,7 @@
+import {
+  createUserActionFundingVerifier,
+  type UserActionFundingVerifier,
+} from './userActionFundingVerification';
 import { createGaslessFinalityVerifier } from './gaslessChainFinality';
 import {
   requireReviewedUserActionCapability,
@@ -36,6 +40,7 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
   config: GaslessExecutorConfig,
   transactionOutcomeRecorder: GaslessTransactionOutcomeRecorder,
   loadUserActionHandoff?: LoadUserActionHandoff,
+  verifyFunding: UserActionFundingVerifier = createUserActionFundingVerifier(config),
 ): GaslessSettlementExecutor {
   if (!config.gaslessExecutorPrivateKey) {
     throw new GatewayError(
@@ -307,12 +312,22 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     },
 
     async simulateUserAction(input) {
-      await validateBoundUserAction(input, loadUserActionHandoff, config.usdcAddress);
+      await validateBoundUserAction(
+        input,
+        loadUserActionHandoff,
+        config.usdcAddress,
+        verifyFunding,
+      );
       return requireReviewedUserActionCapability();
     },
 
     async executeUserAction(input) {
-      await validateBoundUserAction(input, loadUserActionHandoff, config.usdcAddress);
+      await validateBoundUserAction(
+        input,
+        loadUserActionHandoff,
+        config.usdcAddress,
+        verifyFunding,
+      );
       return requireReviewedUserActionCapability();
     },
 
