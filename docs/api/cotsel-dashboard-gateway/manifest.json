@@ -14,6 +14,7 @@
     "paths/ricardian-01.yml",
     "paths/evidence-01.yml",
     "paths/settlement-01.yml",
+    "paths/settlement-observation.yml",
     "paths/governance-01.yml",
     "paths/governance-02.yml",
     "paths/governance-03.yml",
