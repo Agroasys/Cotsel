@@ -60,6 +60,9 @@ export interface GaslessUserActionAuthorization {
 }
 
 export interface GaslessUserActionExecutionInput {
+  actionPackageId?: string;
+  sourceOperationId?: string;
+  approvalScopeFingerprint?: string;
   action: GaslessUserAction;
   handoffId: string;
   chainId: number;

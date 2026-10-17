@@ -86,7 +86,9 @@ export async function createRevenueRealization(data: {
       data.sweepBatchId !== null &&
       data.sweepBatchId !== facts.sweep_batch_id
     ) {
-      throw new CallerSafeError('Revenue realization sweep batch does not match the ledger entry batch');
+      throw new CallerSafeError(
+        'Revenue realization sweep batch does not match the ledger entry batch',
+      );
     }
 
     if (

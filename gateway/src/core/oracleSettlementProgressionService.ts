@@ -13,6 +13,7 @@ const ORACLE_PATH_BY_PHASE = {
   initial_release_after_custody_and_documents: '/api/oracle/release-stage1',
   inspection_available_standard: '/api/oracle/confirm-inspection-available/standard',
   inspection_available_packaged_local: '/api/oracle/confirm-inspection-available/packaged-local',
+  final_release_after_notice_deadline: '/api/oracle/finalize-trade',
 } as const;
 
 type ExecutableSettlementPhase = keyof typeof ORACLE_PATH_BY_PHASE;
@@ -179,7 +180,7 @@ export class OracleSettlementProgressionService {
       throw new GatewayError(
         409,
         'CONFLICT',
-        'settlement_client_upgrade_required: Notice-deadline finalization has no reviewed lifecycle package.',
+        'settlement_activation_blocked: Governed Oracle deadline release requires approved enforceable dispute protection and independent acceptance.',
         { handoffId: handoff.handoffId, phase: handoff.phase },
       );
     if (handoff.phase === 'final_release_after_inspection_acceptance')

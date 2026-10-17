@@ -28,6 +28,7 @@ export function createConfiguredGaslessSettlementService(
     settlementService,
     settlementStore,
     createEthersGaslessSettlementExecutor(config, {
+      loadUserActionHandoff: (id) => settlementStore.getHandoff(id),
       recordValidationEvidence: managedSignerValidationRecorder,
       recordTransactionOutcome: transactionOutcomeRecorder,
       nonceReservationStore: createPostgresGaslessNonceReservationStore(pool),

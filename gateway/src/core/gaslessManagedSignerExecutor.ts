@@ -2,7 +2,11 @@ import {
   createGaslessFinalityVerifier,
   type GaslessFinalityVerifier,
 } from './gaslessChainFinality';
-import { requireReviewedUserActionCapability } from './gaslessExecutionValidation';
+import {
+  requireReviewedUserActionCapability,
+  validateBoundUserAction,
+  type LoadUserActionHandoff,
+} from './gaslessExecutionValidation';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -75,6 +79,7 @@ function buildSigningRequestId(input: {
 export function createManagedSignerGaslessSettlementExecutor(
   config: ManagedSignerGaslessConfig,
   dependencies?: {
+    loadUserActionHandoff?: LoadUserActionHandoff;
     provider?: GaslessManagedProvider;
     finalityVerifier?: GaslessFinalityVerifier;
     signerTransport?: ManagedSignerTransport;
@@ -409,11 +414,13 @@ export function createManagedSignerGaslessSettlementExecutor(
       };
     },
 
-    async simulateUserAction() {
+    async simulateUserAction(input) {
+      await validateBoundUserAction(input, dependencies?.loadUserActionHandoff, config.usdcAddress);
       return requireReviewedUserActionCapability();
     },
 
-    async executeUserAction() {
+    async executeUserAction(input) {
+      await validateBoundUserAction(input, dependencies?.loadUserActionHandoff, config.usdcAddress);
       return requireReviewedUserActionCapability();
     },
 

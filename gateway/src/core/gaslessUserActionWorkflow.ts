@@ -3,13 +3,16 @@ import type {
   GaslessCreateTradeExecutionResult,
   GaslessUserActionExecutionInput,
 } from './gaslessExecutionTypes';
-import { requireReviewedUserActionCapability } from './gaslessExecutionValidation';
+import {
+  requireReviewedUserActionCapability,
+  validateBoundUserAction,
+} from './gaslessExecutionValidation';
 import type { GaslessWorkflowContext } from './gaslessWorkflowContext';
-
-/** Compatibility containment: no accepted event, simulation, reservation, signing, or dispatch. */
+/** No accepted event, simulation, reservation, signing, or dispatch while activation is blocked. */
 export async function executeUserActionWorkflow(
-  _context: GaslessWorkflowContext,
-  _input: GaslessUserActionExecutionInput,
+  context: GaslessWorkflowContext,
+  input: GaslessUserActionExecutionInput,
 ): Promise<GaslessCreateTradeExecutionResult> {
+  await validateBoundUserAction(input, (id) => context.store.getHandoff(id), context.usdcAddress);
   return requireReviewedUserActionCapability();
 }

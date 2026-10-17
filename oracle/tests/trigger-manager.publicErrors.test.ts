@@ -1,3 +1,4 @@
+import { fundedBindingFixture } from './helpers/fundedBinding';
 /**
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -28,6 +29,7 @@ jest.mock('../src/core/containment-guard', () => ({
 }));
 
 jest.mock('@agroasys/sdk', () => ({
+  ...jest.requireActual('@agroasys/sdk'),
   TradeStatus: {
     LOCKED: 0,
     IN_TRANSIT: 1,
@@ -40,6 +42,9 @@ jest.mock('@agroasys/sdk', () => ({
 jest.mock('../src/database/queries', () => ({
   listTriggers: jest.fn(),
   createTrigger: jest.fn(),
+  claimTriggerDispatch: jest.fn().mockResolvedValue(true),
+  getUnresolvedSignerDispatch: jest.fn().mockResolvedValue(null),
+  resolveSignerDispatch: jest.fn(),
   getTriggerByIdempotencyKey: jest.fn(),
   getLatestTriggerByActionKey: jest.fn(),
   updateTrigger: jest.fn(),
@@ -89,6 +94,7 @@ function buildTrade(status: number = TRADE_STATUS_LOCKED): TradeRecord {
 
 function buildTrigger(status: TriggerStatus = TriggerStatus.PENDING): Trigger {
   return {
+    funded_binding: fundedBindingFixture(),
     id: 1,
     action_key: 'RELEASE_STAGE_1:1',
     request_id: 'req-1',
@@ -134,7 +140,11 @@ function expectNoLeak(value: unknown): void {
 
 function sdkClientFailingWith(error: Error): TriggerManagerSdkClient {
   return {
-    getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
+    assertFundedBinding: jest.fn().mockResolvedValue(undefined),
+    getTrade: jest
+      .fn()
+      .mockResolvedValueOnce(buildTrade(TRADE_STATUS_LOCKED))
+      .mockRejectedValue(error),
     releaseFundsStage1: jest.fn().mockRejectedValue(error),
     confirmInspectionAvailable: jest.fn(),
     finalizeTrade: jest.fn(),
@@ -157,15 +167,16 @@ describe('oracle trigger failures expose no raw provider text', () => {
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(),
     });
 
     expect(response.status).toBe(TriggerStatus.TERMINAL_FAILURE);
     expect(response.message).toBe('Oracle validation failure; detail is recorded on the trigger');
     expectNoLeak(response);
-    // The raw cause is kept on the trigger for operators.
+    // Persisted failure projections contain only the safe classification.
     expect(mockedUpdateTrigger).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ last_error: RAW_RPC_MESSAGE }),
+      expect.objectContaining({ last_error: expect.stringContaining('Oracle validation failure') }),
     );
   });
 
@@ -180,6 +191,7 @@ describe('oracle trigger failures expose no raw provider text', () => {
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(),
     });
 
     expect(response.status).toBe(TriggerStatus.EXHAUSTED_NEEDS_REDRIVE);
@@ -199,6 +211,7 @@ describe('oracle trigger failures expose no raw provider text', () => {
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(),
     });
 
     expect(response.status).toBe(TriggerStatus.TERMINAL_FAILURE);

@@ -210,6 +210,20 @@ export class SettlementService {
           'Execution binding correlation differs from handoff identity',
         );
       }
+    } else if (input.phase === 'gasless_user_action') {
+      const binding = parseSettlementExecutionBinding(input.executionBinding, input.sourceApiKeyId);
+      if (
+        binding.scopeVersion !== 'agroasys.cotsel-user-action-binding.v1' ||
+        binding.tradeId !== input.tradeId ||
+        binding.sourceOperationId !== input.externalReference ||
+        input.settlementChannel !== 'cotsel_escrow'
+      )
+        throw new GatewayError(
+          409,
+          'CONFLICT',
+          'User-action handoff differs from immutable instructions',
+        );
+      input.executionBinding = binding;
     } else if ((FUNDED_SETTLEMENT_PHASES as readonly string[]).includes(input.phase)) {
       input.executionBinding = parseSettlementExecutionBinding(
         input.executionBinding,

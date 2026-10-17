@@ -1,3 +1,5 @@
+import { fundedBindingFixture } from './helpers/fundedBinding';
+import { TriggerType } from '../src/types/trigger';
 /**
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -58,7 +60,11 @@ describe('Oracle public errors', () => {
 
     await controller.finalizeTrade(
       {
-        body: { tradeId: '42', requestId: 'request-42' },
+        body: {
+          tradeId: '42',
+          requestId: 'request-42',
+          fundedBinding: fundedBindingFixture(TriggerType.FINALIZE_TRADE, '42'),
+        },
         headers: { 'x-request-id': 'gateway-request-42' },
         path: '/finalize-trade',
       } as unknown as Request,

@@ -11,7 +11,12 @@ import {
   updateTrigger,
 } from '../database/queries';
 import { calculateBackoff } from '../utils/crypto';
-import { classifyError, determineNextStatus, publicFailureMessage, storedFailureMessage, ValidationError } from '../utils/errors';
+import {
+  classifyError,
+  determineNextStatus,
+  publicFailureMessage,
+  ValidationError,
+} from '../utils/errors';
 import { incrementOracleExhaustedRetries } from '../metrics/counters';
 import { Logger } from '../utils/logger';
 import { submitTriggerAction } from './blockchain-actions';
@@ -173,12 +178,18 @@ export async function executeTriggerWithRetry(
       await updateTrigger(trigger.idempotency_key, {
         status: nextStatus,
         attempt_count: attempt,
-        last_error: storedFailureMessage(oracleError.errorType),
+        last_error: publicFailureMessage(oracleError),
         error_type: oracleError.errorType,
       });
 
       if (nextStatus === TriggerStatus.TERMINAL_FAILURE) {
-        await notifyTerminalStatus(trigger, actionKey, nextStatus, publicFailureMessage(oracleError), attempt);
+        await notifyTerminalStatus(
+          trigger,
+          actionKey,
+          nextStatus,
+          publicFailureMessage(oracleError),
+          attempt,
+        );
         return {
           idempotencyKey: trigger.idempotency_key,
           actionKey,

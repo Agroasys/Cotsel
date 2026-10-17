@@ -1,3 +1,7 @@
+import {
+  parseSettlementUserActionBinding,
+  type SettlementUserActionBinding,
+} from './settlementUserActionBinding';
 import { parseSettlementFundedBinding, type SettlementFundedBinding } from '@agroasys/sdk';
 /** SPDX-License-Identifier: Apache-2.0 */
 import { getAddress } from 'ethers';
@@ -5,7 +9,8 @@ import { GatewayError } from '../errors';
 import type { GaslessCreateTradeExecutionInput } from './gaslessExecutionTypes';
 import { createGaslessExecutionScopeHash } from './gaslessRequestNormalization';
 
-export type SettlementExecutionBinding = SettlementCreateTradeBinding | SettlementFundedBinding;
+export type SettlementExecutionBinding =
+  SettlementCreateTradeBinding | SettlementFundedBinding | SettlementUserActionBinding;
 export interface SettlementCreateTradeBinding {
   scopeVersion: 'agroasys.cotsel-execution-binding.v1';
   ownerServiceId: string;
@@ -105,6 +110,12 @@ export function parseSettlementExecutionBinding(
 ): SettlementExecutionBinding {
   if (!serviceIdentity)
     throw new GatewayError(403, 'FORBIDDEN', 'An authenticated owning service is required');
+  if (
+    value &&
+    typeof value === 'object' &&
+    (value as Record<string, unknown>).scopeVersion === 'agroasys.cotsel-user-action-binding.v1'
+  )
+    return parseSettlementUserActionBinding(value, serviceIdentity);
   if (
     value &&
     typeof value === 'object' &&

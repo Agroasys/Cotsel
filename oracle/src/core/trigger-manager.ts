@@ -9,7 +9,7 @@ import {
   updateTrigger,
 } from '../database/queries';
 import { generateActionKey, generateRequestId, generateIdempotencyKey } from '../utils/crypto';
-import { getErrorMessage, publicFailureMessage, storedFailureMessage, ValidationError } from '../utils/errors';
+import { getErrorMessage, storedFailureMessage, ValidationError } from '../utils/errors';
 import { Logger } from '../utils/logger';
 import {
   incrementOracleRedriveAttempts,

@@ -1,3 +1,4 @@
+import type { LoadUserActionHandoff } from './gaslessExecutionValidation';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -13,6 +14,7 @@ import type { GaslessNonceReservationStore } from './gaslessNonceReservationStor
 export function createEthersGaslessSettlementExecutor(
   config: GaslessExecutorConfig,
   dependencies?: {
+    loadUserActionHandoff?: LoadUserActionHandoff;
     recordValidationEvidence?: ManagedSignerValidationRecorder;
     recordTransactionOutcome: GaslessTransactionOutcomeRecorder;
     nonceReservationStore: GaslessNonceReservationStore;
@@ -32,5 +34,6 @@ export function createEthersGaslessSettlementExecutor(
   return createRawPrivateKeyGaslessSettlementExecutor(
     config,
     dependencies.recordTransactionOutcome,
+    dependencies.loadUserActionHandoff,
   );
 }

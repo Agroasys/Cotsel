@@ -1,5 +1,9 @@
 import { createGaslessFinalityVerifier } from './gaslessChainFinality';
-import { requireReviewedUserActionCapability } from './gaslessExecutionValidation';
+import {
+  requireReviewedUserActionCapability,
+  validateBoundUserAction,
+  type LoadUserActionHandoff,
+} from './gaslessExecutionValidation';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -31,6 +35,7 @@ import {
 export function createRawPrivateKeyGaslessSettlementExecutor(
   config: GaslessExecutorConfig,
   transactionOutcomeRecorder: GaslessTransactionOutcomeRecorder,
+  loadUserActionHandoff?: LoadUserActionHandoff,
 ): GaslessSettlementExecutor {
   if (!config.gaslessExecutorPrivateKey) {
     throw new GatewayError(
@@ -301,11 +306,13 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
       };
     },
 
-    async simulateUserAction() {
+    async simulateUserAction(input) {
+      await validateBoundUserAction(input, loadUserActionHandoff, config.usdcAddress);
       return requireReviewedUserActionCapability();
     },
 
-    async executeUserAction() {
+    async executeUserAction(input) {
+      await validateBoundUserAction(input, loadUserActionHandoff, config.usdcAddress);
       return requireReviewedUserActionCapability();
     },
 
