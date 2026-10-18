@@ -24,7 +24,7 @@ The user-action result uses `cotsel.user-action-execution.v1`. It returns the st
 
 After the irreversible signing marker, exact owner-authenticated replay can return retained evidence despite historical expiry or unavailable fresh funding RPC. It still verifies the original immutable binding, signature fingerprint, and request body. Changed body or owner cannot replay. This observation path cannot reserve a nonce, invoke a signer, or broadcast.
 
-The retirement consumer sends `POST /settlement-handoffs/cotsel/lifecycle-action-retirement-evidence` with `{scope}`. Existing service HMAC signs the exact method, path, query, and body. The response must contain the backend data envelope with `verified` evidence or an explicit `unavailable` or `contradicted` status. A 404 or outage never proves non-execution.
+The retirement consumer sends `POST /api/v1/settlement-handoffs/cotsel/lifecycle-action-retirement-evidence` with `{scope}`. Existing service HMAC signs the exact method, path, query, and body. The response must contain the backend data envelope with `verified` evidence or an explicit `unavailable` or `contradicted` status. A 404 or outage never proves non-execution.
 
 ## Canonical preflight and nonce reuse
 

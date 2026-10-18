@@ -61,6 +61,31 @@ describe('owning retirement HTTP evidence transport (controlled HTTP port)', () 
     global.fetch = original;
     jest.restoreAllMocks();
   });
+  test('uses the actual globally prefixed backend route in the explicit URL and HMAC', async () => {
+    const path = '/api/v1/settlement-handoffs/cotsel/lifecycle-action-retirement-evidence';
+    const url = 'https://backend.example.test' + path;
+    jest
+      .mocked(fetch)
+      .mockResolvedValue(new Response(JSON.stringify({ data: { status: 'unavailable' } })));
+    expect(await createUserActionRetirementTransport({ ...config, url })(scope)).toEqual({
+      status: 'unavailable',
+    });
+    const [sentUrl, options] = jest.mocked(fetch).mock.calls[0];
+    expect(String(sentUrl)).toBe(url);
+    const headers = options?.headers as Record<string, string>;
+    expect(headers['X-Signature']).toBe(
+      createServiceAuthHeaders({
+        apiKey: config.apiKey,
+        apiSecret: config.apiSecret,
+        method: 'POST',
+        path,
+        query: '',
+        body: JSON.stringify({ scope }),
+        timestamp: Number(headers['X-Timestamp']),
+        nonce: headers['X-Nonce'],
+      })['X-Signature'],
+    );
+  });
   test('accepts the actual controlled backend PostgreSQL/Finance/global-envelope vector', async () => {
     expect(backendProofFixture.controlledLocalFixture).toBe(true);
     jest
@@ -164,6 +189,8 @@ describe('owning retirement HTTP evidence transport (controlled HTTP port)', () 
     'http://backend.example.test' + USER_ACTION_RETIREMENT_PATH,
     'https://user:secret@backend.example.test' + USER_ACTION_RETIREMENT_PATH,
     'https://backend.example.test/other',
+    'https://backend.example.test/settlement-handoffs/cotsel/lifecycle-action-retirement-evidence',
+    'https://backend.example.test/arbitrary' + USER_ACTION_RETIREMENT_PATH,
     'https://backend.example.test' + USER_ACTION_RETIREMENT_PATH + '?owner=other',
   ])('rejects unsafe or inferred endpoint %s', (url) => {
     expect(() => createUserActionRetirementTransport({ ...config, url })).toThrow('Invalid');

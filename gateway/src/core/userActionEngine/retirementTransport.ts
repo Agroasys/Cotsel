@@ -4,7 +4,7 @@ import { fingerprint } from './validation';
 import { validateUserActionRetirementEvidence } from './retirement';
 import type { VerifyUserActionRetirement, UserActionRetirementEvidence } from './retirement';
 export const USER_ACTION_RETIREMENT_PATH =
-  '/settlement-handoffs/cotsel/lifecycle-action-retirement-evidence';
+  '/api/v1/settlement-handoffs/cotsel/lifecycle-action-retirement-evidence';
 export interface UserActionRetirementTransportConfig {
   url: string;
   owningServiceId: string;
