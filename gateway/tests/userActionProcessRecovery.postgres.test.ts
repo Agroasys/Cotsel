@@ -9,6 +9,7 @@ import type {
   RecoveryProcessResult,
 } from './helpers/userActionRecoveryProcess';
 import type { GaslessUserAction } from '../src/core/gaslessExecutionTypes';
+import { createServiceAuthHeaders } from '../src/core/serviceAuth';
 const describeLocal =
   process.env.GATEWAY_TEST_USE_LOCAL_POSTGRES === 'true' ? describe : describe.skip;
 describeLocal(
@@ -236,6 +237,118 @@ describeLocal(
       ]);
       expect(replay.outcomes).toHaveLength(1);
       expect((await f.store.getHandoff(f.input.handoffId))?.executionStatus).toBe('confirmed');
+    });
+    test('actual authenticated HTTP pending idempotency lease survives SIGKILL; original same key/body executes once only after both leases expire', async () => {
+      const f = await fixture('raw');
+      const path = '/api/dashboard-gateway/v1/test-only/user-action';
+      const key = 'controlled-http-process-key';
+      const { requestId: _transport, sourceApiKeyId: _owner, ...body } = f.input;
+      const post = (port: number, value: unknown = body) => {
+        const raw = JSON.stringify(value);
+        return fetch(`http://127.0.0.1:${port}${path}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': key,
+            ...createServiceAuthHeaders({
+              apiKey: 'owner',
+              apiSecret: 'test-secret',
+              method: 'POST',
+              path,
+              body: raw,
+            }),
+          },
+          body: raw,
+        });
+      };
+      const first = start({ ...f.message, operation: 'http', boundary: 'claimed' });
+      const listening = await first.received;
+      expect(listening.type).toBe('ready');
+      const barrier = once(first.child, 'message');
+      // Handle the expected disconnected HTTP socket immediately; it must not become an unhandled rejection.
+      const lost = post(listening.port!).catch(() => null);
+      const [committed] = (await barrier) as [RecoveryProcessResult];
+      expect(committed).toMatchObject({
+        type: 'barrier',
+        stage: 'claimed',
+        signerCalls: 0,
+        broadcastCalls: 0,
+      });
+      const pending = (
+        await db.runtime.query(
+          `SELECT completed_at,EXTRACT(EPOCH FROM (lease_expires_at-created_at))*1000 AS duration FROM idempotency_keys WHERE idempotency_key=$1`,
+          [key],
+        )
+      ).rows[0];
+      expect(pending.completed_at).toBeNull();
+      expect(Number(pending.duration)).toBe(300_000);
+      expect(first.child.kill('SIGKILL')).toBe(true);
+      expect(await first.exited).toEqual([null, 'SIGKILL']);
+      expect(await lost).toBeNull();
+      expect(await retained()).toEqual({ status: 'accepted', id: committed.requestId });
+
+      const restarted = start({ ...f.message, operation: 'http' });
+      const ready = await restarted.received;
+      expect(ready.type).toBe('ready');
+      const blocked = await post(ready.port!);
+      expect(blocked.status).toBe(409);
+      expect((await blocked.json()).error.message).toContain('already in progress');
+      expect((await db.runtime.query('SELECT * FROM gasless_transaction_outcomes')).rowCount).toBe(
+        0,
+      );
+      // Simulate elapsed real lease time only in this disposable DB. Process death itself grants no permission.
+      await db.runtime.query(
+        "UPDATE gasless_user_action_requests SET lease_expires_at=NOW()-INTERVAL '1 second' WHERE request_id=$1",
+        [committed.requestId],
+      );
+      const transportBlocked = await post(ready.port!);
+      expect(transportBlocked.status).toBe(409);
+      expect((await transportBlocked.json()).error.message).toContain('already in progress');
+      expect(
+        (await f.requests.inspect('owner', f.input.sourceOperationId!))?.attempts.map(
+          (event) => event.eventType,
+        ),
+      ).toEqual(['accepted', 'claimed']);
+      await db.runtime.query(
+        "UPDATE idempotency_keys SET lease_expires_at=NOW()-INTERVAL '1 second' WHERE idempotency_key=$1",
+        [key],
+      );
+      const changed = await post(ready.port!, {
+        ...body,
+        approvalScopeFingerprint: '0x' + '0'.repeat(64),
+      });
+      expect(changed.status).toBe(409);
+      await changed.json();
+      const resumed = await post(ready.port!);
+      expect(resumed.status).toBe(202);
+      const result = await resumed.json();
+      expect(result.data).toEqual({
+        requestId: committed.requestId,
+        signerCalls: 1,
+        broadcastCalls: 1,
+      });
+      const replay = await post(ready.port!);
+      expect(replay.status).toBe(202);
+      expect(replay.headers.get('x-idempotent-replay')).toBe('true');
+      expect(await replay.json()).toEqual(result);
+      const finished = once(restarted.child, 'message');
+      restarted.child.send({ command: 'stop' });
+      expect((await finished)[0]).toMatchObject({
+        type: 'complete',
+        signerCalls: 1,
+        broadcastCalls: 1,
+        requestId: committed.requestId,
+      });
+      expect(await restarted.exited).toEqual([0, null]);
+      expect((await db.runtime.query('SELECT * FROM gasless_user_action_requests')).rowCount).toBe(
+        1,
+      );
+      expect((await db.runtime.query('SELECT * FROM gasless_transaction_outcomes')).rowCount).toBe(
+        1,
+      );
+      expect(first.output() + restarted.output() + JSON.stringify(result)).not.toContain(
+        body.userAuthorization.signature,
+      );
     });
   },
 );

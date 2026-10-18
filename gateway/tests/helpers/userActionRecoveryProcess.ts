@@ -15,19 +15,28 @@ import { GaslessTransactionOutcomeReconciler } from '../../src/core/gaslessTrans
 import { GaslessSettlementOutcomeObserver } from '../../src/core/gaslessSettlementOutcomeObserver';
 import { config } from './gaslessManagedSignerFixtures';
 import type { DormantUserActionEnginePorts } from '../../src/core/userActionEngine/workflow';
+import { Router } from 'express';
+import { createInMemoryNonceStore } from '@agroasys/shared-auth';
+import { createApp } from '../../src/app';
+import { createPostgresIdempotencyStore } from '../../src/core/idempotencyStore';
+import { createIdempotencyMiddleware } from '../../src/middleware/idempotency';
+import { createServiceAuthMiddleware, createServiceApiKeyLookup } from '../../src/core/serviceAuth';
+import { parseOwnedUserAction } from '../../src/core/userActionEngine/ingress';
+import { successResponse } from '../../src/responses';
 
 export interface RecoveryProcessInput {
   database: string;
   input: GaslessUserActionExecutionInput;
   token: string;
   mode: 'raw' | 'kms';
-  operation: 'execute' | 'observe' | 'replay';
+  operation: 'execute' | 'observe' | 'replay' | 'http';
   boundary?: 'claimed' | 'signing' | 'signed_identity';
   receiptStatus?: 0 | 1 | null;
 }
 export interface RecoveryProcessResult {
-  type: 'barrier' | 'complete' | 'error';
+  type: 'barrier' | 'complete' | 'error' | 'ready';
   stage?: string;
+  port?: number;
   requestId?: string;
   signerCalls: number;
   broadcastCalls: number;
@@ -227,11 +236,66 @@ async function run(message: RecoveryProcessInput) {
                 },
         },
       };
-      try {
-        await executeDormantUserAction(ports, input);
-      } catch {
-        await send({ type: 'complete', denied: true, signerCalls, broadcastCalls, reads });
-        return;
+      if (message.operation === 'http') {
+        // Test-only ingress exercises real auth/idempotency around the controlled INTERNAL engine.
+        // It neither replaces nor reaches any production public execution guard.
+        const router = Router();
+        const nonces = createInMemoryNonceStore();
+        router.post(
+          '/test-only/user-action',
+          createServiceAuthMiddleware({
+            enabled: true,
+            maxSkewSeconds: 300,
+            nonceTtlSeconds: 600,
+            consumeNonce: nonces.consume.bind(nonces),
+            lookupApiKey: createServiceApiKeyLookup(
+              JSON.stringify([{ id: 'owner', secret: 'test-secret', active: true }]),
+            ),
+          }),
+          createIdempotencyMiddleware(createPostgresIdempotencyStore(pool)),
+          (req, res, next) => {
+            void executeDormantUserAction(
+              ports,
+              parseOwnedUserAction(
+                req.body,
+                req.requestContext!.requestId,
+                req.serviceAuth!.apiKeyId,
+              ),
+            )
+              .then((record) =>
+                res
+                  .status(202)
+                  .json(
+                    successResponse({ requestId: record.requestId, signerCalls, broadcastCalls }),
+                  ),
+              )
+              .catch(next);
+          },
+        );
+        const app = createApp(config, {
+          version: 'test',
+          commitSha: 'fixture',
+          buildTime: 'fixture',
+          readinessCheck: async () => [],
+          extraRouter: router,
+        });
+        const server = await new Promise<import('http').Server>((resolve) => {
+          const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+        });
+        const address = server.address();
+        if (!address || typeof address === 'string') throw new Error('Test-only address missing');
+        await send({ type: 'ready', port: address.port, signerCalls, broadcastCalls, reads });
+        await new Promise<void>((resolve) => process.once('message', () => resolve()));
+        await new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        );
+      } else {
+        try {
+          await executeDormantUserAction(ports, input);
+        } catch {
+          await send({ type: 'complete', denied: true, signerCalls, broadcastCalls, reads });
+          return;
+        }
       }
     }
     const request = await requests.inspect(input.sourceApiKeyId!, input.sourceOperationId!);
