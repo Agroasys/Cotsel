@@ -1,3 +1,4 @@
+import type { UserActionAdapterBinding } from './userActionEngine/adapter';
 import type { UserActionFundingVerifier } from './userActionFundingVerification';
 /**
  * SPDX-License-Identifier: Apache-2.0
@@ -10,6 +11,7 @@ export interface GaslessWorkflowContext {
   settlementService: SettlementService;
   store: SettlementStore;
   executor: GaslessSettlementExecutor;
+  userActionAdapter?: UserActionAdapterBinding;
   verifyUserActionFunding?: UserActionFundingVerifier;
   chainId: number;
   escrowAddress: string;
@@ -19,6 +21,7 @@ export interface GaslessWorkflowContext {
   assertBroadcastOpen(action: string): void;
   assertCapacityOpen(action: string): void;
   enqueueBroadcast<T>(operation: () => Promise<T>): Promise<T>;
+  recordExecutorBalance?(balance: bigint): void;
   recordExecutionReceipt(receipt: GaslessExecutionReceipt): void;
   buildConfirmedExecutionMetadata(
     action: string,

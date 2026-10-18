@@ -1,3 +1,4 @@
+import { parseOwnedUserAction } from '../core/userActionEngine/ingress';
 import { createUserActionInventoryRouter } from './settlementUserActionInventory';
 import type { ReadUserActionInventory } from '../core/userActionEngine/inventory';
 /**
@@ -493,7 +494,10 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           });
         }
 
-        return requireReviewedUserActionCapability();
+        requireReviewedUserActionCapability();
+        return options.gaslessSettlementService!.executeUserAction(
+          parseOwnedUserAction(req.body, getRequestId(req), getServiceApiKeyId(req)),
+        );
       },
       res,
       next,

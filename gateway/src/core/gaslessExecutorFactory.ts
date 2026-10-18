@@ -1,3 +1,4 @@
+import type { UserActionAdapterBinding } from './userActionEngine/adapter';
 import type { UserActionFundingVerifier } from './userActionFundingVerification';
 import type { LoadUserActionHandoff } from './gaslessExecutionValidation';
 /**
@@ -15,6 +16,7 @@ import type { GaslessNonceReservationStore } from './gaslessNonceReservationStor
 export function createEthersGaslessSettlementExecutor(
   config: GaslessExecutorConfig,
   dependencies?: {
+    userActionAdapter?: UserActionAdapterBinding;
     loadUserActionHandoff?: LoadUserActionHandoff;
     verifyUserActionFunding?: UserActionFundingVerifier;
     recordValidationEvidence?: ManagedSignerValidationRecorder;
@@ -38,5 +40,6 @@ export function createEthersGaslessSettlementExecutor(
     dependencies.recordTransactionOutcome,
     dependencies.loadUserActionHandoff,
     dependencies.verifyUserActionFunding,
+    { adapter: dependencies.userActionAdapter, nonces: dependencies.nonceReservationStore },
   );
 }

@@ -1141,7 +1141,9 @@ paths:
         This service-authenticated compatibility endpoint rejects every user action with
         settlement_client_upgrade_required before accepting an execution event, simulating,
         reserving a signer, or broadcasting. Immutable user-action bindings and complete
-        reviewed Agroasys journeys must ship before any action is enabled. Existing observation continues.
+        reviewed Agroasys journeys remain required before activation. Owning execution adapters are present
+        behind the unconditional denial; their v1 result describes controlled internal execution only.
+        Existing observation continues.
       operationId: createGaslessUserActionExecution
       security: []
       parameters:
@@ -1159,7 +1161,7 @@ paths:
               $ref: '#/components/schemas/SettlementGaslessUserActionExecutionRequest'
       responses:
         '202':
-          description: Gasless user-action execution submitted, or the durable outcome of an earlier ambiguous attempt returned for the same idempotency key.
+          description: Dormant contract only. The public route unconditionally denies execution; controlled owning adapters return stable accepted-request identity and retained original transaction evidence.
           content:
             application/json:
               schema:
@@ -5798,12 +5800,13 @@ components:
           format: date-time
     SettlementGaslessUserActionExecutionRequest:
       type: object
+      additionalProperties: false
       description: Typed request contract retained for compatibility. Execution remains disabled.
       required:
+        - action
         - actionPackageId
         - sourceOperationId
         - approvalScopeFingerprint
-        - action
         - handoffId
         - chainId
         - contractAddress
@@ -5815,8 +5818,11 @@ components:
       properties:
         actionPackageId:
           type: string
+          minLength: 1
+          maxLength: 128
         sourceOperationId:
           type: string
+          format: uuid
         approvalScopeFingerprint:
           type: string
           pattern: ^0x[0-9a-f]{64}$
@@ -5854,28 +5860,7 @@ components:
         userAuthorization:
           $ref: '#/components/schemas/SettlementGaslessUserAuthorization'
     SettlementGaslessUserActionExecutionPayload:
-      type: object
-      required:
-        - handoff
-        - acceptedEvent
-        - queuedEvent
-        - simulationEvent
-        - submittedEvent
-        - txHash
-      properties:
-        handoff:
-          $ref: '#/components/schemas/SettlementHandoff'
-        acceptedEvent:
-          $ref: '#/components/schemas/SettlementExecutionEvent'
-        queuedEvent:
-          $ref: '#/components/schemas/SettlementExecutionEvent'
-        simulationEvent:
-          $ref: '#/components/schemas/SettlementExecutionEvent'
-        submittedEvent:
-          $ref: '#/components/schemas/SettlementExecutionEvent'
-        txHash:
-          type: string
-          description: Canonical EVM transaction hash submitted by Cotsel.
+      $ref: '#/components/schemas/SettlementUserActionExecutionResult'
     SettlementGaslessUserActionExecutionResponse:
       type: object
       required:
@@ -9576,3 +9561,105 @@ components:
         inventoryFingerprint:
           type: string
           pattern: ^0x[0-9a-f]{64}$
+    SettlementUserActionExecutionResult:
+      type: object
+      additionalProperties: false
+      required:
+        - schemaVersion
+        - requestId
+        - sourceOperationId
+        - actionPackageId
+        - handoffId
+        - action
+        - requestFingerprint
+        - executionStatus
+        - transactionHash
+        - attempts
+        - outcomes
+      properties:
+        schemaVersion:
+          const: cotsel.user-action-execution.v1
+        requestId:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        sourceOperationId:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        actionPackageId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        handoffId:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        action:
+          enum:
+            - finalize_after_inspection_acceptance
+            - cancel_locked_timeout
+            - refund_in_transit_timeout
+        requestFingerprint:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        executionStatus:
+          enum:
+            - accepted
+            - signing
+        transactionHash:
+          anyOf:
+            - type: string
+              pattern: ^0x[0-9a-f]{64}$
+            - type: 'null'
+        attempts:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - eventType
+              - transactionHash
+            properties:
+              eventType:
+                enum:
+                  - accepted
+                  - claimed
+                  - signing
+                  - signed
+                  - provider_hash
+                  - signer_rejected
+              transactionHash:
+                anyOf:
+                  - type: string
+                    pattern: ^0x[0-9a-f]{64}$
+                  - type: 'null'
+        outcomes:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - transactionHash
+              - observedTransactionHash
+              - outcomeStatus
+            properties:
+              transactionHash:
+                type: string
+                pattern: ^0x[0-9a-f]{64}$
+              observedTransactionHash:
+                anyOf:
+                  - type: string
+                    pattern: ^0x[0-9a-f]{64}$
+                  - type: 'null'
+              outcomeStatus:
+                enum:
+                  - broadcast_pending
+                  - broadcast_unknown
+                  - confirmation_pending
+                  - confirmed
+                  - reverted
+                  - replaced
+                  - failed

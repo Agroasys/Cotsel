@@ -1,5 +1,5 @@
 /** SPDX-License-Identifier: Apache-2.0 */
-// Intentionally absent from all public routes/factories/SDK exports.
+// Invoked only by owning adapters behind unconditional public activation denials.
 import type { GaslessUserActionExecutionInput } from '../gaslessExecutionTypes';
 import type { SettlementService } from '../settlementService';
 import type { SettlementEventType, SettlementExecutionStatus } from '../settlementStore';
@@ -18,6 +18,7 @@ import {
 } from './validation';
 export interface DormantUserActionEnginePorts extends UserActionValidationPorts {
   requests: UserActionRequestStore;
+  enqueueBroadcast?<T>(operation: () => Promise<T>): Promise<T>;
   custody: UserActionCustodyPorts;
   settlementService: Pick<SettlementService, 'recordExecutionEvent'>;
   assertBroadcastOpen(action: string): void;
@@ -71,29 +72,33 @@ export async function executeDormantUserAction(
   await project('queued', 'queued');
   ports.assertBroadcastOpen(input.action);
   ports.assertCapacityOpen(input.action);
-  const prepared = await prepareUserActionCustody(ports.custody, input, request.requestId);
-  await project('simulation_completed', 'queued');
-  const fresh = await verifyUserAction(ports, input);
-  try {
-    const result = await prepared.execute(
-      async () => {
-        ports.assertBroadcastOpen(input.action);
-        ports.assertCapacityOpen(input.action);
-        await ports.requests.beginSigning(input, fresh, claim);
-      },
-      (identity) => ports.requests.recordSigned(claim, identity),
-      (type, hash) => ports.requests.recordHash(claim, type, hash),
-    );
-    await project('submitted', 'submitted', result.txHash);
-    if (result.confirmed) await project('confirmed', 'confirmed', result.txHash);
-  } catch (error) {
-    if (isGaslessTransactionOutcomePendingError(error))
-      await project(error.outcome, error.outcome, error.transactionHash);
-    else if (isGaslessTransactionRevertedError(error)) {
-      await project('confirmation_pending', 'confirmation_pending', error.transactionHash);
-      await project('reverted', 'reverted', error.transactionHash);
-    } else throw error;
-  }
+  const run = async () => {
+    const prepared = await prepareUserActionCustody(ports.custody, input, request.requestId);
+    await project('simulation_completed', 'queued');
+    const fresh = await verifyUserAction(ports, input);
+    try {
+      const result = await prepared.execute(
+        async () => {
+          ports.assertBroadcastOpen(input.action);
+          ports.assertCapacityOpen(input.action);
+          await ports.requests.beginSigning(input, fresh, claim);
+        },
+        (identity) => ports.requests.recordSigned(claim, identity),
+        (type, hash) => ports.requests.recordHash(claim, type, hash),
+      );
+      await project('submitted', 'submitted', result.txHash);
+      if (result.confirmed) await project('confirmed', 'confirmed', result.txHash);
+    } catch (error) {
+      if (isGaslessTransactionOutcomePendingError(error))
+        await project(error.outcome, error.outcome, error.transactionHash);
+      else if (isGaslessTransactionRevertedError(error)) {
+        await project('confirmation_pending', 'confirmation_pending', error.transactionHash);
+        await project('reverted', 'reverted', error.transactionHash);
+      } else throw error;
+    }
+  };
+  if (ports.enqueueBroadcast) await ports.enqueueBroadcast(run);
+  else await run();
   return (await ports.requests.inspect(input.sourceApiKeyId, input.sourceOperationId))!;
 }
 async function replayExact(

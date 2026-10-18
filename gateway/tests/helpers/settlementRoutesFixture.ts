@@ -11,6 +11,7 @@ import { createInMemorySettlementStore } from '../../src/core/settlementStore';
 import {
   GaslessSettlementExecutionService,
   type GaslessExecutionSubmission,
+  type GaslessUserActionExecutionResult,
   testExports as gaslessSettlementExecutionTestExports,
 } from '../../src/core/gaslessSettlementExecutionService';
 import { createCapabilitiesRouter } from '../../src/routes/capabilities';
@@ -83,7 +84,7 @@ export async function startServer(
     simulateCreateTrade: () => Promise<{ gasEstimate?: bigint | string | number | null }>;
     executeCreateTrade: () => Promise<GaslessExecutionSubmission>;
     simulateUserAction: () => Promise<{ gasEstimate?: bigint | string | number | null }>;
-    executeUserAction: () => Promise<GaslessExecutionSubmission>;
+    executeUserAction: () => Promise<GaslessUserActionExecutionResult>;
     simulateWalletUsdcTransfer: () => Promise<{
       gasEstimate?: bigint | string | number | null;
     }>;
@@ -113,9 +114,7 @@ export async function startServer(
         };
       },
       async executeUserAction() {
-        return buildConfirmedSubmission(
-          '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-        );
+        throw new Error('Unexpected guarded user-action execution');
       },
       async simulateUserAction() {
         return {

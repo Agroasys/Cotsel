@@ -35,7 +35,7 @@ export interface UserActionRetirementEvidence {
   };
 }
 /** Owning-domain adapter must independently verify canonical anchors AND financial truth.
- * No production adapter exists yet; absence/unavailability cannot become approval. */
+ * Missing/unavailable authenticated owning evidence cannot become approval. */
 export type VerifyUserActionRetirement = (
   scope: UserActionRetirementScope,
 ) => Promise<
@@ -126,8 +126,10 @@ export async function verifyNonceOwnership(
           financialOutcome: event.evidence.financialOutcome,
         })),
     };
+
     const expectedScope = fingerprint(scope);
     const proof = await verify(Object.freeze(scope));
+    if (fingerprint(scope) !== expectedScope) deny('Predecessor retirement scope changed');
     if (now() < checkedAt || now() - checkedAt > 10_000) deny('Retirement preflight expired');
     if (proof.status !== 'verified') {
       if (proof.status === 'contradicted') {
@@ -155,54 +157,64 @@ export async function verifyNonceOwnership(
       deny('Independent predecessor retirement evidence is required');
     }
     const e = proof.evidence;
-    const exact = (value: unknown, keys: string[]) =>
-      value !== null &&
-      typeof value === 'object' &&
-      !Array.isArray(value) &&
-      Object.keys(value).length === keys.length &&
-      Object.keys(value).every((key) => keys.includes(key));
-    if (
-      !exact(e, ['scope', 'anchor', 'authorizationNonce', 'financialOutcome']) ||
-      !exact(e.anchor, ['chainId', 'blockNumber', 'blockHash', 'timestamp']) ||
-      !exact(e.financialOutcome, [
-        'authority',
-        'evidenceId',
-        'fingerprint',
-        'originalFundingFingerprint',
-        'kind',
-        'transactionHash',
-        'blockNumber',
-        'blockHash',
-      ])
-    )
-      deny('Predecessor retirement evidence is invalid');
-    if (
-      fingerprint(e.scope) !== expectedScope ||
-      e.anchor.chainId !== scope.chainId ||
-      !/^\d+$/.test(e.anchor.timestamp) ||
-      BigInt(e.anchor.timestamp) <= BigInt(scope.deadline) ||
-      e.authorizationNonce !== scope.nonce ||
-      !/^0x[0-9a-f]{64}$/.test(e.anchor.blockHash) ||
-      !/^\d+$/.test(e.anchor.blockNumber) ||
-      e.financialOutcome.authority !== 'settlement' ||
-      !['oracle_resolved_without_user_execution', 'independent_resolved_non_execution'].includes(
-        e.financialOutcome.kind,
-      ) ||
-      e.financialOutcome.originalFundingFingerprint !== scope.originalFundingFingerprint ||
-      typeof e.financialOutcome.evidenceId !== 'string' ||
-      !/^\S{1,128}$/.test(e.financialOutcome.evidenceId) ||
-      !/^0x[0-9a-f]{64}$/.test(e.financialOutcome.fingerprint) ||
-      (!(
-        e.financialOutcome.kind === 'independent_resolved_non_execution' &&
-        e.financialOutcome.transactionHash === null
-      ) &&
-        !/^0x[0-9a-f]{64}$/.test(e.financialOutcome.transactionHash ?? '')) ||
-      !/^0x[0-9a-f]{64}$/.test(e.financialOutcome.blockHash) ||
-      !/^\d+$/.test(e.financialOutcome.blockNumber) ||
-      BigInt(e.financialOutcome.blockNumber) > BigInt(e.anchor.blockNumber)
-    )
-      deny('Predecessor retirement evidence is invalid');
+    validateUserActionRetirementEvidence(e, scope);
     retirements.push(e);
   }
   return { snapshot: fingerprint(inventory), retirements };
+}
+
+/** Shared untrusted transport boundary; performs no network or writes. */
+export function validateUserActionRetirementEvidence(
+  e: UserActionRetirementEvidence,
+  scope: UserActionRetirementScope,
+): void {
+  const exact = (value: unknown, keys: string[]) =>
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === keys.length &&
+    Object.keys(value).every((key) => keys.includes(key));
+  if (
+    !exact(e, ['scope', 'anchor', 'authorizationNonce', 'financialOutcome']) ||
+    !exact(e.anchor, ['chainId', 'blockNumber', 'blockHash', 'timestamp']) ||
+    !exact(e.financialOutcome, [
+      'authority',
+      'evidenceId',
+      'fingerprint',
+      'originalFundingFingerprint',
+      'kind',
+      'transactionHash',
+      'blockNumber',
+      'blockHash',
+    ])
+  )
+    deny('Predecessor retirement evidence is invalid');
+  const decimal = (value: unknown): value is string =>
+    typeof value === 'string' && /^(0|[1-9][0-9]{0,77})$/.test(value);
+  if (
+    fingerprint(e.scope) !== fingerprint(scope) ||
+    e.anchor.chainId !== scope.chainId ||
+    !decimal(e.anchor.timestamp) ||
+    BigInt(e.anchor.timestamp) <= BigInt(scope.deadline) ||
+    e.authorizationNonce !== scope.nonce ||
+    !/^0x[0-9a-f]{64}$/.test(e.anchor.blockHash) ||
+    !decimal(e.anchor.blockNumber) ||
+    e.financialOutcome.authority !== 'settlement' ||
+    !['oracle_resolved_without_user_execution', 'independent_resolved_non_execution'].includes(
+      e.financialOutcome.kind,
+    ) ||
+    e.financialOutcome.originalFundingFingerprint !== scope.originalFundingFingerprint ||
+    typeof e.financialOutcome.evidenceId !== 'string' ||
+    !/^\S{1,128}$/.test(e.financialOutcome.evidenceId) ||
+    !/^0x[0-9a-f]{64}$/.test(e.financialOutcome.fingerprint) ||
+    (!(
+      e.financialOutcome.kind === 'independent_resolved_non_execution' &&
+      e.financialOutcome.transactionHash === null
+    ) &&
+      !/^0x[0-9a-f]{64}$/.test(e.financialOutcome.transactionHash ?? '')) ||
+    !/^0x[0-9a-f]{64}$/.test(e.financialOutcome.blockHash) ||
+    !decimal(e.financialOutcome.blockNumber) ||
+    BigInt(e.financialOutcome.blockNumber) > BigInt(e.anchor.blockNumber)
+  )
+    deny('Predecessor retirement evidence is invalid');
 }

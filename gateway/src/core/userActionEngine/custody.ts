@@ -55,11 +55,13 @@ export interface UserActionCustodyPorts {
   maxNativeCostWei: bigint;
   minBalanceWei: bigint;
   receiptTimeoutMs: number;
+  observeBalance?(balance: bigint): void;
   signer:
     | { mode: 'raw'; wallet: Pick<Wallet, 'getAddress' | 'signTransaction'> }
     | { mode: 'kms' | 'mpc'; transport: ManagedSignerTransport };
 }
 export interface PreparedUserAction {
+  readonly gasEstimate: bigint;
   execute(
     authorizeSigning: () => Promise<void>,
     recordSigned: (
@@ -89,6 +91,7 @@ export async function prepareUserActionCustody(
   const fees = await ports.provider.getFeeData();
   const effectiveFee = fees.maxFeePerGas ?? fees.gasPrice;
   const balance = await ports.provider.getBalance(address);
+  ports.observeBalance?.(balance);
   if (
     gasLimit <= 0n ||
     gasLimit > ports.maxGasLimit ||
@@ -129,6 +132,7 @@ export async function prepareUserActionCustody(
   };
   const intentHash = buildManagedSignerIntentHash(intent);
   return {
+    gasEstimate: gasLimit,
     async execute(authorizeSigning, recordSigned, recordHash) {
       // Irreversible request marker commits before the nonce marker and ANY signer call.
       await authorizeSigning();

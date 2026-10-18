@@ -310,3 +310,105 @@ components:
         inventoryFingerprint:
           type: string
           pattern: ^0x[0-9a-f]{64}$
+    SettlementUserActionExecutionResult:
+      type: object
+      additionalProperties: false
+      required:
+        - schemaVersion
+        - requestId
+        - sourceOperationId
+        - actionPackageId
+        - handoffId
+        - action
+        - requestFingerprint
+        - executionStatus
+        - transactionHash
+        - attempts
+        - outcomes
+      properties:
+        schemaVersion:
+          const: cotsel.user-action-execution.v1
+        requestId:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        sourceOperationId:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        actionPackageId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        handoffId:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        action:
+          enum:
+            - finalize_after_inspection_acceptance
+            - cancel_locked_timeout
+            - refund_in_transit_timeout
+        requestFingerprint:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        executionStatus:
+          enum:
+            - accepted
+            - signing
+        transactionHash:
+          anyOf:
+            - type: string
+              pattern: ^0x[0-9a-f]{64}$
+            - type: 'null'
+        attempts:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - eventType
+              - transactionHash
+            properties:
+              eventType:
+                enum:
+                  - accepted
+                  - claimed
+                  - signing
+                  - signed
+                  - provider_hash
+                  - signer_rejected
+              transactionHash:
+                anyOf:
+                  - type: string
+                    pattern: ^0x[0-9a-f]{64}$
+                  - type: 'null'
+        outcomes:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - transactionHash
+              - observedTransactionHash
+              - outcomeStatus
+            properties:
+              transactionHash:
+                type: string
+                pattern: ^0x[0-9a-f]{64}$
+              observedTransactionHash:
+                anyOf:
+                  - type: string
+                    pattern: ^0x[0-9a-f]{64}$
+                  - type: 'null'
+              outcomeStatus:
+                enum:
+                  - broadcast_pending
+                  - broadcast_unknown
+                  - confirmation_pending
+                  - confirmed
+                  - reverted
+                  - replaced
+                  - failed

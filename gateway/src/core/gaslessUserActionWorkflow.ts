@@ -1,6 +1,7 @@
+import { requireUserActionAdapter } from './userActionEngine/adapter';
 /** SPDX-License-Identifier: Apache-2.0 */
 import type {
-  GaslessCreateTradeExecutionResult,
+  GaslessUserActionExecutionResult,
   GaslessUserActionExecutionInput,
 } from './gaslessExecutionTypes';
 import {
@@ -12,12 +13,14 @@ import type { GaslessWorkflowContext } from './gaslessWorkflowContext';
 export async function executeUserActionWorkflow(
   context: GaslessWorkflowContext,
   input: GaslessUserActionExecutionInput,
-): Promise<GaslessCreateTradeExecutionResult> {
+): Promise<GaslessUserActionExecutionResult> {
   await validateBoundUserAction(
     input,
     (id) => context.store.getHandoff(id),
     context.usdcAddress,
     context.verifyUserActionFunding,
+    context.userActionAdapter?.isCommittedReplay,
   );
-  return requireReviewedUserActionCapability();
+  requireReviewedUserActionCapability();
+  return requireUserActionAdapter(context.userActionAdapter).execute(input);
 }

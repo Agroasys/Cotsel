@@ -198,6 +198,7 @@ export async function validateBoundUserAction(
   load: LoadUserActionHandoff | undefined,
   tokenAddress: string,
   verifyFunding?: UserActionFundingVerifier,
+  isCommittedReplay?: (input: GaslessUserActionExecutionInput) => Promise<boolean>,
 ): Promise<void> {
   if (
     !load ||
@@ -223,6 +224,7 @@ export async function validateBoundUserAction(
   const binding = parseSettlementUserActionBinding(handoff.executionBinding, input.sourceApiKeyId);
   assertUserActionMatchesBinding(binding, input, tokenAddress);
   assertUserActionPayloadHash(input);
+  if (isCommittedReplay && (await isCommittedReplay(input))) return;
   if (['submitted', 'confirmed', 'reconciled', 'failed'].includes(handoff.executionStatus))
     throw new GatewayError(409, 'CONFLICT', 'Original user-action execution requires observation');
   if (!verifyFunding)

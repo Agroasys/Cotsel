@@ -1,0 +1,61 @@
+{
+  "controlledLocalFixture": true,
+  "scope": {
+    "requestId": "0b18e171-5c52-41f8-9a60-595dfcada8a1",
+    "ownerServiceId": "owner",
+    "sourceOperationId": "0f1e8822-11f0-4da8-a83b-f24ab221c9c7",
+    "packageId": "efab82a9-7c15-4ce3-90d9-eb4bc5c62fa2",
+    "requestFingerprint": "0x4ea73564d1ad4b351e932b92bfccc3e52d4aec5da2c30faeace26401a9ee0fbf",
+    "bindingFingerprint": "0x547935b8d408f24f5731f974dbd49832ca78438df0ef3fc7cb13dadfe4157755",
+    "originalFundingFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "chainId": 84532,
+    "escrowAddress": "0x4de8aa9fd2e842089cd1d0b2d170ba7a00000000",
+    "userAddress": "0xfb6f624ac6efbdea5d849399deff5688adf54662",
+    "nonce": "1",
+    "deadline": "1792337398",
+    "inventoryFingerprint": "0x7f7652dfeb2fa1162711858bb3d0c35a6e45aa6044e8bcffdef5505d7b560fa9",
+    "priorRetirements": []
+  },
+  "response": {
+    "status": 200,
+    "message": "OK",
+    "data": {
+      "status": "verified",
+      "evidence": {
+        "scope": {
+          "requestId": "0b18e171-5c52-41f8-9a60-595dfcada8a1",
+          "ownerServiceId": "owner",
+          "sourceOperationId": "0f1e8822-11f0-4da8-a83b-f24ab221c9c7",
+          "packageId": "efab82a9-7c15-4ce3-90d9-eb4bc5c62fa2",
+          "requestFingerprint": "0x4ea73564d1ad4b351e932b92bfccc3e52d4aec5da2c30faeace26401a9ee0fbf",
+          "bindingFingerprint": "0x547935b8d408f24f5731f974dbd49832ca78438df0ef3fc7cb13dadfe4157755",
+          "originalFundingFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "chainId": 84532,
+          "escrowAddress": "0x4de8aa9fd2e842089cd1d0b2d170ba7a00000000",
+          "userAddress": "0xfb6f624ac6efbdea5d849399deff5688adf54662",
+          "nonce": "1",
+          "deadline": "1792337398",
+          "inventoryFingerprint": "0x7f7652dfeb2fa1162711858bb3d0c35a6e45aa6044e8bcffdef5505d7b560fa9",
+          "priorRetirements": []
+        },
+        "anchor": {
+          "chainId": 84532,
+          "blockNumber": "500",
+          "blockHash": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "timestamp": "1792337399"
+        },
+        "authorizationNonce": "1",
+        "financialOutcome": {
+          "authority": "settlement",
+          "evidenceId": "3f1d9ed9-5920-4c94-98e7-b586bdf296d6",
+          "fingerprint": "0xc41de7fe44374c0eadf860a26c7eaec634c359ded699f3d9fef883fbc40c5979",
+          "originalFundingFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "kind": "oracle_resolved_without_user_execution",
+          "transactionHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "blockNumber": "123",
+          "blockHash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }
+    }
+  }
+}

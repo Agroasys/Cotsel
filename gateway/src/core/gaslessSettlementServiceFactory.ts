@@ -1,3 +1,5 @@
+import { createOwnedUserActionAdapter } from './userActionEngine/adapter';
+import { createUserActionRetirementTransport } from './userActionEngine/retirementTransport';
 import { createUserActionFundingVerifier } from './userActionFundingVerification';
 /**
  * SPDX-License-Identifier: Apache-2.0
@@ -22,14 +24,36 @@ export function createConfiguredGaslessSettlementService(
   settlementStore: SettlementStore,
   managedSignerValidationRecorder: ManagedSignerValidationRecorder,
   transactionOutcomeRecorder: GaslessTransactionOutcomeRecorder,
+  retirementEvidence?: { url: string; owningServiceId: string },
 ): GaslessSettlementExecutionService | null {
   if (!config.gaslessExecutionEnabled) return null;
 
   const verifyUserActionFunding = createUserActionFundingVerifier(config);
+  const verifyRetirement =
+    retirementEvidence && config.settlementCallbackApiKey && config.settlementCallbackApiSecret
+      ? createUserActionRetirementTransport({
+          ...retirementEvidence,
+          apiKey: config.settlementCallbackApiKey,
+          apiSecret: config.settlementCallbackApiSecret,
+          timeoutMs: Math.min(config.settlementCallbackRequestTimeoutMs, 9000),
+        })
+      : undefined;
+  const userActionAdapter = createOwnedUserActionAdapter({
+    pool,
+    store: settlementStore,
+    settlementService,
+    verifyFunding: verifyUserActionFunding,
+    verifyRetirement,
+    chainId: config.chainId,
+    escrowAddress: config.escrowAddress,
+    usdcAddress: config.usdcAddress,
+    requestMaxTtlSeconds: config.gaslessRequestMaxTtlSeconds ?? 900,
+  });
   return new GaslessSettlementExecutionService(
     settlementService,
     settlementStore,
     createEthersGaslessSettlementExecutor(config, {
+      userActionAdapter,
       verifyUserActionFunding,
       loadUserActionHandoff: (id) => settlementStore.getHandoff(id),
       recordValidationEvidence: managedSignerValidationRecorder,
@@ -37,6 +61,7 @@ export function createConfiguredGaslessSettlementService(
       nonceReservationStore: createPostgresGaslessNonceReservationStore(pool),
     }),
     {
+      userActionAdapter,
       verifyUserActionFunding,
       chainId: config.chainId,
       escrowAddress: config.escrowAddress,

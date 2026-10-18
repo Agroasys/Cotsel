@@ -1,3 +1,8 @@
+import { bindUserActionCustodyPolicy } from './userActionEngine/custodyBinding';
+import {
+  requireUserActionAdapter,
+  type UserActionAdapterBinding,
+} from './userActionEngine/adapter';
 import {
   createUserActionFundingVerifier,
   type UserActionFundingVerifier,
@@ -83,6 +88,7 @@ function buildSigningRequestId(input: {
 export function createManagedSignerGaslessSettlementExecutor(
   config: ManagedSignerGaslessConfig,
   dependencies?: {
+    userActionAdapter?: UserActionAdapterBinding;
     loadUserActionHandoff?: LoadUserActionHandoff;
     verifyUserActionFunding?: UserActionFundingVerifier;
     provider?: GaslessManagedProvider;
@@ -384,6 +390,15 @@ export function createManagedSignerGaslessSettlementExecutor(
     );
   }
 
+  dependencies.userActionAdapter?.bindCustody(
+    bindUserActionCustodyPolicy(config, {
+      provider,
+      nonces: nonceReservationStore,
+      outcomes: transactionOutcomeRecorder,
+      finality,
+      signer: { mode: custodyMode, transport: signerTransport },
+    }),
+  );
   return {
     async simulateCreateTrade(input) {
       const { executorAddress } = await assertSignerBalance();
@@ -427,8 +442,10 @@ export function createManagedSignerGaslessSettlementExecutor(
         dependencies?.loadUserActionHandoff,
         config.usdcAddress,
         verifyFunding,
+        dependencies?.userActionAdapter?.isCommittedReplay,
       );
-      return requireReviewedUserActionCapability();
+      requireReviewedUserActionCapability();
+      return requireUserActionAdapter(dependencies?.userActionAdapter).simulate(input);
     },
 
     async executeUserAction(input) {
@@ -437,8 +454,10 @@ export function createManagedSignerGaslessSettlementExecutor(
         dependencies?.loadUserActionHandoff,
         config.usdcAddress,
         verifyFunding,
+        dependencies?.userActionAdapter?.isCommittedReplay,
       );
-      return requireReviewedUserActionCapability();
+      requireReviewedUserActionCapability();
+      return requireUserActionAdapter(dependencies?.userActionAdapter).execute(input);
     },
 
     async simulateWalletUsdcTransfer(input) {
