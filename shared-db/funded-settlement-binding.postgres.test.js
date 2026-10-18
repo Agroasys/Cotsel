@@ -7,7 +7,6 @@ const test = require('node:test');
 const { Pool } = require('pg');
 const { computePublicSchemaFingerprint } = require('./schema-fingerprint');
 const { runVersionedMigrations } = require('./migrate');
-const { parseSettlementFundedBinding } = require('../sdk/dist/settlementFundedBinding');
 
 const enabled = process.env.RUN_FUNDED_BINDING_POSTGRES === 'true';
 test(
@@ -26,7 +25,7 @@ test(
     const admin = new Pool({ connectionString: url.toString() });
     const identity = `funded_binding_${randomBytes(6).toString('hex')}`;
     await admin.query(`CREATE ROLE ${identity} NOLOGIN NOSUPERUSER NOBYPASSRLS`);
-    const binding = parseSettlementFundedBinding({
+    const binding = {
       scopeVersion: 'agroasys.funded-settlement-binding.v1',
       ownerServiceId: 'controlled-platform',
       sourceOperationId: '42',
@@ -50,7 +49,7 @@ test(
       fundingBlockNumber: '100',
       fundingBlockHash: `0x${'b'.repeat(64)}`,
       originalFundingFingerprint: 'c'.repeat(64),
-    });
+    };
     try {
       for (const service of ['oracle', 'gateway', 'treasury']) {
         const database = `${identity}_${service}`;
