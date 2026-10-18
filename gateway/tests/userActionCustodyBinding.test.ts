@@ -127,7 +127,7 @@ describe.each(['managed', 'raw'] as const)(
     );
 
     it.each(['submitted', 'confirmed', 'failed'] as const)(
-      'observes %s history instead of invoking funding verification or signing again',
+      'requires observation for %s history without invoking funding verification or signing again',
       async (status) => {
         const f = await setup('cancel_locked_timeout');
         f.handoff.executionStatus = status;
