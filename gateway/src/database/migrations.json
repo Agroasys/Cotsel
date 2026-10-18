@@ -99,6 +99,13 @@
       "file": "schema/015_user_action_binding.sql",
       "sha256": "3203a934e6a2cf4eb90d5284cb40ffe4e31635e1d24bfc46b7d062ccb9e7b041",
       "schema_sha256": "39b1094d7ece3db3088ebe8f08f030d658062941ec09160918a35db97d7ea029"
+    },
+    {
+      "version": "202610180016",
+      "name": "user_action_requests",
+      "file": "schema/016_user_action_requests.sql",
+      "sha256": "9fac7b6061994f44a39c3df60e9126a880a052cba14a6f1ba40c7c6ef8ab4841",
+      "schema_sha256": "32f16444995685ae8df1c5fd8154d1784959d812faff77d6a757492ff98aba3a"
     }
   ]
 }

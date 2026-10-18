@@ -12,11 +12,11 @@ const buyer = new Wallet('0x' + '11'.repeat(32));
 const supplier = new Wallet('0x' + '22'.repeat(32));
 export async function createBoundUserActionFixture(
   action: GaslessUserAction = 'finalize_after_inspection_acceptance',
+  deadline = '2000000000',
 ) {
   const signer = action === 'finalize_after_dispute_window' ? supplier : buyer;
   const escrow = '0x' + '33'.repeat(20),
-    token = '0x' + '44'.repeat(20),
-    deadline = '2000000000';
+    token = '0x' + '44'.repeat(20);
   const signature = await signer.signTypedData(
     { name: 'AgroasysEscrow', version: '1', chainId: '84532', verifyingContract: escrow },
     {

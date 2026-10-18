@@ -1363,6 +1363,50 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '503':
           description: Finalized matching evidence is not available yet.
+  /settlement/gasless-executions/user-action/operations/{sourceOperationId}:
+    get:
+      tags:
+        - Settlement
+      summary: Read the issuing service's retained user-action operation inventory
+      description: Existing service HMAC authentication is required. This read remains available when execution is denied. A missing or foreign operation returns the same 404; it never proves non-execution. No authorization signatures or signed bytes are returned.
+      operationId: getSettlementUserActionOperationInventory
+      security: []
+      parameters:
+        - name: sourceOperationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Bounded immutable instruction, attempt and outcome inventory owned by the authenticated service.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                  - timestamp
+                properties:
+                  success:
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                  data:
+                    $ref: '#/components/schemas/SettlementUserActionInventory'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Service authentication failed.
+        '404':
+          description: No operation belongs to the authenticated issuing service.
+        '409':
+          description: Inventory exceeds the automatic observation bound or is inconsistent.
+        '503':
+          description: Operation inventory is unavailable.
   /governance/status:
     get:
       tags:
@@ -9220,5 +9264,210 @@ components:
           type: string
           pattern: ^0x[0-9a-f]{64}$
         executionScopeHash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+    SettlementUserActionInventory:
+      type: object
+      additionalProperties: false
+      required:
+        - schemaVersion
+        - request
+        - currentNonceOwnerRequestId
+        - inventoryFingerprint
+      properties:
+        schemaVersion:
+          const: cotsel.user-action-inventory.v1
+        request:
+          type: object
+          additionalProperties: false
+          required:
+            - requestId
+            - ownerServiceId
+            - sourceOperationId
+            - packageId
+            - handoffId
+            - chainId
+            - escrowAddress
+            - userAddress
+            - nonce
+            - requestFingerprint
+            - bindingFingerprint
+            - binding
+            - status
+            - attempts
+            - outcomes
+          properties:
+            requestId:
+              type: string
+            ownerServiceId:
+              type: string
+            sourceOperationId:
+              type: string
+            packageId:
+              type: string
+            handoffId:
+              type: string
+            chainId:
+              type: string
+            escrowAddress:
+              type: string
+            userAddress:
+              type: string
+            nonce:
+              type: string
+            requestFingerprint:
+              type: string
+              pattern: ^0x[0-9a-f]{64}$
+            bindingFingerprint:
+              type: string
+              pattern: ^0x[0-9a-f]{64}$
+            binding:
+              $ref: '#/components/schemas/SettlementUserActionBinding'
+            status:
+              enum:
+                - accepted
+                - signing
+            attempts:
+              type: array
+              maxItems: 100
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                  - event_id
+                  - event_type
+                  - transaction_hash
+                  - transaction_identity
+                properties:
+                  event_id:
+                    type: string
+                  event_type:
+                    enum:
+                      - accepted
+                      - claimed
+                      - signing
+                      - signed
+                      - provider_hash
+                      - signer_rejected
+                  transaction_hash:
+                    anyOf:
+                      - type: string
+                        pattern: ^0x[0-9a-f]{64}$
+                      - type: 'null'
+                  transaction_identity:
+                    anyOf:
+                      - type: object
+                        additionalProperties: false
+                        required:
+                          - transactionHash
+                          - applicationRequestId
+                          - resourceType
+                          - resourceId
+                          - operation
+                          - signerAddress
+                          - destinationAddress
+                          - valueWei
+                          - gasLimit
+                          - calldataHash
+                          - intentHash
+                          - sourceApiKeyId
+                          - maxFeePerGasWei
+                          - maxPriorityFeePerGasWei
+                          - gasPriceWei
+                          - chainId
+                          - nonce
+                          - transactionType
+                        properties:
+                          transactionHash:
+                            type: string
+                          applicationRequestId:
+                            type: string
+                          resourceType:
+                            type: string
+                          resourceId:
+                            type: string
+                          operation:
+                            type: string
+                          signerAddress:
+                            type: string
+                          destinationAddress:
+                            type: string
+                          valueWei:
+                            type: string
+                          gasLimit:
+                            type: string
+                          calldataHash:
+                            type: string
+                          intentHash:
+                            type: string
+                          sourceApiKeyId:
+                            type: string
+                          maxFeePerGasWei:
+                            type:
+                              - string
+                              - 'null'
+                          maxPriorityFeePerGasWei:
+                            type:
+                              - string
+                              - 'null'
+                          gasPriceWei:
+                            type:
+                              - string
+                              - 'null'
+                          chainId:
+                            type: integer
+                          nonce:
+                            type: integer
+                          transactionType:
+                            type: integer
+                      - type: 'null'
+            outcomes:
+              type: array
+              maxItems: 10
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                  - transaction_hash
+                  - observed_transaction_hash
+                  - outcome_status
+                  - block_number
+                  - block_hash
+                  - finality_evidence
+                properties:
+                  transaction_hash:
+                    type: string
+                    pattern: ^0x[0-9a-f]{64}$
+                  observed_transaction_hash:
+                    anyOf:
+                      - type: string
+                        pattern: ^0x[0-9a-f]{64}$
+                      - type: 'null'
+                  outcome_status:
+                    enum:
+                      - broadcast_pending
+                      - broadcast_unknown
+                      - confirmation_pending
+                      - confirmed
+                      - reverted
+                      - replaced
+                      - failed
+                  block_number:
+                    type:
+                      - number
+                      - string
+                      - 'null'
+                  block_hash:
+                    anyOf:
+                      - type: string
+                        pattern: ^0x[0-9a-f]{64}$
+                      - type: 'null'
+                  finality_evidence:
+                    type:
+                      - object
+                      - 'null'
+        currentNonceOwnerRequestId:
+          type: string
+        inventoryFingerprint:
           type: string
           pattern: ^0x[0-9a-f]{64}$

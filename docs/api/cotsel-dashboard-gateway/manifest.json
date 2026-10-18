@@ -44,6 +44,7 @@
     "components/schemas-treasury-04.yml",
     "components/schemas-compliance-01.yml",
     "components/schemas-settlement-execution-binding.yml",
-    "components/schemas-settlement-user-action-binding.yml"
+    "components/schemas-settlement-user-action-binding.yml",
+    "components/schemas-settlement-user-action-inventory.yml"
   ]
 }

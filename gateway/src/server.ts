@@ -1,3 +1,4 @@
+import { createUserActionInventoryReader } from './core/userActionEngine/inventory';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -259,6 +260,7 @@ async function bootstrap(): Promise<void> {
       settlementStore,
       gaslessSettlementService,
       gaslessTransactionOutcomes: gaslessTransactionOutcomeRuntime.recorder,
+      readUserActionInventory: createUserActionInventoryReader(pool),
       oracleSettlementProgressionService,
       ricardianClient,
       nonceStore: settlementNonceStore,
