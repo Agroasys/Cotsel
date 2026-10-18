@@ -63,6 +63,8 @@ export async function withGovernancePostgres(fn: (port: number) => Promise<void>
       database: 'postgres',
       user: 'postgres',
     });
+    let createdRole = false;
+    let createdDatabase = false;
     try {
       const existing = await admin.query(
         `SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'gateway_test') AS database,
@@ -74,17 +76,24 @@ export async function withGovernancePostgres(fn: (port: number) => Promise<void>
         );
       }
       await admin.query("CREATE ROLE gateway_runtime LOGIN PASSWORD 'gateway-runtime-test'");
+      createdRole = true;
       await admin.query('CREATE DATABASE gateway_test');
+      createdDatabase = true;
       await prepareDatabase(5432);
       await fn(5432);
     } finally {
-      await admin.query(
-        `SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-         WHERE datname = 'gateway_test' AND pid <> pg_backend_pid()`,
-      );
-      await admin.query('DROP DATABASE IF EXISTS gateway_test');
-      await admin.query('DROP ROLE IF EXISTS gateway_runtime');
-      await admin.end();
+      try {
+        if (createdDatabase) {
+          await admin.query(
+            `SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+             WHERE datname = 'gateway_test' AND pid <> pg_backend_pid()`,
+          );
+          await admin.query('DROP DATABASE IF EXISTS gateway_test');
+        }
+        if (createdRole) await admin.query('DROP ROLE IF EXISTS gateway_runtime');
+      } finally {
+        await admin.end();
+      }
     }
     return;
   }
