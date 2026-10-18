@@ -9299,14 +9299,20 @@ components:
           properties:
             requestId:
               type: string
+              format: uuid
+              pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
             ownerServiceId:
               type: string
             sourceOperationId:
               type: string
+              format: uuid
+              pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
             packageId:
               type: string
             handoffId:
               type: string
+              format: uuid
+              pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
             chainId:
               type: string
             escrowAddress:
@@ -9341,6 +9347,7 @@ components:
                 properties:
                   event_id:
                     type: string
+                    pattern: ^[1-9][0-9]{0,77}$
                   event_type:
                     enum:
                       - accepted
@@ -9380,6 +9387,7 @@ components:
                         properties:
                           transactionHash:
                             type: string
+                            pattern: ^0x[0-9a-f]{64}$
                           applicationRequestId:
                             type: string
                           resourceType:
@@ -9394,26 +9402,33 @@ components:
                             type: string
                           valueWei:
                             type: string
+                            pattern: ^(0|[1-9][0-9]{0,77})$
                           gasLimit:
                             type: string
+                            pattern: ^(0|[1-9][0-9]{0,77})$
                           calldataHash:
                             type: string
+                            pattern: ^0x[0-9a-f]{64}$
                           intentHash:
                             type: string
+                            pattern: ^0x[0-9a-f]{64}$
                           sourceApiKeyId:
                             type: string
                           maxFeePerGasWei:
-                            type:
-                              - string
-                              - 'null'
+                            anyOf:
+                              - type: string
+                                pattern: ^(0|[1-9][0-9]{0,77})$
+                              - type: 'null'
                           maxPriorityFeePerGasWei:
-                            type:
-                              - string
-                              - 'null'
+                            anyOf:
+                              - type: string
+                                pattern: ^(0|[1-9][0-9]{0,77})$
+                              - type: 'null'
                           gasPriceWei:
-                            type:
-                              - string
-                              - 'null'
+                            anyOf:
+                              - type: string
+                                pattern: ^(0|[1-9][0-9]{0,77})$
+                              - type: 'null'
                           chainId:
                             type: integer
                           nonce:
@@ -9453,21 +9468,111 @@ components:
                       - replaced
                       - failed
                   block_number:
-                    type:
-                      - number
-                      - string
-                      - 'null'
+                    anyOf:
+                      - type: string
+                        pattern: ^(0|[1-9][0-9]{0,77})$
+                      - type: 'null'
                   block_hash:
                     anyOf:
                       - type: string
                         pattern: ^0x[0-9a-f]{64}$
                       - type: 'null'
                   finality_evidence:
-                    type:
-                      - object
-                      - 'null'
+                    anyOf:
+                      - type: object
+                        additionalProperties: false
+                        required:
+                          - policyVersion
+                          - chainId
+                          - transactionHash
+                          - blockNumber
+                          - blockHash
+                          - finalizedBlockNumber
+                          - finalizedBlockHash
+                          - rpcWitnesses
+                        properties:
+                          policyVersion:
+                            const: gasless_dual_rpc_finalized_v1
+                          chainId:
+                            type: string
+                            pattern: ^(0|[1-9][0-9]{0,77})$
+                          transactionHash:
+                            type: string
+                            pattern: ^0x[0-9a-f]{64}$
+                          blockNumber:
+                            type: string
+                            pattern: ^(0|[1-9][0-9]{0,77})$
+                          blockHash:
+                            type: string
+                            pattern: ^0x[0-9a-f]{64}$
+                          finalizedBlockNumber:
+                            type: string
+                            pattern: ^(0|[1-9][0-9]{0,77})$
+                          finalizedBlockHash:
+                            type: string
+                            pattern: ^0x[0-9a-f]{64}$
+                          rpcWitnesses:
+                            type: array
+                            minItems: 2
+                            maxItems: 2
+                            uniqueItems: true
+                            items:
+                              type: string
+                              pattern: ^0x[0-9a-f]{64}$
+                          projectionCoverage:
+                            type: object
+                            additionalProperties: false
+                            required:
+                              - version
+                              - tradeId
+                              - indexer
+                              - reconciliation
+                            properties:
+                              version:
+                                const: cotsel.financial-projection-coverage.v1
+                              tradeId:
+                                type: string
+                                pattern: ^(0|[1-9][0-9]{0,77})$
+                              indexer:
+                                type: object
+                                additionalProperties: false
+                                required:
+                                  - blockNumber
+                                  - blockHash
+                                properties:
+                                  blockNumber:
+                                    type: string
+                                    pattern: ^(0|[1-9][0-9]{0,77})$
+                                  blockHash:
+                                    type: string
+                                    pattern: ^0x[0-9a-f]{64}$
+                              reconciliation:
+                                type: object
+                                additionalProperties: false
+                                required:
+                                  - runKey
+                                  - blockNumber
+                                  - blockHash
+                                  - verifiedAt
+                                properties:
+                                  runKey:
+                                    type: string
+                                    pattern: ^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$
+                                  blockNumber:
+                                    type: string
+                                    pattern: ^(0|[1-9][0-9]{0,77})$
+                                  blockHash:
+                                    type: string
+                                    pattern: ^0x[0-9a-f]{64}$
+                                  verifiedAt:
+                                    type: string
+                                    format: date-time
+                                    maxLength: 32
+                      - type: 'null'
         currentNonceOwnerRequestId:
           type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
         inventoryFingerprint:
           type: string
           pattern: ^0x[0-9a-f]{64}$

@@ -1,211 +1,312 @@
-{
-  'components':
-    {
-      'schemas':
-        {
-          'SettlementUserActionInventory':
-            {
-              'type': 'object',
-              'additionalProperties': false,
-              'required':
-                ['schemaVersion', 'request', 'currentNonceOwnerRequestId', 'inventoryFingerprint'],
-              'properties':
-                {
-                  'schemaVersion': { 'const': 'cotsel.user-action-inventory.v1' },
-                  'request':
-                    {
-                      'type': 'object',
-                      'additionalProperties': false,
-                      'required':
-                        [
-                          'requestId',
-                          'ownerServiceId',
-                          'sourceOperationId',
-                          'packageId',
-                          'handoffId',
-                          'chainId',
-                          'escrowAddress',
-                          'userAddress',
-                          'nonce',
-                          'requestFingerprint',
-                          'bindingFingerprint',
-                          'binding',
-                          'status',
-                          'attempts',
-                          'outcomes',
-                        ],
-                      'properties':
-                        {
-                          'requestId': { 'type': 'string' },
-                          'ownerServiceId': { 'type': 'string' },
-                          'sourceOperationId': { 'type': 'string' },
-                          'packageId': { 'type': 'string' },
-                          'handoffId': { 'type': 'string' },
-                          'chainId': { 'type': 'string' },
-                          'escrowAddress': { 'type': 'string' },
-                          'userAddress': { 'type': 'string' },
-                          'nonce': { 'type': 'string' },
-                          'requestFingerprint': { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
-                          'bindingFingerprint': { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
-                          'binding': { '$ref': '#/components/schemas/SettlementUserActionBinding' },
-                          'status': { 'enum': ['accepted', 'signing'] },
-                          'attempts':
-                            {
-                              'type': 'array',
-                              'maxItems': 100,
-                              'items':
-                                {
-                                  'type': 'object',
-                                  'additionalProperties': false,
-                                  'required':
-                                    [
-                                      'event_id',
-                                      'event_type',
-                                      'transaction_hash',
-                                      'transaction_identity',
-                                    ],
-                                  'properties':
-                                    {
-                                      'event_id': { 'type': 'string' },
-                                      'event_type':
-                                        {
-                                          'enum':
-                                            [
-                                              'accepted',
-                                              'claimed',
-                                              'signing',
-                                              'signed',
-                                              'provider_hash',
-                                              'signer_rejected',
-                                            ],
-                                        },
-                                      'transaction_hash':
-                                        {
-                                          'anyOf':
-                                            [
-                                              { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
-                                              { 'type': 'null' },
-                                            ],
-                                        },
-                                      'transaction_identity':
-                                        {
-                                          'anyOf':
-                                            [
-                                              {
-                                                'type': 'object',
-                                                'additionalProperties': false,
-                                                'required':
-                                                  [
-                                                    'transactionHash',
-                                                    'applicationRequestId',
-                                                    'resourceType',
-                                                    'resourceId',
-                                                    'operation',
-                                                    'signerAddress',
-                                                    'destinationAddress',
-                                                    'valueWei',
-                                                    'gasLimit',
-                                                    'calldataHash',
-                                                    'intentHash',
-                                                    'sourceApiKeyId',
-                                                    'maxFeePerGasWei',
-                                                    'maxPriorityFeePerGasWei',
-                                                    'gasPriceWei',
-                                                    'chainId',
-                                                    'nonce',
-                                                    'transactionType',
-                                                  ],
-                                                'properties':
-                                                  {
-                                                    'transactionHash': { 'type': 'string' },
-                                                    'applicationRequestId': { 'type': 'string' },
-                                                    'resourceType': { 'type': 'string' },
-                                                    'resourceId': { 'type': 'string' },
-                                                    'operation': { 'type': 'string' },
-                                                    'signerAddress': { 'type': 'string' },
-                                                    'destinationAddress': { 'type': 'string' },
-                                                    'valueWei': { 'type': 'string' },
-                                                    'gasLimit': { 'type': 'string' },
-                                                    'calldataHash': { 'type': 'string' },
-                                                    'intentHash': { 'type': 'string' },
-                                                    'sourceApiKeyId': { 'type': 'string' },
-                                                    'maxFeePerGasWei':
-                                                      { 'type': ['string', 'null'] },
-                                                    'maxPriorityFeePerGasWei':
-                                                      { 'type': ['string', 'null'] },
-                                                    'gasPriceWei': { 'type': ['string', 'null'] },
-                                                    'chainId': { 'type': 'integer' },
-                                                    'nonce': { 'type': 'integer' },
-                                                    'transactionType': { 'type': 'integer' },
-                                                  },
-                                              },
-                                              { 'type': 'null' },
-                                            ],
-                                        },
-                                    },
-                                },
-                            },
-                          'outcomes':
-                            {
-                              'type': 'array',
-                              'maxItems': 10,
-                              'items':
-                                {
-                                  'type': 'object',
-                                  'additionalProperties': false,
-                                  'required':
-                                    [
-                                      'transaction_hash',
-                                      'observed_transaction_hash',
-                                      'outcome_status',
-                                      'block_number',
-                                      'block_hash',
-                                      'finality_evidence',
-                                    ],
-                                  'properties':
-                                    {
-                                      'transaction_hash':
-                                        { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
-                                      'observed_transaction_hash':
-                                        {
-                                          'anyOf':
-                                            [
-                                              { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
-                                              { 'type': 'null' },
-                                            ],
-                                        },
-                                      'outcome_status':
-                                        {
-                                          'enum':
-                                            [
-                                              'broadcast_pending',
-                                              'broadcast_unknown',
-                                              'confirmation_pending',
-                                              'confirmed',
-                                              'reverted',
-                                              'replaced',
-                                              'failed',
-                                            ],
-                                        },
-                                      'block_number': { 'type': ['number', 'string', 'null'] },
-                                      'block_hash':
-                                        {
-                                          'anyOf':
-                                            [
-                                              { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
-                                              { 'type': 'null' },
-                                            ],
-                                        },
-                                      'finality_evidence': { 'type': ['object', 'null'] },
-                                    },
-                                },
-                            },
-                        },
-                    },
-                  'currentNonceOwnerRequestId': { 'type': 'string' },
-                  'inventoryFingerprint': { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
-                },
-            },
-        },
-    },
-}
+components:
+  schemas:
+    SettlementUserActionInventory:
+      type: object
+      additionalProperties: false
+      required:
+        - schemaVersion
+        - request
+        - currentNonceOwnerRequestId
+        - inventoryFingerprint
+      properties:
+        schemaVersion:
+          const: cotsel.user-action-inventory.v1
+        request:
+          type: object
+          additionalProperties: false
+          required:
+            - requestId
+            - ownerServiceId
+            - sourceOperationId
+            - packageId
+            - handoffId
+            - chainId
+            - escrowAddress
+            - userAddress
+            - nonce
+            - requestFingerprint
+            - bindingFingerprint
+            - binding
+            - status
+            - attempts
+            - outcomes
+          properties:
+            requestId:
+              type: string
+              format: uuid
+              pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+            ownerServiceId:
+              type: string
+            sourceOperationId:
+              type: string
+              format: uuid
+              pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+            packageId:
+              type: string
+            handoffId:
+              type: string
+              format: uuid
+              pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+            chainId:
+              type: string
+            escrowAddress:
+              type: string
+            userAddress:
+              type: string
+            nonce:
+              type: string
+            requestFingerprint:
+              type: string
+              pattern: ^0x[0-9a-f]{64}$
+            bindingFingerprint:
+              type: string
+              pattern: ^0x[0-9a-f]{64}$
+            binding:
+              $ref: '#/components/schemas/SettlementUserActionBinding'
+            status:
+              enum:
+                - accepted
+                - signing
+            attempts:
+              type: array
+              maxItems: 100
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                  - event_id
+                  - event_type
+                  - transaction_hash
+                  - transaction_identity
+                properties:
+                  event_id:
+                    type: string
+                    pattern: ^[1-9][0-9]{0,77}$
+                  event_type:
+                    enum:
+                      - accepted
+                      - claimed
+                      - signing
+                      - signed
+                      - provider_hash
+                      - signer_rejected
+                  transaction_hash:
+                    anyOf:
+                      - type: string
+                        pattern: ^0x[0-9a-f]{64}$
+                      - type: 'null'
+                  transaction_identity:
+                    anyOf:
+                      - type: object
+                        additionalProperties: false
+                        required:
+                          - transactionHash
+                          - applicationRequestId
+                          - resourceType
+                          - resourceId
+                          - operation
+                          - signerAddress
+                          - destinationAddress
+                          - valueWei
+                          - gasLimit
+                          - calldataHash
+                          - intentHash
+                          - sourceApiKeyId
+                          - maxFeePerGasWei
+                          - maxPriorityFeePerGasWei
+                          - gasPriceWei
+                          - chainId
+                          - nonce
+                          - transactionType
+                        properties:
+                          transactionHash:
+                            type: string
+                            pattern: ^0x[0-9a-f]{64}$
+                          applicationRequestId:
+                            type: string
+                          resourceType:
+                            type: string
+                          resourceId:
+                            type: string
+                          operation:
+                            type: string
+                          signerAddress:
+                            type: string
+                          destinationAddress:
+                            type: string
+                          valueWei:
+                            type: string
+                            pattern: ^(0|[1-9][0-9]{0,77})$
+                          gasLimit:
+                            type: string
+                            pattern: ^(0|[1-9][0-9]{0,77})$
+                          calldataHash:
+                            type: string
+                            pattern: ^0x[0-9a-f]{64}$
+                          intentHash:
+                            type: string
+                            pattern: ^0x[0-9a-f]{64}$
+                          sourceApiKeyId:
+                            type: string
+                          maxFeePerGasWei:
+                            anyOf:
+                              - type: string
+                                pattern: ^(0|[1-9][0-9]{0,77})$
+                              - type: 'null'
+                          maxPriorityFeePerGasWei:
+                            anyOf:
+                              - type: string
+                                pattern: ^(0|[1-9][0-9]{0,77})$
+                              - type: 'null'
+                          gasPriceWei:
+                            anyOf:
+                              - type: string
+                                pattern: ^(0|[1-9][0-9]{0,77})$
+                              - type: 'null'
+                          chainId:
+                            type: integer
+                          nonce:
+                            type: integer
+                          transactionType:
+                            type: integer
+                      - type: 'null'
+            outcomes:
+              type: array
+              maxItems: 10
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                  - transaction_hash
+                  - observed_transaction_hash
+                  - outcome_status
+                  - block_number
+                  - block_hash
+                  - finality_evidence
+                properties:
+                  transaction_hash:
+                    type: string
+                    pattern: ^0x[0-9a-f]{64}$
+                  observed_transaction_hash:
+                    anyOf:
+                      - type: string
+                        pattern: ^0x[0-9a-f]{64}$
+                      - type: 'null'
+                  outcome_status:
+                    enum:
+                      - broadcast_pending
+                      - broadcast_unknown
+                      - confirmation_pending
+                      - confirmed
+                      - reverted
+                      - replaced
+                      - failed
+                  block_number:
+                    anyOf:
+                      - type: string
+                        pattern: ^(0|[1-9][0-9]{0,77})$
+                      - type: 'null'
+                  block_hash:
+                    anyOf:
+                      - type: string
+                        pattern: ^0x[0-9a-f]{64}$
+                      - type: 'null'
+                  finality_evidence:
+                    anyOf:
+                      - type: object
+                        additionalProperties: false
+                        required:
+                          - policyVersion
+                          - chainId
+                          - transactionHash
+                          - blockNumber
+                          - blockHash
+                          - finalizedBlockNumber
+                          - finalizedBlockHash
+                          - rpcWitnesses
+                        properties:
+                          policyVersion:
+                            const: gasless_dual_rpc_finalized_v1
+                          chainId:
+                            type: string
+                            pattern: ^(0|[1-9][0-9]{0,77})$
+                          transactionHash:
+                            type: string
+                            pattern: ^0x[0-9a-f]{64}$
+                          blockNumber:
+                            type: string
+                            pattern: ^(0|[1-9][0-9]{0,77})$
+                          blockHash:
+                            type: string
+                            pattern: ^0x[0-9a-f]{64}$
+                          finalizedBlockNumber:
+                            type: string
+                            pattern: ^(0|[1-9][0-9]{0,77})$
+                          finalizedBlockHash:
+                            type: string
+                            pattern: ^0x[0-9a-f]{64}$
+                          rpcWitnesses:
+                            type: array
+                            minItems: 2
+                            maxItems: 2
+                            uniqueItems: true
+                            items:
+                              type: string
+                              pattern: ^0x[0-9a-f]{64}$
+                          projectionCoverage:
+                            type: object
+                            additionalProperties: false
+                            required:
+                              - version
+                              - tradeId
+                              - indexer
+                              - reconciliation
+                            properties:
+                              version:
+                                const: cotsel.financial-projection-coverage.v1
+                              tradeId:
+                                type: string
+                                pattern: ^(0|[1-9][0-9]{0,77})$
+                              indexer:
+                                type: object
+                                additionalProperties: false
+                                required:
+                                  - blockNumber
+                                  - blockHash
+                                properties:
+                                  blockNumber:
+                                    type: string
+                                    pattern: ^(0|[1-9][0-9]{0,77})$
+                                  blockHash:
+                                    type: string
+                                    pattern: ^0x[0-9a-f]{64}$
+                              reconciliation:
+                                type: object
+                                additionalProperties: false
+                                required:
+                                  - runKey
+                                  - blockNumber
+                                  - blockHash
+                                  - verifiedAt
+                                properties:
+                                  runKey:
+                                    type: string
+                                    pattern: ^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$
+                                  blockNumber:
+                                    type: string
+                                    pattern: ^(0|[1-9][0-9]{0,77})$
+                                  blockHash:
+                                    type: string
+                                    pattern: ^0x[0-9a-f]{64}$
+                                  verifiedAt:
+                                    type: string
+                                    format: date-time
+                                    maxLength: 32
+                      - type: 'null'
+        currentNonceOwnerRequestId:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        inventoryFingerprint:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$

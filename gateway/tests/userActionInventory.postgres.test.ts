@@ -1,3 +1,4 @@
+import { validateInventoryRequest } from '../src/core/userActionEngine/inventoryValidation';
 import fs from 'fs';
 import { keccak256 } from 'ethers';
 /** SPDX-License-Identifier: Apache-2.0 */
@@ -201,5 +202,157 @@ describeLocal('owned user-action inventory API with actual PostgreSQL projection
       );
       expect(JSON.stringify(jest.mocked(method).mock.calls)).not.toContain('sensitive');
     }
+  });
+  test.each([
+    'chain_private',
+    'chain_mismatch',
+    'block_private',
+    'block_zero_prefix',
+    'finalized_private',
+    'finalized_before_receipt',
+    'tx_mismatch',
+    'duplicate_witness',
+    'wrong_policy',
+    'wrong_projection_version',
+    'wrong_trade',
+    'private_trade',
+    'private_indexer_block',
+    'private_reconciler_block',
+    'private_run_key',
+    'oversized_run_key',
+    'private_verified_at',
+    'future_verified_at',
+    'indexer_behind_reconciliation',
+    'anchor_hash_mismatch',
+  ] as const)('stored %s finality fails closed through authenticated HTTP', async (fault) => {
+    const f = await setup(true);
+    const original = (
+      await db.runtime.query('SELECT finality_evidence FROM gasless_transaction_outcomes')
+    ).rows[0].finality_evidence;
+    const privateText = 'PRIVATE_PROVIDER_TOKEN_FIXTURE';
+    const proof = {
+      ...original,
+      projectionCoverage: {
+        version: 'cotsel.financial-projection-coverage.v1',
+        tradeId: '7',
+        indexer: { blockNumber: '200', blockHash: original.finalizedBlockHash },
+        reconciliation: {
+          runKey: 'retained-run:fixture',
+          blockNumber: '180',
+          blockHash: '0x' + 'c'.repeat(64),
+          verifiedAt: new Date().toISOString(),
+        },
+      },
+    };
+    await db.owner.query('UPDATE gasless_transaction_outcomes SET finality_evidence=$1', [proof]);
+    expect((await f.get()).status).toBe(200);
+    switch (fault) {
+      case 'chain_private':
+        proof.chainId = privateText;
+        break;
+      case 'chain_mismatch':
+        proof.chainId = '1';
+        break;
+      case 'block_private':
+        proof.blockNumber = privateText;
+        break;
+      case 'block_zero_prefix':
+        proof.blockNumber = '0101';
+        break;
+      case 'finalized_private':
+        proof.finalizedBlockNumber = privateText;
+        break;
+      case 'finalized_before_receipt':
+        proof.finalizedBlockNumber = '100';
+        break;
+      case 'tx_mismatch':
+        proof.transactionHash = '0x' + 'e'.repeat(64);
+        break;
+      case 'duplicate_witness':
+        proof.rpcWitnesses = [original.rpcWitnesses[0], original.rpcWitnesses[0]];
+        break;
+      case 'wrong_policy':
+        proof.policyVersion = privateText;
+        break;
+      case 'wrong_projection_version':
+        proof.projectionCoverage.version = privateText;
+        break;
+      case 'wrong_trade':
+        proof.projectionCoverage.tradeId = '8';
+        break;
+      case 'private_trade':
+        proof.projectionCoverage.tradeId = privateText;
+        break;
+      case 'private_indexer_block':
+        proof.projectionCoverage.indexer.blockNumber = privateText;
+        break;
+      case 'private_reconciler_block':
+        proof.projectionCoverage.reconciliation.blockNumber = privateText;
+        break;
+      case 'private_run_key':
+        proof.projectionCoverage.reconciliation.runKey = privateText + '\n';
+        break;
+      case 'oversized_run_key':
+        proof.projectionCoverage.reconciliation.runKey = 'x'.repeat(129);
+        break;
+      case 'private_verified_at':
+        proof.projectionCoverage.reconciliation.verifiedAt = privateText;
+        break;
+      case 'future_verified_at':
+        proof.projectionCoverage.reconciliation.verifiedAt = new Date(
+          Date.now() + 120_000,
+        ).toISOString();
+        break;
+      case 'indexer_behind_reconciliation':
+        proof.projectionCoverage.indexer.blockNumber = '179';
+        break;
+      case 'anchor_hash_mismatch':
+        proof.projectionCoverage.indexer.blockHash = '0x' + 'd'.repeat(64);
+        break;
+    }
+    await db.owner.query('UPDATE gasless_transaction_outcomes SET finality_evidence=$1', [proof]);
+    const response = await f.get();
+    expect(response.status).toBe(409);
+    expect(await response.text()).not.toContain(privateText);
+    for (const method of [console.log, console.warn, console.error])
+      expect(JSON.stringify(jest.mocked(method).mock.calls)).not.toContain(privateText);
+  });
+  test('attempt/outcome enum, id, signed identity provenance and unretained observed hash cannot pass validated PG inventory', async () => {
+    const f = await setup(true),
+      inventory = (await f.read('owner', operation))!;
+    const mutate = (change: (request: typeof inventory.request) => void) => {
+      const request = JSON.parse(JSON.stringify(inventory.request));
+      change(request);
+      expect(() => validateInventoryRequest(request, 'owner')).toThrow();
+    };
+    mutate((request) => {
+      request.attempts[0].event_id = 'PRIVATE_DIAGNOSTIC';
+    });
+    mutate((request) => {
+      request.attempts[0].event_type = 'provider_private_error';
+    });
+    mutate((request) => {
+      request.outcomes[0].outcome_status = 'private_unknown';
+    });
+    for (const field of [
+      'applicationRequestId',
+      'resourceId',
+      'operation',
+      'sourceApiKeyId',
+      'chainId',
+      'destinationAddress',
+      'valueWei',
+    ] as const)
+      mutate((request) => {
+        const signed = request.attempts.find(
+          (attempt) => attempt.event_type === 'signed',
+        )!.transaction_identity!;
+        (signed as unknown as Record<string, unknown>)[field] =
+          field === 'chainId' ? 1 : field === 'valueWei' ? '1' : 'foreign';
+      });
+    await db.owner.query('UPDATE gasless_transaction_outcomes SET observed_transaction_hash=$1', [
+      '0x' + 'b'.repeat(64),
+    ]);
+    expect((await f.get()).status).toBe(409);
   });
 });

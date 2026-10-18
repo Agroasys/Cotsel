@@ -28,9 +28,11 @@ export function validateSignedIdentity(identity: GaslessTransactionIdentity): vo
   )
     deny('Complete canonical signed identity is required');
   for (const key of ['transactionHash', 'calldataHash', 'intentHash'] as const)
-    if (!/^0x[0-9a-f]{64}$/.test(identity[key])) deny('Signed hash is invalid');
+    if (typeof identity[key] !== 'string' || !/^0x[0-9a-f]{64}$/.test(identity[key]))
+      deny('Signed hash is invalid');
   for (const key of ['signerAddress', 'destinationAddress'] as const)
-    if (!/^0x[0-9a-fA-F]{40}$/.test(identity[key])) deny('Signed address is invalid');
+    if (typeof identity[key] !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(identity[key]))
+      deny('Signed address is invalid');
   if (
     !Number.isSafeInteger(identity.chainId) ||
     identity.chainId < 1 ||
@@ -40,11 +42,18 @@ export function validateSignedIdentity(identity: GaslessTransactionIdentity): vo
   )
     deny('Signed transaction identity is invalid');
   for (const key of ['valueWei', 'gasLimit'] as const)
-    if (!/^(0|[1-9]\d*)$/.test(identity[key])) deny('Signed amount is invalid');
+    if (
+      typeof identity[key] !== 'string' ||
+      !/^(0|[1-9][0-9]{0,77})$/.test(identity[key]) ||
+      BigInt(identity[key]) >= 1n << 256n
+    )
+      deny('Signed amount is invalid');
   for (const key of ['maxFeePerGasWei', 'maxPriorityFeePerGasWei', 'gasPriceWei'] as const)
     if (
       identity[key] !== null &&
-      (typeof identity[key] !== 'string' || !/^(0|[1-9]\d*)$/.test(identity[key]))
+      (typeof identity[key] !== 'string' ||
+        !/^(0|[1-9][0-9]{0,77})$/.test(identity[key]) ||
+        BigInt(identity[key]) >= 1n << 256n)
     )
       deny('Signed fee is invalid');
   if (
@@ -58,4 +67,11 @@ export function validateSignedIdentity(identity: GaslessTransactionIdentity): vo
         identity.maxPriorityFeePerGasWei !== null)
   )
     deny('Signed fee fields do not match transaction type');
+  if (
+    identity.transactionType === 2
+      ? BigInt(identity.maxFeePerGasWei!) <= 0n ||
+        BigInt(identity.maxPriorityFeePerGasWei!) > BigInt(identity.maxFeePerGasWei!)
+      : BigInt(identity.gasPriceWei!) <= 0n
+  )
+    deny('Signed fee ordering is invalid');
 }
