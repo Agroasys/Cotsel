@@ -1,3 +1,4 @@
+import { writeFileSync } from 'fs';
 import type { Server } from 'http';
 import { createInMemoryNonceStore } from '@agroasys/shared-auth';
 import { createApp } from '../src/app';
@@ -364,6 +365,13 @@ describeLocal('owning guarded execution adapters (real PG and local signatures)'
       const response = await post(body, 'controlled-test-only');
       expect(response.status).toBe(202);
       const payload = await response.json();
+      if (process.env.COTSEL_USER_ACTION_EXECUTION_VECTOR_PATH)
+        writeFileSync(
+          process.env.COTSEL_USER_ACTION_EXECUTION_VECTOR_PATH,
+          JSON.stringify({ fixtureOnly: true, requestBody: body, response: payload }, null, 2) +
+            '\n',
+          { mode: 0o600 },
+        );
       expect(
         createSchemaValidator(
           loadOpenApiSpec(),
