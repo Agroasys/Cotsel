@@ -146,3 +146,11 @@ image understands the active outcome schema and does not restore automatic
 nonce retries. Do not roll back or delete the outcome tables or their event
 history. If no compatible image exists, pause gasless broadcasts and keep the
 recovery worker running until the original hashes are resolved.
+
+## Retained lifecycle identity repair
+
+The existing Gateway observer repairs up to 25 known lifecycle signed identities before each reconciliation cycle.
+The same timer and cycle fence own repair and observation. No signer or broadcast port is present.
+A missing lifecycle migration or unavailable repair leaves lifecycle requests unresolved. Existing retained outcome observation continues.
+A signing marker without a canonical signed hash stays quarantined. Process death does not permit another signature.
+See [the lifecycle execution foundation](../architecture/dormant-user-action-engine.md) for configuration and proof limits.

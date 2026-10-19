@@ -3,8 +3,8 @@ import { createServiceAuthHeaders } from '../serviceAuth';
 import { fingerprint } from './validation';
 import { validateUserActionRetirementEvidence } from './retirement';
 import type { VerifyUserActionRetirement, UserActionRetirementEvidence } from './retirement';
-export const USER_ACTION_RETIREMENT_PATH =
-  '/api/v1/settlement-handoffs/cotsel/lifecycle-action-retirement-evidence';
+import { USER_ACTION_RETIREMENT_PATH } from '../../config/userActionRetirement';
+export { USER_ACTION_RETIREMENT_PATH } from '../../config/userActionRetirement';
 export interface UserActionRetirementTransportConfig {
   url: string;
   owningServiceId: string;

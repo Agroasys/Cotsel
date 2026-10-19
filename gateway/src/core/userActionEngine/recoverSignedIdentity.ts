@@ -6,7 +6,7 @@ import type {
 } from '../gaslessTransactionOutcomeStore';
 import { IDENTITY_FIELDS, validateSignedIdentity } from './signedIdentity';
 import { deny, fingerprint } from './validation';
-/** Explicit dormant-worker step. No signer, submission port or candidate substitution. */
+/** Existing observer pre-cycle repair. No signer, submission port or candidate substitution. */
 export async function recoverUserActionSignedIdentities(
   pool: Pool,
   recorder: Pick<GaslessTransactionOutcomeRecorder, 'recordPrepared'>,

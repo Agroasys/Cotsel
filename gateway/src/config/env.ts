@@ -411,6 +411,10 @@ export function loadConfig(): GatewayConfig {
     settlementCallbackUrl,
     settlementCallbackApiKey,
     settlementCallbackApiSecret,
+    userActionRetirementEvidenceUrl: optionalEnv('GATEWAY_USER_ACTION_RETIREMENT_EVIDENCE_URL'),
+    userActionRetirementOwningServiceId: optionalEnv(
+      'GATEWAY_USER_ACTION_RETIREMENT_OWNING_SERVICE_ID',
+    ),
     settlementCallbackRequestTimeoutMs: envNumber(
       'GATEWAY_SETTLEMENT_CALLBACK_REQUEST_TIMEOUT_MS',
       5000,

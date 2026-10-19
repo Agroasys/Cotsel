@@ -1,9 +1,11 @@
 /** SPDX-License-Identifier: Apache-2.0 */
 import { randomUUID } from 'crypto';
 import path from 'path';
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import { Pool } from 'pg';
 import { runVersionedMigrations } from '@agroasys/shared-db/migrate';
-export async function createUserActionEnginePostgres() {
+export async function createUserActionEnginePostgres(throughVersion?: '202610170015') {
   const name = `ua_${randomUUID().replace(/-/g, '')}`;
   const connection = {
     host: '127.0.0.1',
@@ -16,6 +18,7 @@ export async function createUserActionEnginePostgres() {
   let role = false,
     db = false;
   let owner: Pool | undefined, runtime: Pool | undefined;
+  let manifestDirectory: string | undefined;
   const close = async () => {
     await runtime?.end();
     await owner?.end();
@@ -24,6 +27,7 @@ export async function createUserActionEnginePostgres() {
     } finally {
       if (role) await admin.query(`DROP ROLE ${name}`);
       await admin.end();
+      if (manifestDirectory) rmSync(manifestDirectory, { recursive: true, force: true });
     }
   };
   try {
@@ -38,10 +42,26 @@ export async function createUserActionEnginePostgres() {
       options: `-c app.runtime_db_user=${name}`,
     });
     await owner.query(`SET app.runtime_db_user='${name}'`);
+    const sourceDirectory = path.resolve(__dirname, '../../src/database');
+    let manifestPath = path.join(sourceDirectory, 'migrations.json');
+    if (throughVersion) {
+      manifestDirectory = mkdtempSync(path.join(tmpdir(), 'gateway-history-'));
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+        migrations: Array<{ version: string; file: string }>;
+      };
+      manifest.migrations = manifest.migrations.filter((row) => row.version <= throughVersion);
+      for (const row of manifest.migrations) {
+        const target = path.join(manifestDirectory, row.file);
+        mkdirSync(path.dirname(target), { recursive: true });
+        copyFileSync(path.join(sourceDirectory, row.file), target);
+      }
+      manifestPath = path.join(manifestDirectory, 'migrations.json');
+      writeFileSync(manifestPath, JSON.stringify(manifest));
+    }
     const args = {
       pool: owner,
       serviceName: 'gateway',
-      manifestPath: path.resolve(__dirname, '../../src/database/migrations.json'),
+      manifestPath,
       runtimeDbUser: name,
     };
     await runVersionedMigrations(args);

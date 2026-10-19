@@ -71,3 +71,42 @@ test('produces a deterministic digest from redacted configuration', () => {
   const changedPublicConfig = loadStrictRuntimeEnv({ envFile, schemaFile, inheritedEnv: {} });
   assert.notEqual(first.redactedConfigSha256, changedPublicConfig.redactedConfigSha256);
 });
+
+test('exactly two additive retirement dependencies may be absent from old profiles', () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'cotsel-optional-retirement-'));
+  const schemaFile = path.join(directory, 'schema.env');
+  const envFile = path.join(directory, 'runtime.env');
+  const url = 'GATEWAY_USER_ACTION_RETIREMENT_EVIDENCE_URL';
+  const owner = 'GATEWAY_USER_ACTION_RETIREMENT_OWNING_SERVICE_ID';
+  writeFileSync(schemaFile, `REQUIRED=\n${url}=\n${owner}=\n`);
+  writeFileSync(envFile, 'REQUIRED=retained\n');
+  const legacy = loadStrictRuntimeEnv({ envFile, schemaFile, inheritedEnv: {} });
+  assert.equal(legacy.values.get(url), '');
+  assert.equal(legacy.values.get(owner), '');
+  writeFileSync(envFile, `REQUIRED=retained\n${url}=\n${owner}=\n`);
+  assert.equal(
+    loadStrictRuntimeEnv({ envFile, schemaFile, inheritedEnv: {} }).redactedConfigSha256,
+    legacy.redactedConfigSha256,
+  );
+  writeFileSync(
+    envFile,
+    `REQUIRED=retained\n${url}=https://backend.example.test/api/v1/settlement-handoffs/cotsel/lifecycle-action-retirement-evidence\n`,
+  );
+  const partial = loadStrictRuntimeEnv({ envFile, schemaFile, inheritedEnv: {} });
+  assert.equal(partial.values.get(owner), '');
+  assert.throws(
+    () => loadStrictRuntimeEnv({ envFile, schemaFile, inheritedEnv: { [owner]: 'ambient-owner' } }),
+    /inherited override/,
+  );
+  writeFileSync(envFile, `${url}=\n${owner}=\n`);
+  assert.throws(
+    () => loadStrictRuntimeEnv({ envFile, schemaFile, inheritedEnv: {} }),
+    /missing environment key REQUIRED/,
+  );
+  writeFileSync(schemaFile, `REQUIRED=\n${url}=https://invented-default.example.test\n${owner}=\n`);
+  writeFileSync(envFile, 'REQUIRED=retained\n');
+  assert.throws(
+    () => loadStrictRuntimeEnv({ envFile, schemaFile, inheritedEnv: {} }),
+    /missing environment key GATEWAY_USER_ACTION_RETIREMENT_EVIDENCE_URL/,
+  );
+});

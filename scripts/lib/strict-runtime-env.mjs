@@ -5,6 +5,11 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+// These additive capability dependencies alone may be absent from an older runtime profile.
+const OPTIONAL_EMPTY_RUNTIME_KEYS = new Set([
+  'GATEWAY_USER_ACTION_RETIREMENT_EVIDENCE_URL',
+  'GATEWAY_USER_ACTION_RETIREMENT_OWNING_SERVICE_ID',
+]);
 const SHELL_EXPRESSION_PATTERN = /\$\{|\$\(|`/;
 const SENSITIVE_KEY_PATTERN =
   /(PASSWORD|SECRET|PRIVATE|TOKEN|API_KEY|API_KEYS|HMAC|WEBHOOK_URL|RPC(?:_FALLBACK)?(?:_URL|_URLS|_ENDPOINT|_ENDPOINTS)|DATABASE_URL|REDIS_URL)$/;
@@ -107,6 +112,10 @@ export function loadStrictRuntimeEnv({ envFile, schemaFile, inheritedEnv = proce
 
   for (const key of schema.keys()) {
     if (!values.has(key)) {
+      if (OPTIONAL_EMPTY_RUNTIME_KEYS.has(key) && schema.get(key) === '') {
+        values.set(key, '');
+        continue;
+      }
       fail(`${envFile}: missing environment key ${key}`);
     }
   }
