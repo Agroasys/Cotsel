@@ -6,6 +6,11 @@ import {
   type SettlementUserActionBinding,
 } from '../../src/core/settlementUserActionBinding';
 import type { GaslessUserActionExecutionInput } from '../../src/core/gaslessExecutionTypes';
+import {
+  USER_ACTION_RETIREMENT_PATH,
+  type UserActionRetirementTransportConfig,
+} from '../../src/core/userActionEngine/retirementTransport';
+import type { VerifyUserActionRetirement } from '../../src/core/userActionEngine/retirement';
 
 export const PAIRED_PROTOCOL = 'cotsel.paired-lifecycle-fixture.v1' as const;
 export type PairedAcceptedBody = Omit<
@@ -53,6 +58,7 @@ export type PairedCommand =
   | (Envelope &
       (
         | { command: 'pinAcceptedBody'; acceptedBody: PairedAcceptedBody }
+        | { command: 'verifyRetirement'; transport: UserActionRetirementTransportConfig }
         | { command: 'releaseBarrier' | 'expirePreSignLeases' | 'inspectCounters' | 'shutdown' }
       ));
 export interface PairedCounters {
@@ -82,6 +88,7 @@ export interface PairedEvent {
   requestLeaseRows?: number;
   httpLeaseRows?: number;
   executionResult?: 'resolved' | 'rejected';
+  retirement?: Awaited<ReturnType<VerifyUserActionRetirement>>;
   code?: 'fixture_invalid' | 'fixture_failed';
 }
 function invalid(): never {
@@ -208,7 +215,39 @@ export function parsePairedCommand(value: unknown): PairedCommand {
     v.fundingWitnesses.forEach(witness);
   } else if (raw.command === 'pinAcceptedBody')
     object(value, ['protocol', 'commandId', 'command', 'acceptedBody']);
-  else if (
+  else if (raw.command === 'verifyRetirement') {
+    const v = object(value, ['protocol', 'commandId', 'command', 'transport']);
+    const transport = object(v.transport, [
+      'url',
+      'owningServiceId',
+      'apiKey',
+      'apiSecret',
+      'timeoutMs',
+    ]);
+    if (
+      !text(transport.url, 4096) ||
+      !text(transport.owningServiceId, 128) ||
+      !/^\S+$/.test(transport.owningServiceId) ||
+      !text(transport.apiKey, 128) ||
+      !/^\S+$/.test(transport.apiKey) ||
+      !text(transport.apiSecret, 256) ||
+      !Number.isSafeInteger(transport.timeoutMs) ||
+      (transport.timeoutMs as number) < 1 ||
+      (transport.timeoutMs as number) > 9000
+    )
+      invalid();
+    const url = new URL(transport.url);
+    if (
+      url.protocol !== 'https:' ||
+      !['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname) ||
+      url.pathname !== USER_ACTION_RETIREMENT_PATH ||
+      url.search ||
+      url.hash ||
+      url.username ||
+      url.password
+    )
+      invalid();
+  } else if (
     ['releaseBarrier', 'expirePreSignLeases', 'inspectCounters', 'shutdown'].includes(
       raw.command as string,
     )

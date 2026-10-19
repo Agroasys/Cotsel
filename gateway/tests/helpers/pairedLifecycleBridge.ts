@@ -25,6 +25,8 @@ import { successResponse } from '../../src/responses';
 import { config } from './gaslessManagedSignerFixtures';
 import { createUserActionEnginePostgres } from './userActionEnginePostgres';
 import { pairedLifecyclePorts } from './pairedLifecyclePorts';
+import { verifyPairedLifecycleRetirement } from './pairedLifecycleRetirement';
+import type { GaslessUserActionExecutionInput } from '../../src/core/gaslessExecutionTypes';
 import {
   PAIRED_PROTOCOL,
   parsePairedCommand,
@@ -103,6 +105,7 @@ async function start(seed: PairedStart) {
   let pinnedFingerprint: string | undefined,
     pinnedHandoff: string | undefined,
     activeKey: string | undefined;
+  let pinnedInput: GaslessUserActionExecutionInput | undefined;
   let release: (() => void) | undefined,
     barrierUsed = false;
   const counters = async () => {
@@ -336,6 +339,11 @@ async function start(seed: PairedStart) {
         throw new Error('Pinned identity immutable');
       pinnedFingerprint = result.requestFingerprint = identity;
       pinnedHandoff = input.handoffId;
+      pinnedInput = input;
+    } else if (command.command === 'verifyRetirement') {
+      result.retirement = pinnedInput
+        ? await verifyPairedLifecycleRetirement(pool, pinnedInput, command.transport)
+        : { status: 'unavailable' };
     } else if (command.command === 'releaseBarrier') {
       if (!release) throw new Error('Barrier required');
       release();

@@ -1,6 +1,7 @@
 /** SPDX-License-Identifier: Apache-2.0 */
 import { randomUUID } from 'crypto';
 import { Interface } from 'ethers';
+import { createServer } from 'net';
 import { createBoundUserActionFixture } from './helpers/boundUserActionFixture';
 import { createPairedLifecycleTestClient } from './helpers/pairedLifecycleTestClient';
 import { createUserActionExecutionScopeHash } from '../src/core/settlementUserActionBinding';
@@ -11,6 +12,7 @@ import type {
 } from '../src/core/gaslessExecutionTypes';
 import type { UserActionInventory } from '../src/core/userActionEngine/inventory';
 import type { PairedAcceptedBody, PairedStart } from './helpers/pairedLifecycleProtocol';
+import { USER_ACTION_RETIREMENT_PATH } from '../src/core/userActionEngine/retirementTransport';
 const describeLocal =
   process.env.GATEWAY_TEST_USE_LOCAL_POSTGRES === 'true' ? describe : describe.skip;
 const execution = '/settlement/gasless-executions/user-action';
@@ -223,6 +225,72 @@ describeLocal(
         broadcastCalls: 0,
         outcomes: 0,
       });
+    });
+    test('retirement read needs retained acceptance and connection failure cannot grant execution or mutate authority', async () => {
+      const f = await seed();
+      await pin(f.acceptedBody);
+      const listener = createServer();
+      await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve));
+      const address = listener.address();
+      if (!address || typeof address === 'string') throw new Error('Loopback port required');
+      await new Promise<void>((resolve, reject) =>
+        listener.close((error) => (error ? reject(error) : resolve())),
+      );
+      const transport = {
+        url: `https://127.0.0.1:${address.port}${USER_ACTION_RETIREMENT_PATH}`,
+        owningServiceId: 'owner',
+        apiKey: 'fixture-callback-key',
+        apiSecret: 'fixture-callback-secret',
+        timeoutMs: 1000,
+      };
+      expect(await client.command({ command: 'verifyRetirement', transport })).toMatchObject({
+        event: 'result',
+        retirement: { status: 'unavailable' },
+      });
+      expect(await counters()).toMatchObject({
+        acceptedRequests: 0,
+        signerInvocations: 0,
+        broadcastCalls: 0,
+      });
+      expect(
+        (await client.http(f.ready.baseUrl!, execution, 'POST', f.acceptedBody, 'execute')).status,
+      ).toBe(202);
+      const before = await client.http(
+        f.ready.baseUrl!,
+        `${execution}/operations/${f.input.sourceOperationId}`,
+        'GET',
+        undefined,
+      );
+      expect(await client.command({ command: 'verifyRetirement', transport })).toMatchObject({
+        event: 'result',
+        retirement: { status: 'unavailable' },
+      });
+      expect(
+        await client.command({
+          command: 'verifyRetirement',
+          transport: { ...transport, owningServiceId: 'foreign' },
+        }),
+      ).toMatchObject({ event: 'result', retirement: { status: 'unavailable' } });
+      const after = await client.http(
+        f.ready.baseUrl!,
+        `${execution}/operations/${f.input.sourceOperationId}`,
+        'GET',
+        undefined,
+      );
+      expect((after.body as { data: UserActionInventory }).data).toEqual(
+        (before.body as { data: UserActionInventory }).data,
+      );
+      expect(await counters()).toMatchObject({
+        acceptedRequests: 1,
+        signerInvocations: 1,
+        broadcastCalls: 1,
+        outcomes: 1,
+      });
+      const reply = await client.command({ command: 'verifyRetirement', transport });
+      expect(reply.retirement).toEqual({ status: 'unavailable' });
+      expect(JSON.stringify(reply)).not.toContain(transport.apiSecret);
+      expect(JSON.stringify(reply)).not.toContain(f.input.userAuthorization.signature);
+      expect(client.output()).not.toContain(transport.apiSecret);
     });
     test('public guard, foreign auth, unpinned request and changed accepted body fail without signing', async () => {
       const f = await seed();

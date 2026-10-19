@@ -4,8 +4,21 @@ import { fork } from 'child_process';
 import { once } from 'events';
 import { createBoundUserActionFixture } from './helpers/boundUserActionFixture';
 import { PAIRED_PROTOCOL, parsePairedCommand } from './helpers/pairedLifecycleProtocol';
+import { USER_ACTION_RETIREMENT_PATH } from '../src/core/userActionEngine/retirementTransport';
 
 describe('test-only paired bridge protocol boundary', () => {
+  const retirement = {
+    protocol: PAIRED_PROTOCOL,
+    commandId: 'retirement',
+    command: 'verifyRetirement',
+    transport: {
+      url: 'https://127.0.0.1:4443' + USER_ACTION_RETIREMENT_PATH,
+      owningServiceId: 'owner',
+      apiKey: 'fixture-callback',
+      apiSecret: 'fixture-only',
+      timeoutMs: 1000,
+    },
+  };
   async function start() {
     const fixture = await createBoundUserActionFixture();
     const receipt = {
@@ -99,6 +112,67 @@ describe('test-only paired bridge protocol boundary', () => {
         command: 'expirePreSignLeases',
         operation: 'other',
       }),
+    ).toThrow();
+  });
+  test.each(['127.0.0.1', '[::1]', 'localhost'])(
+    'accepts only explicit loopback retirement read configuration (%s)',
+    (host) => {
+      const value = {
+        ...retirement,
+        transport: {
+          ...retirement.transport,
+          url: `https://${host}:4443${USER_ACTION_RETIREMENT_PATH}`,
+        },
+      };
+      expect(parsePairedCommand(value)).toEqual(value);
+    },
+  );
+  test.each([
+    'http://127.0.0.1:4443',
+    'https://backend.example.test',
+    'https://127.0.0.2',
+    'https://10.0.0.1',
+    'https://127.0.0.1.evil.example.test',
+    'https://username:secret@127.0.0.1',
+  ])('rejects non-loopback or credential-bearing retirement target %s', (origin) => {
+    expect(() =>
+      parsePairedCommand({
+        ...retirement,
+        transport: { ...retirement.transport, url: origin + USER_ACTION_RETIREMENT_PATH },
+      }),
+    ).toThrow();
+  });
+  test.each([
+    '/wrong-path',
+    USER_ACTION_RETIREMENT_PATH + '?scope=foreign',
+    USER_ACTION_RETIREMENT_PATH + '#fragment',
+    USER_ACTION_RETIREMENT_PATH + '/',
+  ])('rejects route/query/fragment override %s', (route) => {
+    expect(() =>
+      parsePairedCommand({
+        ...retirement,
+        transport: { ...retirement.transport, url: 'https://127.0.0.1:4443' + route },
+      }),
+    ).toThrow();
+  });
+  test.each([
+    { timeoutMs: 0 },
+    { timeoutMs: 9001 },
+    { timeoutMs: 1.5 },
+    { apiSecret: '' },
+    { apiSecret: 'x'.repeat(257) },
+    { owningServiceId: 'foreign owner' },
+    { apiKey: 'x'.repeat(129) },
+  ])('rejects malformed bounded retirement config %j', (change) => {
+    expect(() =>
+      parsePairedCommand({ ...retirement, transport: { ...retirement.transport, ...change } }),
+    ).toThrow();
+  });
+  test('caller cannot select scope, supply proof, or augment transport authority', () => {
+    for (const key of ['scope', 'evidence', 'fundingApproved', 'enableProduction'])
+      expect(() => parsePairedCommand({ ...retirement, [key]: {} })).toThrow();
+    expect(() =>
+      parsePairedCommand({ ...retirement, transport: { ...retirement.transport, scope: {} } }),
     ).toThrow();
   });
   test('entrypoint exits without explicit opt-in before provisioning a database or listener', async () => {
