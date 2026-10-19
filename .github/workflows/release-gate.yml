@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - main
+      - codex/revision2-cotsel-foundations
+      - codex/revision2-cotsel-lifecycle
   push:
     branches:
       - main
