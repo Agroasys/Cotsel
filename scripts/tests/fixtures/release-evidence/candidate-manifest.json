@@ -335,8 +335,8 @@
     },
     {
       "component": "gateway",
-      "headIdentity": "202609160009_gasless_nonce_reservations",
-      "checksumSha256": "0c66d7b41372a3e9f8f38486dd88f25daf77744ffb9e1620a1a2fec91b5b710d"
+      "headIdentity": "202610180016_user_action_requests",
+      "checksumSha256": "551df0d3ebf8cb1ee123d8327d81046869db72dd2cb6d484d1d8b8e054665db9"
     },
     {
       "component": "indexer",
@@ -345,13 +345,13 @@
     },
     {
       "component": "oracle",
-      "headIdentity": "202608310001_baseline",
-      "checksumSha256": "bd596dfb79adabdfa95b1930e05c06bf9d9f8cb76a17c16276154ad7b3c073af"
+      "headIdentity": "202610160004_signer_dispatch_exclusion",
+      "checksumSha256": "12234824fa98a9cef3828620cdb8a455abf66eb684b6f5cc5aeb754f60fb13c2"
     },
     {
       "component": "reconciliation",
-      "headIdentity": "202609120001_run_leases",
-      "checksumSha256": "278cac59c7b2d5b7d287bdabfcd3964f83581cc47315e55f7d411b6d31b85b20"
+      "headIdentity": "202610150004_financial_coverage_evidence",
+      "checksumSha256": "666d3557793cbe1036218e422f9dfabf80fea047a40635bd89252ee7cc432215"
     },
     {
       "component": "ricardian",
@@ -360,8 +360,8 @@
     },
     {
       "component": "treasury",
-      "headIdentity": "202609190007_realization_reconciliation_binding",
-      "checksumSha256": "b6b37fcb45b11a4e69af80504322f29c305b23f36eb8c94ad5cd936772bab237"
+      "headIdentity": "202610160008_sweep_finalized_evidence",
+      "checksumSha256": "8bf675ec2fe0495ba8c1189d56d7322b7a15165def38ea02f5ee08a631fc1f24"
     }
   ],
   "chain": {

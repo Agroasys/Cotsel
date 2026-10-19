@@ -58,15 +58,15 @@ describe('Oracle public errors', () => {
     const controller = new OracleController(triggerManager as never);
     const recorder = responseRecorder();
 
-    await controller.finalizeTrade(
+    await controller.releaseStage1(
       {
         body: {
           tradeId: '42',
           requestId: 'request-42',
-          fundedBinding: fundedBindingFixture(TriggerType.FINALIZE_TRADE, '42'),
+          fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1, '42'),
         },
         headers: { 'x-request-id': 'gateway-request-42' },
-        path: '/finalize-trade',
+        path: '/release-stage-1',
       } as unknown as Request,
       recorder as unknown as Response<OracleResponse | ErrorResponse>,
     );
