@@ -4,6 +4,7 @@ import { Server } from 'http';
 import { createRouter } from '../src/api/routes';
 import { generateRequestHash } from '../src/utils/crypto';
 import { consumeHmacNonce } from '../src/database/queries';
+import { captureRawJsonBody } from '../src/middleware/middleware';
 
 jest.mock('../src/config', () => ({
   config: {
@@ -24,11 +25,12 @@ function createSignedHeaders(
     signature?: string;
     nonce?: string;
     authorization?: string;
+    signedBody?: string;
   },
 ) {
   const timestamp = overrides?.timestamp ?? Date.now().toString();
   const authorization = overrides?.authorization ?? 'Bearer test-api-key';
-  const bodyText = JSON.stringify(body);
+  const bodyText = overrides?.signedBody ?? JSON.stringify(body);
   const signature =
     overrides?.signature ?? generateRequestHash(timestamp, bodyText, 'test-hmac-secret');
 
@@ -83,7 +85,7 @@ describe('oracle authenticated routes', () => {
     jest.clearAllMocks();
 
     const app = express();
-    app.use(express.json());
+    app.use(express.json({ verify: captureRawJsonBody }));
     app.use('/api/oracle', createRouter(controller as never));
 
     await new Promise<void>((resolve) => {
@@ -260,6 +262,47 @@ describe('oracle authenticated routes', () => {
       }),
     );
     expect(mockConsumeHmacNonce).toHaveBeenCalledWith('test-api-key', 'oracle-trigger-list', 600);
+  });
+
+  test('signed GET over the empty body reaches protected trigger queue route', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+
+    const response = await fetch(`${baseUrl}/api/oracle/triggers`, {
+      headers: createSignedHeaders({}, { nonce: 'oracle-trigger-list-empty', signedBody: '' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(controller.listTriggers).toHaveBeenCalledTimes(1);
+  });
+
+  test('re-serialized JSON with reordered keys is rejected at the route boundary', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const payload = { tradeId: 'trade-order', requestId: 'req-order' };
+
+    const response = await fetch(`${baseUrl}/api/oracle/release-stage1`, {
+      method: 'POST',
+      headers: createSignedHeaders(payload, { nonce: 'oracle-key-order' }),
+      body: JSON.stringify({ requestId: payload.requestId, tradeId: payload.tradeId }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(controller.releaseStage1).not.toHaveBeenCalled();
+  });
+
+  test('whitespace-only body changes are rejected at the route boundary', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const payload = { tradeId: 'trade-space', requestId: 'req-space' };
+
+    const response = await fetch(`${baseUrl}/api/oracle/release-stage1`, {
+      method: 'POST',
+      headers: createSignedHeaders(payload, { nonce: 'oracle-whitespace' }),
+      body: JSON.stringify(payload, null, 2),
+    });
+
+    expect(response.status).toBe(401);
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(controller.releaseStage1).not.toHaveBeenCalled();
   });
 
   test('valid signed redrive request reaches redrive route once', async () => {

@@ -4,7 +4,49 @@ import { config } from '../config';
 import { consumeHmacNonce } from '../database/queries';
 import { Logger } from '../utils/logger';
 import { ErrorResponse } from '../types';
-import { deriveRequestNonce, hashSignature, verifyRequestSignature } from '../utils/crypto';
+import {
+  deriveRequestNonce,
+  hashSignature,
+  RequestBodyBytes,
+  verifyRequestSignature,
+} from '../utils/crypto';
+
+// Body-less requests carry no bytes to bind. Existing callers (the
+// agroasys-backend Oracle read bridge) sign this placeholder for them, so it
+// stays accepted for body-less requests only, until they sign the empty body.
+const LEGACY_EMPTY_BODY_SIGNING_FORM = '{}';
+
+// express.json `verify` hook: keep the exact received bytes so the HMAC is
+// checked against them rather than a reserialized JSON body (WP-2 H-22).
+export function captureRawJsonBody(req: Request, _res: Response, body: Buffer): void {
+  req.rawBody = Buffer.from(body);
+}
+
+function isInvalidSignatureError(error: unknown): boolean {
+  return error instanceof Error && error.message === 'Invalid HMAC signature';
+}
+
+// Verifies the signature over the received bytes and returns the body form
+// that was signed, so the derived nonce matches what the caller computed.
+function verifyReceivedBody(req: Request, timestamp: string, signature: string): RequestBodyBytes {
+  const received = req.rawBody ?? Buffer.alloc(0);
+  if (received.length > 0) {
+    verifyRequestSignature(timestamp, received, signature, config.hmacSecret);
+    return received;
+  }
+
+  try {
+    verifyRequestSignature(timestamp, received, signature, config.hmacSecret);
+    return received;
+  } catch (error: unknown) {
+    if (!isInvalidSignatureError(error)) {
+      throw error;
+    }
+  }
+
+  verifyRequestSignature(timestamp, LEGACY_EMPTY_BODY_SIGNING_FORM, signature, config.hmacSecret);
+  return LEGACY_EMPTY_BODY_SIGNING_FORM;
+}
 
 function extractBearerToken(authHeader?: string): string | null {
   if (!authHeader) {
@@ -58,8 +100,7 @@ export async function hmacMiddleware(
   }
 
   try {
-    const body = JSON.stringify(req.body ?? {});
-    verifyRequestSignature(timestamp, body, signature, config.hmacSecret);
+    const body = verifyReceivedBody(req, timestamp, signature);
     const nonce = providedNonce || deriveRequestNonce(timestamp, body, signature);
 
     if (!nonce || nonce.length > 255) {

@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { authMiddleware, hmacMiddleware } from '../src/middleware/middleware';
-import { generateRequestHash } from '../src/utils/crypto';
+import { deriveRequestNonce, generateRequestHash } from '../src/utils/crypto';
 import { consumeHmacNonce } from '../src/database/queries';
 
 jest.mock('../src/config', () => ({
@@ -22,7 +22,8 @@ interface MockResponse extends Response {
 
 type MockRequest = Partial<Request> & {
   headers: Record<string, string>;
-  body: Record<string, unknown>;
+  body?: Record<string, unknown>;
+  rawBody?: Buffer;
   ip: string;
   apiKeyToken?: string;
   hmacSignature?: string;
@@ -42,13 +43,16 @@ function createSignedRequest(overrides?: {
   signature?: string;
   nonce?: string;
   authorization?: string;
+  receivedBody?: string;
+  signedBody?: string;
 }): MockRequest {
   const body = overrides?.body ?? { tradeId: '1', requestId: 'req-1' };
   const timestamp = overrides?.timestamp ?? Date.now().toString();
   const authHeader = overrides?.authorization ?? 'Bearer test-api-key';
-  const bodyText = JSON.stringify(body);
+  const receivedBody = overrides?.receivedBody ?? JSON.stringify(body);
+  const signedBody = overrides?.signedBody ?? receivedBody;
   const signature =
-    overrides?.signature ?? generateRequestHash(timestamp, bodyText, 'test-hmac-secret');
+    overrides?.signature ?? generateRequestHash(timestamp, signedBody, 'test-hmac-secret');
 
   const headers: Record<string, string> = {
     authorization: authHeader,
@@ -63,6 +67,20 @@ function createSignedRequest(overrides?: {
   return {
     headers,
     body,
+    rawBody: Buffer.from(receivedBody),
+    ip: '127.0.0.1',
+  };
+}
+
+function createBodylessRequest(signedBody: string, nonce: string): MockRequest {
+  const timestamp = Date.now().toString();
+  return {
+    headers: {
+      authorization: 'Bearer test-api-key',
+      'x-timestamp': timestamp,
+      'x-signature': generateRequestHash(timestamp, signedBody, 'test-hmac-secret'),
+      'x-nonce': nonce,
+    },
     ip: '127.0.0.1',
   };
 }
@@ -157,5 +175,107 @@ describe('oracle hmac middleware', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'Invalid HMAC signature' }),
     );
+  });
+
+  test.each([
+    [
+      'key order',
+      JSON.stringify({ tradeId: '1', requestId: 'req-1' }),
+      JSON.stringify({ requestId: 'req-1', tradeId: '1' }),
+    ],
+    [
+      'whitespace',
+      JSON.stringify({ tradeId: '1', requestId: 'req-1' }),
+      JSON.stringify({ tradeId: '1', requestId: 'req-1' }, null, 2),
+    ],
+    [
+      'trailing newline',
+      JSON.stringify({ tradeId: '1', requestId: 'req-1' }),
+      `${JSON.stringify({ tradeId: '1', requestId: 'req-1' })}\n`,
+    ],
+  ])(
+    'a %s change to the received bytes invalidates the signature',
+    async (_label, signedBody, receivedBody) => {
+      mockConsumeHmacNonce.mockResolvedValue(true);
+
+      const req = createSignedRequest({ nonce: 'nonce-exact-bytes', signedBody, receivedBody });
+      const res = createMockResponse();
+      const hmacNext = jest.fn() as NextFunction;
+
+      await hmacMiddleware(req as Request, res, hmacNext);
+
+      expect(hmacNext).not.toHaveBeenCalled();
+      expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(401);
+    },
+  );
+
+  test('signature is verified over the received bytes, not the parsed body', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const receivedBody = '{ "requestId": "req-1",  "tradeId": "1" }';
+
+    const req = createSignedRequest({ nonce: 'nonce-raw-bytes', receivedBody });
+    const res = createMockResponse();
+    const hmacNext = jest.fn() as NextFunction;
+
+    await hmacMiddleware(req as Request, res, hmacNext);
+
+    expect(hmacNext).toHaveBeenCalledTimes(1);
+  });
+
+  test('derived nonce matches the caller derivation over the received bytes', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+
+    const req = createSignedRequest();
+    const res = createMockResponse();
+    const hmacNext = jest.fn() as NextFunction;
+
+    await hmacMiddleware(req as Request, res, hmacNext);
+
+    expect(hmacNext).toHaveBeenCalledTimes(1);
+    expect(req.hmacNonce).toBe(
+      deriveRequestNonce(
+        req.headers['x-timestamp'],
+        JSON.stringify({ tradeId: '1', requestId: 'req-1' }),
+        req.headers['x-signature'],
+      ),
+    );
+  });
+
+  test('body-less request signed over the empty body succeeds', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+
+    const req = createBodylessRequest('', 'nonce-empty-body');
+    const res = createMockResponse();
+    const hmacNext = jest.fn() as NextFunction;
+
+    await hmacMiddleware(req as Request, res, hmacNext);
+
+    expect(hmacNext).toHaveBeenCalledTimes(1);
+  });
+
+  test('body-less request signed over the legacy {} placeholder still succeeds', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+
+    const req = createBodylessRequest('{}', 'nonce-legacy-empty-body');
+    const res = createMockResponse();
+    const hmacNext = jest.fn() as NextFunction;
+
+    await hmacMiddleware(req as Request, res, hmacNext);
+
+    expect(hmacNext).toHaveBeenCalledTimes(1);
+  });
+
+  test('legacy {} placeholder is not accepted when the request carries a body', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+
+    const req = createSignedRequest({ nonce: 'nonce-legacy-with-body', signedBody: '{}' });
+    const res = createMockResponse();
+    const hmacNext = jest.fn() as NextFunction;
+
+    await hmacMiddleware(req as Request, res, hmacNext);
+
+    expect(hmacNext).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
   });
 });
