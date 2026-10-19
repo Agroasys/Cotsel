@@ -43,6 +43,8 @@ let unblock: (() => void) | undefined;
 const executions = new Set<Promise<void>>();
 let commandQueue = Promise.resolve();
 let runCommand: ((command: PairedCommand) => Promise<void>) | undefined;
+let retirementReadInFlight = false;
+let hasHeldBarrier = () => false;
 const send = (event: Omit<PairedEvent, 'protocol'>) =>
   !process.connected
     ? Promise.resolve()
@@ -66,14 +68,14 @@ process.once('disconnect', () => {
   void close().finally(() => process.exit(0));
 });
 process.on('message', (value) => {
-  commandQueue = commandQueue.then(async () => {
-    let command: PairedCommand;
-    try {
-      command = parsePairedCommand(value);
-    } catch {
-      await send({ event: 'error', code: 'fixture_invalid' });
-      return;
-    }
+  let command: PairedCommand;
+  try {
+    command = parsePairedCommand(value);
+  } catch {
+    void send({ event: 'error', code: 'fixture_invalid' });
+    return;
+  }
+  const executeCommand = async () => {
     try {
       if (command.command === 'start') {
         if (runCommand) throw new Error('Already started');
@@ -94,7 +96,12 @@ process.on('message', (value) => {
         process.disconnect?.();
       }
     }
-  });
+  };
+  // Only release an already-held execution barrier while a read-only proof is waiting.
+  // Every other command remains serialized; this never creates a new execution path.
+  if (command.command === 'releaseBarrier' && retirementReadInFlight && hasHeldBarrier())
+    void executeCommand();
+  else commandQueue = commandQueue.then(executeCommand);
 });
 async function start(seed: PairedStart) {
   // Only the existing disposable local migration harness can select database/role credentials.
@@ -108,6 +115,7 @@ async function start(seed: PairedStart) {
   let pinnedInput: GaslessUserActionExecutionInput | undefined;
   let release: (() => void) | undefined,
     barrierUsed = false;
+  hasHeldBarrier = () => Boolean(release);
   const counters = async () => {
     const [counts, hashes] = await Promise.all([
       pool.query(`SELECT (SELECT count(*)::int FROM gasless_user_action_requests) AS accepted,
@@ -341,9 +349,14 @@ async function start(seed: PairedStart) {
       pinnedHandoff = input.handoffId;
       pinnedInput = input;
     } else if (command.command === 'verifyRetirement') {
-      result.retirement = pinnedInput
-        ? await verifyPairedLifecycleRetirement(pool, pinnedInput, command.transport)
-        : { status: 'unavailable' };
+      retirementReadInFlight = true;
+      try {
+        result.retirement = pinnedInput
+          ? await verifyPairedLifecycleRetirement(pool, pinnedInput, command.transport)
+          : { status: 'unavailable' };
+      } finally {
+        retirementReadInFlight = false;
+      }
     } else if (command.command === 'releaseBarrier') {
       if (!release) throw new Error('Barrier required');
       release();

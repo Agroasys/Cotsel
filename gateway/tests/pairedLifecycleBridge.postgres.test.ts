@@ -228,6 +228,10 @@ describeLocal(
     });
     test('retirement read needs retained acceptance and connection failure cannot grant execution or mutate authority', async () => {
       const f = await seed();
+      expect(await client.command({ command: 'releaseBarrier' })).toMatchObject({
+        event: 'error',
+        code: 'fixture_failed',
+      });
       await pin(f.acceptedBody);
       const listener = createServer();
       await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve));
@@ -288,6 +292,10 @@ describeLocal(
       });
       const reply = await client.command({ command: 'verifyRetirement', transport });
       expect(reply.retirement).toEqual({ status: 'unavailable' });
+      expect(await client.command({ command: 'releaseBarrier' })).toMatchObject({
+        event: 'error',
+        code: 'fixture_failed',
+      });
       expect(JSON.stringify(reply)).not.toContain(transport.apiSecret);
       expect(JSON.stringify(reply)).not.toContain(f.input.userAuthorization.signature);
       expect(client.output()).not.toContain(transport.apiSecret);
