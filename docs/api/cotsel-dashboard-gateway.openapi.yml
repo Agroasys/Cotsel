@@ -112,7 +112,7 @@ paths:
   /settlement/handoffs/{handoffId}/execution-events:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1settlement~1handoffs~1{handoffId}~1execution-events
   /settlement/transactions/{transactionHash}/finality:
-    $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1settlement~1transactions~1{transactionHash}~1finality
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-02.yml#/paths/~1settlement~1transactions~1{transactionHash}~1finality
   /governance/status:
     $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1status
   /governance/actions:

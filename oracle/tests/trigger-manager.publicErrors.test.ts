@@ -4,6 +4,7 @@
  * WP-10 I-06: raw RPC, signer and provider text never leaves the oracle through
  * a live execution result, a replay of a stored failure, or the trigger list.
  */
+import { fundedBindingFixture } from './helpers/fundedBinding';
 import type { Request, Response } from 'express';
 import { OracleController } from '../src/api/controller';
 import { TriggerManager } from '../src/core/trigger-manager';
@@ -28,6 +29,7 @@ jest.mock('../src/core/containment-guard', () => ({
 }));
 
 jest.mock('@agroasys/sdk', () => ({
+  ...jest.requireActual('@agroasys/sdk'),
   TradeStatus: {
     LOCKED: 0,
     IN_TRANSIT: 1,
@@ -89,6 +91,7 @@ function buildTrade(status: number = TRADE_STATUS_LOCKED): TradeRecord {
 
 function buildTrigger(status: TriggerStatus = TriggerStatus.PENDING): Trigger {
   return {
+    funded_binding: fundedBindingFixture(),
     id: 1,
     action_key: 'RELEASE_STAGE_1:1',
     request_id: 'req-1',
@@ -134,6 +137,7 @@ function expectNoLeak(value: unknown): void {
 
 function sdkClientFailingWith(error: Error): TriggerManagerSdkClient {
   return {
+    assertFundedBinding: jest.fn().mockResolvedValueOnce(undefined).mockRejectedValue(error),
     getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
     releaseFundsStage1: jest.fn().mockRejectedValue(error),
     confirmInspectionAvailable: jest.fn(),
@@ -154,6 +158,7 @@ describe('oracle trigger failures expose no raw provider text', () => {
     const manager = new TriggerManager(sdkClientFailingWith(new Error(RAW_RPC_MESSAGE)), 3, 1);
 
     const response = await manager.executeTrigger({
+      fundedBinding: fundedBindingFixture(),
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
@@ -162,10 +167,12 @@ describe('oracle trigger failures expose no raw provider text', () => {
     expect(response.status).toBe(TriggerStatus.TERMINAL_FAILURE);
     expect(response.message).toBe('Oracle validation failure; detail is recorded on the trigger');
     expectNoLeak(response);
-    // The raw cause is kept on the trigger for operators.
+    // Durable trigger metadata retains only the stable classification.
     expect(mockedUpdateTrigger).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ last_error: RAW_RPC_MESSAGE }),
+      expect.objectContaining({
+        last_error: 'Oracle validation failure; detail is recorded on the trigger',
+      }),
     );
   });
 
@@ -177,6 +184,7 @@ describe('oracle trigger failures expose no raw provider text', () => {
     );
 
     const response = await manager.executeTrigger({
+      fundedBinding: fundedBindingFixture(),
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
@@ -185,6 +193,12 @@ describe('oracle trigger failures expose no raw provider text', () => {
     expect(response.status).toBe(TriggerStatus.EXHAUSTED_NEEDS_REDRIVE);
     expect(response.message).toContain('Oracle network failure');
     expectNoLeak(response);
+    expect(mockedUpdateTrigger).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        last_error: 'Oracle network failure; detail is recorded on the trigger',
+      }),
+    );
   });
 
   it('replaying a stored terminal failure returns only its classification', async () => {
@@ -196,6 +210,7 @@ describe('oracle trigger failures expose no raw provider text', () => {
     const manager = new TriggerManager(sdkClientFailingWith(new Error('unused')), 3, 1);
 
     const response = await manager.executeTrigger({
+      fundedBinding: fundedBindingFixture(),
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,

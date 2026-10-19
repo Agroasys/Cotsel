@@ -194,7 +194,7 @@ describe('TriggerManager retry and idempotency states', () => {
       'FINAL_RELEASE:1:req-buyer-acceptance',
       expect.objectContaining({
         status: TriggerStatus.TERMINAL_FAILURE,
-        last_error: expect.stringMatching(/Buyer authorization is required/),
+        last_error: 'Oracle validation failure; detail is recorded on the trigger',
       }),
     );
     expect(sdkClient.finalizeTrade).not.toHaveBeenCalled();
