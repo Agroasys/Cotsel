@@ -4,6 +4,7 @@ declare global {
       apiKeyToken?: string;
       hmacSignature?: string;
       hmacNonce?: string;
+      rawBody?: Buffer;
     }
   }
 }
