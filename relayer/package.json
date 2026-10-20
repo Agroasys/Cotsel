@@ -16,16 +16,16 @@
   "dependencies": {
     "@agroasys/sdk": "workspace:*",
     "@agroasys/shared-auth": "workspace:*",
-    "@aws-sdk/client-kms": "3.1143.0",
+    "@aws-sdk/client-kms": "3.1149.0",
     "ethers": "^6.17.0",
-    "express": "^5.2.1",
+    "express": "^5.3.0",
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.5",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.14",
     "ts-node": "^10.9.2",
