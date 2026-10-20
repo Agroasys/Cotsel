@@ -22,15 +22,15 @@
     "@subsquid/logger": "^1.6.0",
     "@subsquid/typeorm-migration": "^1.4.0",
     "@subsquid/typeorm-store": "^1.9.2",
-    "dotenv": "^18.0.4",
+    "dotenv": "^18.0.7",
     "ethers": "^6.17.0",
     "pg": "8.23.1",
-    "typeorm": "1.1.1"
+    "typeorm": "1.1.2"
   },
   "devDependencies": {
     "@subsquid/typeorm-codegen": "^2.4.0",
     "@types/minimatch": "^6.0.0",
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
     "typescript": ">=6.0.2 <6.1.0"
   }
