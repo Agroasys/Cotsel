@@ -7,7 +7,7 @@ import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk'
 import { config } from './config';
 import { createRouter } from './api/routes';
 import { OracleController } from './api/controller';
-import { captureRawJsonBody, errorHandler } from './middleware/middleware';
+import { createRawBodyJsonParser, errorHandler } from './middleware/middleware';
 import { Logger } from './utils/logger';
 import { testConnection, closeConnection, pool } from './database/connection';
 import { createOracleReadinessCheck } from './readiness';
@@ -156,7 +156,7 @@ async function bootstrap() {
         }),
       ),
     );
-    app.use(express.json({ verify: captureRawJsonBody }));
+    app.use(createRawBodyJsonParser());
 
     app.use((req, res, next) => {
       Logger.info(`${req.method} ${req.path}`, {

@@ -1,10 +1,11 @@
 import express, { Request, Response } from 'express';
 import { AddressInfo } from 'net';
 import { Server } from 'http';
+import { gzipSync } from 'zlib';
 import { createRouter } from '../src/api/routes';
 import { generateRequestHash } from '../src/utils/crypto';
 import { consumeHmacNonce } from '../src/database/queries';
-import { captureRawJsonBody } from '../src/middleware/middleware';
+import { createRawBodyJsonParser, errorHandler } from '../src/middleware/middleware';
 
 jest.mock('../src/config', () => ({
   config: {
@@ -85,8 +86,9 @@ describe('oracle authenticated routes', () => {
     jest.clearAllMocks();
 
     const app = express();
-    app.use(express.json({ verify: captureRawJsonBody }));
+    app.use(createRawBodyJsonParser());
     app.use('/api/oracle', createRouter(controller as never));
+    app.use(errorHandler);
 
     await new Promise<void>((resolve) => {
       server = app.listen(0, () => resolve());
@@ -301,6 +303,62 @@ describe('oracle authenticated routes', () => {
     });
 
     expect(response.status).toBe(401);
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(controller.releaseStage1).not.toHaveBeenCalled();
+  });
+
+  test('non-JSON body signed over the legacy {} placeholder is rejected', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+
+    const response = await fetch(`${baseUrl}/api/oracle/release-stage1`, {
+      method: 'POST',
+      headers: {
+        ...createSignedHeaders({}, { nonce: 'oracle-legacy-text-body', signedBody: '{}' }),
+        'content-type': 'text/plain',
+      },
+      body: 'not-the-signed-body',
+    });
+
+    expect(response.status).toBe(401);
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(controller.releaseStage1).not.toHaveBeenCalled();
+  });
+
+  test('non-JSON body signed over its own bytes is rejected', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const body = 'tradeId=trade-text';
+
+    const response = await fetch(`${baseUrl}/api/oracle/release-stage1`, {
+      method: 'POST',
+      headers: {
+        ...createSignedHeaders({}, { nonce: 'oracle-text-body', signedBody: body }),
+        'content-type': 'text/plain',
+      },
+      body,
+    });
+
+    expect(response.status).toBe(401);
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(controller.releaseStage1).not.toHaveBeenCalled();
+  });
+
+  test('gzip-encoded body signed over the uncompressed JSON is rejected', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const payload = { tradeId: 'trade-gzip', requestId: 'req-gzip' };
+
+    const response = await fetch(`${baseUrl}/api/oracle/release-stage1`, {
+      method: 'POST',
+      headers: {
+        ...createSignedHeaders(payload, { nonce: 'oracle-gzip' }),
+        'content-encoding': 'gzip',
+      },
+      body: gzipSync(JSON.stringify(payload)),
+    });
+
+    expect(response.status).toBe(415);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({ error: 'UnsupportedMediaType' }),
+    );
     expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
     expect(controller.releaseStage1).not.toHaveBeenCalled();
   });

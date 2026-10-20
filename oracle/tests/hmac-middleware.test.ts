@@ -278,4 +278,35 @@ describe('oracle hmac middleware', () => {
     expect(hmacNext).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
   });
+
+  test('legacy {} placeholder is not accepted when an uncaptured body was declared', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+
+    const req = createBodylessRequest('{}', 'nonce-legacy-uncaptured-body');
+    req.headers['content-length'] = '19';
+    const res = createMockResponse();
+    const hmacNext = jest.fn() as NextFunction;
+
+    await hmacMiddleware(req as Request, res, hmacNext);
+
+    expect(hmacNext).not.toHaveBeenCalled();
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  test('legacy {} placeholder is not accepted for a chunked request body', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+
+    const req = createBodylessRequest('{}', 'nonce-legacy-chunked-body');
+    req.headers['transfer-encoding'] = 'chunked';
+    req.rawBody = Buffer.alloc(0);
+    const res = createMockResponse();
+    const hmacNext = jest.fn() as NextFunction;
+
+    await hmacMiddleware(req as Request, res, hmacNext);
+
+    expect(hmacNext).not.toHaveBeenCalled();
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
 });
