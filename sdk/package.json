@@ -62,7 +62,7 @@
   },
   "dependencies": {
     "ethers": "^6.17.0",
-    "ox": "^1.8.5"
+    "ox": "^1.8.6"
   },
   "devDependencies": {
     "dotenv": "^18.0.7",
