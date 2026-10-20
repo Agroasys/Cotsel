@@ -1,10 +1,67 @@
-import { Request, Response, NextFunction } from 'express';
+import express, { Request, RequestHandler, Response, NextFunction } from 'express';
 import { failure, sendInternalFailure } from '@agroasys/shared-http';
 import { config } from '../config';
 import { consumeHmacNonce } from '../database/queries';
 import { Logger } from '../utils/logger';
 import { ErrorResponse } from '../types';
-import { deriveRequestNonce, hashSignature, verifyRequestSignature } from '../utils/crypto';
+import {
+  deriveRequestNonce,
+  hashSignature,
+  RequestBodyBytes,
+  verifyRequestSignature,
+} from '../utils/crypto';
+
+// Body-less requests carry no bytes to bind. Existing callers (the
+// agroasys-backend Oracle read bridge) sign this placeholder for them, so it
+// stays accepted for body-less requests only, until they sign the empty body.
+const LEGACY_EMPTY_BODY_SIGNING_FORM = '{}';
+
+// express.json `verify` hook: keep the exact received bytes so the HMAC is
+// checked against them rather than a reserialized JSON body (WP-2 H-22).
+export function captureRawJsonBody(req: Request, _res: Response, body: Buffer): void {
+  req.rawBody = Buffer.from(body);
+}
+
+// `inflate: false` makes body-parser reject compressed bodies instead of
+// handing `verify` the decompressed bytes, which are not what was signed.
+export function createRawBodyJsonParser(): RequestHandler {
+  return express.json({ inflate: false, verify: captureRawJsonBody });
+}
+
+// A request provably carries no entity only when it declares no framing for one.
+function declaresNoBody(req: Request): boolean {
+  if (req.headers['transfer-encoding'] !== undefined) {
+    return false;
+  }
+  const contentLength = req.headers['content-length'];
+  return contentLength === undefined || contentLength.trim() === '0';
+}
+
+function isInvalidSignatureError(error: unknown): boolean {
+  return error instanceof Error && error.message === 'Invalid HMAC signature';
+}
+
+// Verifies the signature over the received bytes and returns the body form
+// that was signed, so the derived nonce matches what the caller computed.
+function verifyReceivedBody(req: Request, timestamp: string, signature: string): RequestBodyBytes {
+  const received = req.rawBody ?? Buffer.alloc(0);
+  if (received.length > 0 || !declaresNoBody(req)) {
+    verifyRequestSignature(timestamp, received, signature, config.hmacSecret);
+    return received;
+  }
+
+  try {
+    verifyRequestSignature(timestamp, received, signature, config.hmacSecret);
+    return received;
+  } catch (error: unknown) {
+    if (!isInvalidSignatureError(error)) {
+      throw error;
+    }
+  }
+
+  verifyRequestSignature(timestamp, LEGACY_EMPTY_BODY_SIGNING_FORM, signature, config.hmacSecret);
+  return LEGACY_EMPTY_BODY_SIGNING_FORM;
+}
 
 function extractBearerToken(authHeader?: string): string | null {
   if (!authHeader) {
@@ -57,9 +114,16 @@ export async function hmacMiddleware(
     return;
   }
 
+  // A body the JSON parser skipped (e.g. a non-JSON content type) has no
+  // captured bytes to verify, so it must not fall through as body-less.
+  if (req.rawBody === undefined && !declaresNoBody(req)) {
+    Logger.warn('Request body could not be captured for HMAC verification', { ip: req.ip });
+    res.status(401).json(failure('Unauthorized', 'Request body could not be verified'));
+    return;
+  }
+
   try {
-    const body = JSON.stringify(req.body ?? {});
-    verifyRequestSignature(timestamp, body, signature, config.hmacSecret);
+    const body = verifyReceivedBody(req, timestamp, signature);
     const nonce = providedNonce || deriveRequestNonce(timestamp, body, signature);
 
     if (!nonce || nonce.length > 255) {
@@ -111,12 +175,29 @@ export async function hmacMiddleware(
   }
 }
 
+function isUnsupportedEncodingError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    (err as { type?: unknown }).type === 'encoding.unsupported'
+  );
+}
+
 export function errorHandler(
   err: unknown,
   req: Request,
   res: Response<ErrorResponse>,
   _next: NextFunction,
 ): void {
+  // Raised by createRawBodyJsonParser for a compressed body (WP-2 H-22).
+  if (isUnsupportedEncodingError(err)) {
+    Logger.warn('Rejected compressed request body', { route: req.path, ip: req.ip });
+    res
+      .status(415)
+      .json(failure('UnsupportedMediaType', 'Compressed request bodies are not accepted'));
+    return;
+  }
+
   // WP-10 I-06: the raw error is logged under the correlation ID, never returned.
   sendInternalFailure(req, res, err, {
     code: 'InternalServerError',

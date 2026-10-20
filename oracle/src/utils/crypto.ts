@@ -19,13 +19,31 @@ export function generateIdempotencyKey(actionKey: string): string {
   return `${actionKey}:${generateRequestId()}`;
 }
 
-export function generateRequestHash(timestamp: string, body: string, secret: string): string {
-  const payload = timestamp + body;
-  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+// The exact bytes a request carried. A string is hashed as its UTF-8 encoding,
+// so a JSON string and the Buffer it was sent as produce the same digest.
+export type RequestBodyBytes = string | Buffer;
+
+export function generateRequestHash(
+  timestamp: string,
+  body: RequestBodyBytes,
+  secret: string,
+): string {
+  return crypto.createHmac('sha256', secret).update(timestamp).update(body).digest('hex');
 }
 
-export function deriveRequestNonce(timestamp: string, body: string, signature: string): string {
-  return crypto.createHash('sha256').update([timestamp, body, signature].join(':')).digest('hex');
+export function deriveRequestNonce(
+  timestamp: string,
+  body: RequestBodyBytes,
+  signature: string,
+): string {
+  return crypto
+    .createHash('sha256')
+    .update(timestamp)
+    .update(':')
+    .update(body)
+    .update(':')
+    .update(signature)
+    .digest('hex');
 }
 
 // Hash the HMAC signature so logs can correlate a request without exposing any
@@ -36,7 +54,7 @@ export function hashSignature(signature: string): string {
 
 export function verifyRequestSignature(
   timestamp: string,
-  body: string,
+  body: RequestBodyBytes,
   signature: string,
   secret: string,
   maxAgeMinutes: number = 5,
