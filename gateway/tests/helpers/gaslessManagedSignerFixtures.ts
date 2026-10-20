@@ -272,6 +272,19 @@ export function createFakeManagedSignerDependencies(options?: {
       }),
     },
     recordValidationEvidence,
+    finalityVerifier: {
+      verifyReceipt: jest.fn(async () => ({
+        policyVersion: 'gasless_dual_rpc_finalized_v1' as const,
+        chainId: String(config.chainId),
+        transactionHash: `0x${'a'.repeat(64)}`,
+        blockNumber: '123',
+        blockHash: `0x${'8'.repeat(64)}`,
+        finalizedBlockNumber: '130',
+        finalizedBlockHash: `0x${'f'.repeat(64)}`,
+        rpcWitnesses: ['test-rpc-a', 'test-rpc-b'],
+      })),
+      revalidateBlock: jest.fn(async () => 'canonical' as const),
+    },
     recordTransactionOutcome,
     nonceReservationStore,
   };

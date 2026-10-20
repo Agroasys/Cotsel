@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { Pool, PoolClient } from 'pg';
+import type { GaslessFinalityEvidence } from './gaslessChainFinality';
 
 export const GASLESS_TRANSACTION_OUTCOME_STATUSES = [
   'broadcast_pending',
@@ -33,6 +34,7 @@ export interface GaslessTransactionIdentity {
   gasPriceWei?: string | null;
   calldataHash: string;
   intentHash: string;
+  sourceApiKeyId?: string | null;
 }
 
 export interface GaslessTransactionOutcomeRecord extends GaslessTransactionIdentity {
@@ -40,10 +42,14 @@ export interface GaslessTransactionOutcomeRecord extends GaslessTransactionIdent
   outcomeStatus: GaslessTransactionOutcomeStatus;
   projectedOutcomeStatus: GaslessTransactionOutcomeStatus | null;
   failureCode: string | null;
+  blockNumber?: string | null;
+  blockHash?: string | null;
+  finalityEvidence?: GaslessFinalityEvidence | null;
   updatedAt: string;
 }
 
 export interface GaslessConfirmedOutcome {
+  finalityEvidence?: GaslessFinalityEvidence;
   blockNumber: string;
   blockHash: string;
   gasUsed: string;
@@ -63,7 +69,22 @@ export interface GaslessTransactionOutcomeRecorder {
 }
 
 export interface GaslessTransactionOutcomeStore extends GaslessTransactionOutcomeRecorder {
+  listWalletTransferOutcomes(
+    sourceApiKeyId: string,
+    resourceId: string,
+  ): Promise<
+    Array<{
+      transactionHash: string;
+      observedTransactionHash: string | null;
+      applicationRequestId: string;
+      outcomeStatus: GaslessTransactionOutcomeStatus;
+      chainId: number;
+      destinationAddress: string;
+      calldataHash: string;
+    }>
+  >;
   listRecoveryCandidates(limit: number): Promise<GaslessTransactionOutcomeRecord[]>;
+  markOrphaned(transactionHash: string): Promise<void>;
   markRecoveryAttempted(transactionHash: string): Promise<void>;
   markProjectionApplied(
     transactionHash: string,
@@ -120,11 +141,16 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
              gas_used = COALESCE($6, gas_used),
              effective_gas_price_wei = COALESCE($7, effective_gas_price_wei),
              observed_transaction_hash = COALESCE($8, observed_transaction_hash),
+             finality_evidence = COALESCE($10::jsonb, finality_evidence),
              updated_at = NOW()
          WHERE transaction_hash = $1
            AND outcome_status = ANY($9::varchar[])
+           AND (outcome_status IS DISTINCT FROM $2::varchar OR
+                (block_number IS NOT DISTINCT FROM $4::bigint AND block_hash IS NOT DISTINCT FROM $5::varchar
+                 AND gas_used IS NOT DISTINCT FROM $6::numeric AND effective_gas_price_wei IS NOT DISTINCT FROM $7::numeric))
            AND (
              outcome_status IS DISTINCT FROM $2::varchar
+             OR finality_evidence IS DISTINCT FROM COALESCE($10::jsonb, finality_evidence)
              OR (
                $2::varchar = 'broadcast_unknown'
                AND (
@@ -138,9 +164,9 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
        )
        INSERT INTO gasless_transaction_outcome_events (
          transaction_hash, outcome_status, failure_code, block_number, block_hash,
-         observed_transaction_hash
+         observed_transaction_hash, finality_evidence
        )
-       SELECT transaction_hash, $2::varchar, $3, $4, $5, $8 FROM updated
+       SELECT transaction_hash, $2::varchar, $3, $4, $5, $8, $10::jsonb FROM updated
        RETURNING transaction_hash`,
       [
         transactionHash,
@@ -151,7 +177,8 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
         details.gasUsed ?? null,
         details.effectiveGasPriceWei ?? null,
         details.observedTransactionHash ?? null,
-        allowedCurrentStatuses(status),
+        [...allowedCurrentStatuses(status), status],
+        details.finalityEvidence ? JSON.stringify(details.finalityEvidence) : null,
       ],
     );
     if (result.rowCount !== 1) {
@@ -210,6 +237,27 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
   }
 
   return {
+    async listWalletTransferOutcomes(sourceApiKeyId, resourceId) {
+      const result = await pool.query<{
+        transactionHash: string;
+        observedTransactionHash: string | null;
+        applicationRequestId: string;
+        outcomeStatus: GaslessTransactionOutcomeStatus;
+        chainId: string;
+        destinationAddress: string;
+        calldataHash: string;
+      }>(
+        `SELECT transaction_hash AS "transactionHash",observed_transaction_hash AS "observedTransactionHash",
+        application_request_id AS "applicationRequestId",outcome_status AS "outcomeStatus",chain_id AS "chainId",
+        destination_address AS "destinationAddress",calldata_hash AS "calldataHash"
+        FROM gasless_transaction_outcomes WHERE source_api_key_id = $1 AND resource_type = 'platform_transfer'
+        AND resource_id = $2 AND operation = 'wallet_usdc_transfer' ORDER BY created_at,transaction_hash LIMIT 11`,
+        [sourceApiKeyId, resourceId],
+      );
+      if (result.rows.length > 10)
+        throw new Error('Wallet execution inventory exceeds the automatic observation limit.');
+      return result.rows.map((row) => ({ ...row, chainId: Number(row.chainId) }));
+    },
     async listRecoveryCandidates(limit) {
       const result = await pool.query<{
         transactionHash: string;
@@ -233,6 +281,9 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
         outcomeStatus: GaslessTransactionOutcomeStatus;
         projectedOutcomeStatus: GaslessTransactionOutcomeStatus | null;
         failureCode: string | null;
+        blockNumber: string | null;
+        blockHash: string | null;
+        finalityEvidence: GaslessFinalityEvidence | null;
         updatedAt: Date;
       }>(
         `SELECT
@@ -256,11 +307,13 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
            observed_transaction_hash AS "observedTransactionHash",
            outcome_status AS "outcomeStatus",
            projected_outcome_status AS "projectedOutcomeStatus",
+           block_number::text AS "blockNumber", block_hash AS "blockHash",
+           finality_evidence AS "finalityEvidence",
            failure_code AS "failureCode",
            updated_at AS "updatedAt"
          FROM gasless_transaction_outcomes
          WHERE outcome_status IN (
-             'broadcast_pending', 'broadcast_unknown', 'confirmation_pending'
+             'broadcast_pending', 'broadcast_unknown', 'confirmation_pending', 'confirmed', 'reverted'
            )
             OR projected_outcome_status IS DISTINCT FROM outcome_status
          ORDER BY COALESCE(last_reconciliation_attempt_at, created_at) ASC
@@ -274,14 +327,23 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
         updatedAt: row.updatedAt.toISOString(),
       }));
     },
+    async markOrphaned(transactionHash) {
+      const result = await pool.query(
+        `WITH changed AS (
+          UPDATE gasless_transaction_outcomes SET outcome_status = 'confirmation_pending',
+            failure_code = 'FINALIZED_BLOCK_ORPHANED', projected_outcome_status = NULL, updated_at = NOW()
+          WHERE transaction_hash = $1 AND outcome_status IN ('confirmed','reverted') RETURNING transaction_hash, block_number, block_hash
+        ) INSERT INTO gasless_transaction_outcome_events (transaction_hash,outcome_status,failure_code,block_number,block_hash)
+          SELECT transaction_hash,'confirmation_pending','FINALIZED_BLOCK_ORPHANED',block_number,block_hash FROM changed`,
+        [transactionHash],
+      );
+      if (result.rowCount !== 1) throw new Error('Orphaned outcome requires reconciliation');
+    },
     async markRecoveryAttempted(transactionHash) {
       await pool.query(
         `UPDATE gasless_transaction_outcomes
          SET last_reconciliation_attempt_at = NOW()
-         WHERE transaction_hash = $1
-           AND outcome_status IN (
-             'broadcast_pending', 'broadcast_unknown', 'confirmation_pending'
-           )`,
+         WHERE transaction_hash = $1`,
         [transactionHash],
       );
     },
@@ -307,10 +369,10 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
            operation, chain_id, signer_address, transaction_nonce, transaction_type,
            destination_address, value_wei, gas_limit, max_fee_per_gas_wei,
            max_priority_fee_per_gas_wei, gas_price_wei, calldata_hash, intent_hash,
-           outcome_status
+           outcome_status, source_api_key_id
          ) VALUES (
            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-           $16, $17, 'broadcast_pending'
+           $16, $17, 'broadcast_pending', $18
          )
          ON CONFLICT (transaction_hash) DO NOTHING
          RETURNING transaction_hash`,
@@ -332,6 +394,7 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
             identity.gasPriceWei ?? null,
             identity.calldataHash,
             identity.intentHash,
+            identity.sourceApiKeyId ?? null,
           ],
         );
         if (result.rowCount !== 1) {

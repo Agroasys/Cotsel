@@ -79,3 +79,10 @@ export * from './runtime';
 export * from './utils/validation';
 export * from './utils/signature';
 export * from './utils/feeSplit';
+
+export {
+  parseSettlementFundedBinding,
+  assertFundedTradeMatchesBinding,
+  FUNDED_SETTLEMENT_PHASES,
+} from './settlementFundedBinding';
+export type { SettlementFundedBinding } from './settlementFundedBinding';

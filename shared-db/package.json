@@ -6,6 +6,7 @@
   "types": "index.d.ts",
   "scripts": {
     "lint": "eslint --max-warnings=0 .",
+    "test:funded-binding:postgres": "RUN_FUNDED_BINDING_POSTGRES=true node --test funded-settlement-binding.postgres.test.js",
     "test": "node --test index.test.js migrate.test.js migrate.postgres.integration.test.js schema-fingerprint.test.js schema-fingerprint.manifests.postgres.test.js rls-schema.test.js postgres-rls.integration.test.js"
   },
   "dependencies": {

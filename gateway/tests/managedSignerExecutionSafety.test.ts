@@ -1,8 +1,6 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Interface } from 'ethers';
-import { AgroasysEscrow__factory } from '@agroasys/sdk';
 import { testExports as gaslessSettlementExecutionTestExports } from '../src/core/gaslessSettlementExecutionService';
 import {
   buildCreateTradeInput,
@@ -302,43 +300,43 @@ describe('managed signer gasless execution safety', () => {
   );
 
   test.each([
-    ['open_dispute', 'openDisputeWithAuthorization'],
-    ['cancel_locked_timeout', 'cancelLockedTradeAfterTimeoutWithAuthorization'],
-    ['refund_in_transit_timeout', 'refundInTransitAfterTimeoutWithAuthorization'],
-    ['finalize_after_dispute_window', 'finalizeAfterDisputeWindowWithAuthorization'],
-    ['finalize_after_inspection_acceptance', 'finalizeAfterInspectionAcceptanceWithAuthorization'],
-  ] as const)(
-    'managed custody executor encodes %s with %s',
-    async (action, expectedFunctionName) => {
-      const dependencies = createFakeManagedSignerDependencies();
-      const executor =
-        gaslessSettlementExecutionTestExports.createManagedSignerGaslessSettlementExecutor(
-          {
-            rpcUrl: config.rpcUrl,
-            rpcFallbackUrls: config.rpcFallbackUrls,
-            chainId: config.chainId,
-            escrowAddress: config.escrowAddress,
-            usdcAddress: config.usdcAddress,
-            gaslessSignerCustodyMode: 'kms',
-            gaslessManagedSignerUrl: 'https://signer.example.test',
-            gaslessMaxGasLimit: 1_500_000n,
-            gaslessMaxFeePerGasWei: 10n,
-            gaslessMaxNativeCostWei: 10_000_000n,
-            gaslessMinExecutorBalanceWei: 10n,
-          },
-          dependencies,
-        );
-
-      await executor.executeUserAction(buildUserActionInput(action, action));
-
-      const signedRequest = dependencies.signerTransport.signTransaction.mock.calls[0][0];
-      const escrowInterface = new Interface(AgroasysEscrow__factory.abi);
-      expect(escrowInterface.parseTransaction({ data: signedRequest.transaction.data })?.name).toBe(
-        expectedFunctionName,
+    'open_dispute',
+    'cancel_locked_timeout',
+    'refund_in_transit_timeout',
+    'finalize_after_dispute_window',
+    'finalize_after_inspection_acceptance',
+  ] as const)('managed custody executor contains %s before signer use', async (action) => {
+    const dependencies = createFakeManagedSignerDependencies();
+    const executor =
+      gaslessSettlementExecutionTestExports.createManagedSignerGaslessSettlementExecutor(
+        {
+          rpcUrl: config.rpcUrl,
+          rpcFallbackUrls: config.rpcFallbackUrls,
+          chainId: config.chainId,
+          escrowAddress: config.escrowAddress,
+          usdcAddress: config.usdcAddress,
+          gaslessSignerCustodyMode: 'kms',
+          gaslessManagedSignerUrl: 'https://signer.example.test',
+          gaslessMaxGasLimit: 1_500_000n,
+          gaslessMaxFeePerGasWei: 10n,
+          gaslessMaxNativeCostWei: 10_000_000n,
+          gaslessMinExecutorBalanceWei: 10n,
+        },
+        dependencies,
       );
-      expect(signedRequest.operation).toBe(action);
-    },
-  );
+
+    const input = buildUserActionInput(action, action);
+    await expect(executor.simulateUserAction(input)).rejects.toThrow(
+      'settlement_client_upgrade_required',
+    );
+    await expect(executor.executeUserAction(input)).rejects.toThrow(
+      'settlement_client_upgrade_required',
+    );
+    expect(dependencies.signerTransport.getSignerAddress).not.toHaveBeenCalled();
+    expect(dependencies.signerTransport.signTransaction).not.toHaveBeenCalled();
+    expect(dependencies.nonceReservationStore.reserve).not.toHaveBeenCalled();
+    expect(dependencies.provider.broadcastTransaction).not.toHaveBeenCalled();
+  });
 
   test('managed custody executor retains an unknown outcome and never retries nonce drift', async () => {
     const dependencies = createFakeManagedSignerDependencies({

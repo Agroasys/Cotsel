@@ -1,3 +1,8 @@
+import {
+  createGaslessFinalityVerifier,
+  type GaslessFinalityVerifier,
+} from './gaslessChainFinality';
+import { requireReviewedUserActionCapability } from './gaslessExecutionValidation';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -18,10 +23,8 @@ import type { GaslessTransactionOutcomeRecorder } from './gaslessTransactionOutc
 import type { GaslessNonceReservationStore } from './gaslessNonceReservationStore';
 import {
   buildManagedCreateTradeTransaction,
-  buildManagedUserActionTransaction,
   buildManagedWalletTransferTransaction,
   createTradePolicyContext,
-  userActionPolicyContext,
   walletTransferPolicyContext,
 } from './gaslessManagedSignerTransactions';
 import {
@@ -73,6 +76,7 @@ export function createManagedSignerGaslessSettlementExecutor(
   config: ManagedSignerGaslessConfig,
   dependencies?: {
     provider?: GaslessManagedProvider;
+    finalityVerifier?: GaslessFinalityVerifier;
     signerTransport?: ManagedSignerTransport;
     recordValidationEvidence?: ManagedSignerValidationRecorder;
     recordTransactionOutcome: GaslessTransactionOutcomeRecorder;
@@ -100,6 +104,7 @@ export function createManagedSignerGaslessSettlementExecutor(
     );
   }
   const transactionOutcomeRecorder = dependencies.recordTransactionOutcome;
+  const finality = dependencies.finalityVerifier ?? createGaslessFinalityVerifier(config);
   if (!dependencies.nonceReservationStore) {
     throw new GatewayError(
       503,
@@ -244,7 +249,20 @@ export function createManagedSignerGaslessSettlementExecutor(
         'Gasless transaction confirmation requires reconciliation',
       );
     }
+    let finalizedEvidence;
+    try {
+      finalizedEvidence = await finality.verifyReceipt(config.chainId, tx.hash, receipt);
+    } catch {
+      finalizedEvidence = null;
+    }
+    if (!finalizedEvidence)
+      throw new GaslessTransactionOutcomePendingError(
+        tx.hash,
+        'confirmation_pending',
+        'Gasless transaction awaits finalized chain evidence',
+      );
     const outcome = {
+      finalityEvidence: finalizedEvidence,
       blockNumber: BigInt(receipt.blockNumber).toString(),
       blockHash: receipt.blockHash,
       gasUsed: BigInt(receipt.gasUsed ?? 0n).toString(),
@@ -263,6 +281,7 @@ export function createManagedSignerGaslessSettlementExecutor(
 
     return {
       txHash: tx.hash,
+      finalityEvidence: finalizedEvidence,
       blockNumber: BigInt(receipt.blockNumber).toString(),
       gasUsed: gasUsed.toString(),
       effectiveGasPriceWei: effectiveGasPriceWei.toString(),
@@ -279,6 +298,7 @@ export function createManagedSignerGaslessSettlementExecutor(
       applicationRequestId: string;
       resourceType: 'settlement_handoff' | 'platform_transfer';
       resourceId: string;
+      sourceApiKeyId?: string | null;
     },
     transaction: TransactionRequest,
     gasEstimate: bigint,
@@ -389,40 +409,12 @@ export function createManagedSignerGaslessSettlementExecutor(
       };
     },
 
-    async simulateUserAction(input) {
-      const { executorAddress } = await assertSignerBalance();
-      return {
-        gasEstimate: await simulateTransaction(
-          buildManagedUserActionTransaction(transactionConfig, input, executorAddress),
-        ),
-      };
+    async simulateUserAction() {
+      return requireReviewedUserActionCapability();
     },
 
-    async executeUserAction(input) {
-      const { executorAddress } = await assertSignerBalance();
-      const transaction = buildManagedUserActionTransaction(
-        transactionConfig,
-        input,
-        executorAddress,
-      );
-      const gasEstimate = await simulateTransaction(transaction);
-      const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await broadcastManagedTransaction(
-        input.action,
-        userActionPolicyContext(input),
-        {
-          applicationRequestId: input.requestId,
-          resourceType: 'settlement_handoff',
-          resourceId: input.handoffId,
-        },
-        transaction,
-        gasEstimate,
-        feeOverrides,
-      );
-      return {
-        txHash: tx.hash,
-        receipt: await waitForConfirmedReceipt(tx),
-      };
+    async executeUserAction() {
+      return requireReviewedUserActionCapability();
     },
 
     async simulateWalletUsdcTransfer(input) {
@@ -450,6 +442,7 @@ export function createManagedSignerGaslessSettlementExecutor(
           applicationRequestId: input.requestId,
           resourceType: 'platform_transfer',
           resourceId: input.platformTransferId,
+          sourceApiKeyId: input.sourceApiKeyId ?? null,
         },
         transaction,
         gasEstimate,

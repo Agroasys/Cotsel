@@ -8,6 +8,27 @@
       "schema_sha256": "063bbc4676b8605ccea415c66582e93f756b601e67ff19b6736f8c5ff8857c3e",
       "adopt_existing_schema": true,
       "baseline": true
+    },
+    {
+      "version": "202610160002",
+      "name": "funded_settlement_binding",
+      "file": "schema/002_funded_settlement_binding.sql",
+      "sha256": "95fd0d796d24268d03bef16ad75695c7a808d764d3be611be6466ea5c6d399fb",
+      "schema_sha256": "ce95332ca0b056d1dfc72aa95aadb3312221560ac78bda39e1643aba18da6c15"
+    },
+    {
+      "version": "202610160003",
+      "name": "durable_dispatch_claim",
+      "file": "schema/003_durable_dispatch_claim.sql",
+      "sha256": "b629a4ef37b98c3420765cd9ed0b57385fd81de98fb90ead0f07262e800b15f9",
+      "schema_sha256": "e3c36d4f544132d03abb4c03055b4a5541ee22e386c36f3545be4b5a87ae765c"
+    },
+    {
+      "version": "202610160004",
+      "name": "signer_dispatch_exclusion",
+      "file": "schema/004_signer_dispatch_exclusion.sql",
+      "sha256": "a8feca4d02e2181326a5d71f662540dbb277dbc9e1f5ac8770d87bc78ae388b5",
+      "schema_sha256": "8b38500b0851d50b5a9f70deef8cd2549508f8870d0c8d49b51891d0e9945469"
     }
   ]
 }

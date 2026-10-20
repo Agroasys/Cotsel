@@ -1,3 +1,4 @@
+import type { SettlementFundedBinding } from '@agroasys/sdk';
 import type { SettlementConfirmationStage } from '@agroasys/sdk';
 
 export enum TriggerStatus {
@@ -30,6 +31,10 @@ export enum ErrorType {
 }
 
 export interface Trigger {
+  /** Missing on legacy rows, which cannot resume financial execution. */
+  funded_binding?: SettlementFundedBinding | null;
+  dispatch_started_at?: Date | null;
+  dispatch_signer_scope?: string | null;
   id: number;
 
   action_key: string;
@@ -70,6 +75,7 @@ export interface Trigger {
 }
 
 export interface CreateTriggerData {
+  fundedBinding: SettlementFundedBinding;
   actionKey: string;
   requestId: string;
   idempotencyKey: string;

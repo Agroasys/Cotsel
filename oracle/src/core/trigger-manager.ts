@@ -1,4 +1,5 @@
-import { SDKClient, BlockchainResult } from '../blockchain/sdk-client';
+import { type SettlementFundedBinding } from '@agroasys/sdk';
+import { SDKClient } from '../blockchain/sdk-client';
 import { StateValidator } from './state-validator';
 import { Trigger, TriggerType, TriggerStatus, CreateTriggerData } from '../types/trigger';
 import {
@@ -7,23 +8,10 @@ import {
   getLatestTriggerByActionKey,
   updateTrigger,
 } from '../database/queries';
-import {
-  generateActionKey,
-  generateRequestId,
-  generateIdempotencyKey,
-  calculateBackoff,
-} from '../utils/crypto';
-import {
-  classifyError,
-  determineNextStatus,
-  getErrorMessage,
-  publicFailureMessage,
-  storedFailureMessage,
-  ValidationError,
-} from '../utils/errors';
+import { generateActionKey, generateRequestId, generateIdempotencyKey } from '../utils/crypto';
+import { getErrorMessage, storedFailureMessage, ValidationError } from '../utils/errors';
 import { Logger } from '../utils/logger';
 import {
-  incrementOracleExhaustedRetries,
   incrementOracleRedriveAttempts,
   incrementOraclePendingApproval,
   incrementOracleApproved,
@@ -33,9 +21,11 @@ import { WebhookNotifier } from '@agroasys/notifications';
 import { approveTrigger, rejectTrigger } from '../database/queries';
 import { NOOP_ORACLE_ACTION_LOCK, type OracleActionLock } from './oracle-action-lock';
 import { createContainmentGuard, type ContainmentGuard } from './containment-guard';
-import { submitTriggerAction } from './blockchain-actions';
+import { executeTriggerWithRetry } from './trigger-execution';
+import { requireFundedBinding } from './funded-settlement-instruction';
 
 export interface TriggerRequest {
+  fundedBinding?: SettlementFundedBinding;
   tradeId: string;
   requestId: string;
   triggerType: TriggerType;
@@ -55,8 +45,6 @@ export interface TriggerResponse {
 }
 
 export class TriggerManager {
-  private readonly maxBackoffMs = 30000;
-
   constructor(
     private sdkClient: SDKClient,
     private maxAttempts: number = 5,
@@ -88,7 +76,24 @@ export class TriggerManager {
     });
 
     const latestTrigger = await getLatestTriggerByActionKey(actionKey);
+    if (
+      request.fundedBinding &&
+      latestTrigger &&
+      JSON.stringify(
+        requireFundedBinding(request.fundedBinding, request.tradeId, request.triggerType),
+      ) !==
+        JSON.stringify(
+          requireFundedBinding(
+            latestTrigger.funded_binding,
+            latestTrigger.trade_id,
+            latestTrigger.trigger_type,
+          ),
+        )
+    )
+      throw new ValidationError('The original funded progression instruction cannot be replaced');
 
+    if (latestTrigger?.dispatch_started_at && !this.isActionAlreadyCompleted(latestTrigger))
+      return this.handleExistingTrigger(latestTrigger, actionKey);
     if (latestTrigger && this.isActionAlreadyCompleted(latestTrigger)) {
       Logger.info('Action already completed', {
         actionKey,
@@ -119,6 +124,12 @@ export class TriggerManager {
       return this.handleExistingTrigger(existingRequest, actionKey);
     }
 
+    const fundedBinding = requireFundedBinding(
+      request.fundedBinding,
+      request.tradeId,
+      request.triggerType,
+    );
+    await this.sdkClient.assertFundedBinding(fundedBinding);
     try {
       const trade = await this.sdkClient.getTrade(request.tradeId);
       StateValidator.validateTradeState(trade, request.triggerType);
@@ -220,7 +231,23 @@ export class TriggerManager {
     // Guard before the retry machinery: a re-drive skips the executeTrigger
     // pause check, so re-assert it here and let the error propagate out (the
     // catch below would otherwise treat it as "already executed").
+    await this.sdkClient.assertFundedBinding(
+      requireFundedBinding(
+        exhaustedTrigger.funded_binding,
+        exhaustedTrigger.trade_id,
+        exhaustedTrigger.trigger_type,
+      ),
+    );
     await this.assertTradeMayProgress(exhaustedTrigger.trade_id);
+
+    if (
+      exhaustedTrigger.dispatch_started_at ||
+      exhaustedTrigger.tx_hash ||
+      exhaustedTrigger.submitted_at
+    )
+      throw new ValidationError(
+        'Original execution requires independent reconciliation; re-drive cannot create another transaction',
+      );
 
     incrementOracleRedriveAttempts(exhaustedTrigger.action_key);
 
@@ -237,6 +264,11 @@ export class TriggerManager {
       const newIdempotencyKey = generateIdempotencyKey(exhaustedTrigger.action_key);
 
       const newTrigger = await createTrigger({
+        fundedBinding: requireFundedBinding(
+          exhaustedTrigger.funded_binding,
+          exhaustedTrigger.trade_id,
+          exhaustedTrigger.trigger_type,
+        ),
         actionKey: exhaustedTrigger.action_key,
         requestId: newRequestId,
         idempotencyKey: newIdempotencyKey,
@@ -258,30 +290,6 @@ export class TriggerManager {
 
       return await this.executeWithRetry(newTrigger, exhaustedTrigger.action_key);
     } catch (error: unknown) {
-      if (error instanceof ValidationError) {
-        Logger.info('Re-drive check: action already executed on-chain', {
-          actionKey: exhaustedTrigger.action_key,
-          validationError: error.message,
-        });
-
-        await updateTrigger(exhaustedTrigger.idempotency_key, {
-          status: TriggerStatus.CONFIRMED,
-          on_chain_verified: true,
-          on_chain_verified_at: new Date(),
-          confirmed_at: new Date(),
-        });
-
-        return {
-          idempotencyKey: exhaustedTrigger.idempotency_key,
-          actionKey: exhaustedTrigger.action_key,
-          requestId: exhaustedTrigger.request_id,
-          status: TriggerStatus.CONFIRMED,
-          txHash: exhaustedTrigger.tx_hash || undefined,
-          idempotent: true,
-          message: 'Action already executed on-chain (verified during re-drive)',
-        };
-      }
-
       Logger.error('Re-drive verification failed', {
         actionKey: exhaustedTrigger.action_key,
         error: getErrorMessage(error),
@@ -427,6 +435,11 @@ export class TriggerManager {
     const idempotencyKey = `${actionKey}:${request.requestId}`;
 
     const data: CreateTriggerData = {
+      fundedBinding: requireFundedBinding(
+        request.fundedBinding,
+        request.tradeId,
+        request.triggerType,
+      ),
       actionKey,
       requestId: request.requestId,
       idempotencyKey,
@@ -439,132 +452,15 @@ export class TriggerManager {
     return await createTrigger(data);
   }
 
-  private async executeWithRetry(trigger: Trigger, actionKey: string): Promise<TriggerResponse> {
-    let attempt = 1;
-
-    while (attempt <= this.maxAttempts) {
-      try {
-        Logger.info('Executing trigger attempt', {
-          idempotencyKey: trigger.idempotency_key.substring(0, 32),
-          actionKey,
-          attempt,
-          maxAttempts: this.maxAttempts,
-        });
-
-        const trade = await this.sdkClient.getTrade(trigger.trade_id);
-        StateValidator.validateTradeState(trade, trigger.trigger_type);
-
-        await updateTrigger(trigger.idempotency_key, {
-          status: TriggerStatus.EXECUTING,
-          attempt_count: attempt,
-        });
-
-        const result = await this.executeBlockchainAction(trigger.trigger_type, trigger.trade_id);
-
-        await updateTrigger(trigger.idempotency_key, {
-          status: TriggerStatus.SUBMITTED,
-          tx_hash: result.txHash,
-          block_number: BigInt(result.blockNumber),
-          submitted_at: new Date(),
-        });
-
-        Logger.info('Trigger submitted successfully', {
-          idempotencyKey: trigger.idempotency_key.substring(0, 32),
-          actionKey,
-          txHash: result.txHash,
-          blockNumber: result.blockNumber,
-        });
-
-        return {
-          idempotencyKey: trigger.idempotency_key,
-          actionKey,
-          requestId: trigger.request_id,
-          status: TriggerStatus.SUBMITTED,
-          txHash: result.txHash,
-          blockNumber: result.blockNumber,
-          idempotent: false,
-          message: 'Transaction submitted, awaiting confirmation',
-        };
-      } catch (error: unknown) {
-        const oracleError = classifyError(error);
-
-        Logger.error('Trigger execution failed', {
-          idempotencyKey: trigger.idempotency_key.substring(0, 32),
-          actionKey,
-          attempt,
-          errorType: oracleError.errorType,
-          isTerminal: oracleError.isTerminal,
-          message: oracleError.message,
-        });
-        const nextStatus = determineNextStatus(oracleError, attempt, this.maxAttempts);
-        const publicReason = publicFailureMessage(oracleError);
-
-        await updateTrigger(trigger.idempotency_key, {
-          status: nextStatus,
-          attempt_count: attempt,
-          last_error: oracleError.message,
-          error_type: oracleError.errorType,
-        });
-
-        if (nextStatus === TriggerStatus.TERMINAL_FAILURE) {
-          await this.notifyTerminalStatus(
-            trigger,
-            actionKey,
-            nextStatus,
-            oracleError.message,
-            attempt,
-          );
-          return {
-            idempotencyKey: trigger.idempotency_key,
-            actionKey,
-            requestId: trigger.request_id,
-            status: nextStatus,
-            idempotent: false,
-            message: publicReason,
-          };
-        }
-
-        if (nextStatus === TriggerStatus.EXHAUSTED_NEEDS_REDRIVE) {
-          const exhaustedMessage = `Exhausted ${this.maxAttempts} attempts: ${oracleError.message}. Use re-drive endpoint to retry.`;
-          incrementOracleExhaustedRetries(actionKey);
-          await this.notifyTerminalStatus(
-            trigger,
-            actionKey,
-            nextStatus,
-            exhaustedMessage,
-            attempt,
-          );
-          return {
-            idempotencyKey: trigger.idempotency_key,
-            actionKey,
-            requestId: trigger.request_id,
-            status: nextStatus,
-            idempotent: false,
-            message: `Exhausted ${this.maxAttempts} attempts: ${publicReason}. Use re-drive endpoint to retry.`,
-          };
-        }
-
-        if (attempt < this.maxAttempts && !oracleError.isTerminal) {
-          const backoffMs = calculateBackoff(attempt, this.baseDelayMs, this.maxBackoffMs);
-          Logger.info('Retrying after backoff', {
-            idempotencyKey: trigger.idempotency_key.substring(0, 32),
-            actionKey,
-            backoffMs,
-            maxBackoffMs: this.maxBackoffMs,
-            nextAttempt: attempt + 1,
-          });
-          await new Promise((resolve) => setTimeout(resolve, backoffMs));
-          attempt++;
-          continue;
-        }
-
-        throw error;
-      }
-    }
-
-    throw new Error(
-      `Retry loop exited without terminal status for action ${actionKey} after ${this.maxAttempts} attempts`,
-    );
+  private executeWithRetry(trigger: Trigger, actionKey: string): Promise<TriggerResponse> {
+    return executeTriggerWithRetry(trigger, actionKey, {
+      sdkClient: this.sdkClient,
+      maxAttempts: this.maxAttempts,
+      baseDelayMs: this.baseDelayMs,
+      containmentGuard: this.containmentGuard,
+      handleExistingTrigger: this.handleExistingTrigger.bind(this),
+      notifyTerminalStatus: this.notifyTerminalStatus.bind(this),
+    });
   }
 
   private async notifyTerminalStatus(
@@ -602,22 +498,5 @@ export class TriggerManager {
         maxAttempts: this.maxAttempts,
       },
     });
-  }
-
-  /**
-   * The one place every oracle-submitted progression goes through.
-   *
-   * The guard is re-asserted here, not only at the entry points: a trigger can
-   * sit queued, retry, or be re-driven long after it was accepted, and a
-   * containment opened in the meantime must stop the submission that is about
-   * to happen — not merely the decision to attempt one.
-   */
-  private async executeBlockchainAction(
-    triggerType: TriggerType,
-    tradeId: string,
-  ): Promise<BlockchainResult> {
-    await this.containmentGuard.assertMayProgress(tradeId);
-
-    return await submitTriggerAction(this.sdkClient, triggerType, tradeId);
   }
 }

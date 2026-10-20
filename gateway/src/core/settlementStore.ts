@@ -2,6 +2,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomUUID } from 'crypto';
+import { isDeepStrictEqual } from 'node:util';
+import type { SettlementExecutionBinding } from './settlementExecutionBinding';
 import { Pool, PoolClient } from 'pg';
 import { GatewayError } from '../errors';
 import {
@@ -35,6 +37,7 @@ import type {
 } from './settlementStoreTypes';
 
 interface SettlementHandoffRow {
+  executionBinding: SettlementExecutionBinding | null;
   handoffId: string;
   platformId: string;
   platformHandoffId: string;
@@ -97,6 +100,7 @@ function parseDecimal(value: string | null): number | null {
 
 function mapHandoffRow(row: SettlementHandoffRow): SettlementHandoffRecord {
   return {
+    executionBinding: row.executionBinding ?? null,
     handoffId: row.handoffId,
     platformId: row.platformId,
     platformHandoffId: row.platformHandoffId,
@@ -195,6 +199,7 @@ async function getHandoffWithClient(
        asset_amount AS "assetAmount",
        ricardian_hash AS "ricardianHash",
        external_reference AS "externalReference",
+       execution_binding AS "executionBinding",
        metadata,
        execution_status AS "executionStatus",
        reconciliation_status AS "reconciliationStatus",
@@ -390,6 +395,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
          asset_amount AS "assetAmount",
          ricardian_hash AS "ricardianHash",
          external_reference AS "externalReference",
+         execution_binding AS "executionBinding",
          metadata,
          execution_status AS "executionStatus",
          reconciliation_status AS "reconciliationStatus",
@@ -431,6 +437,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
          asset_amount AS "assetAmount",
          ricardian_hash AS "ricardianHash",
          external_reference AS "externalReference",
+         execution_binding AS "executionBinding",
          metadata,
          execution_status AS "executionStatus",
          reconciliation_status AS "reconciliationStatus",
@@ -480,6 +487,23 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
       };
       const existing = await findHandoffRowByPlatformRef(input.platformId, input.platformHandoffId);
       if (existing) {
+        if (existing.sourceApiKeyId !== (input.sourceApiKeyId ?? null))
+          throw new GatewayError(403, 'FORBIDDEN', 'Handoff belongs to another service identity');
+        if (
+          ((input.executionBinding !== null && input.executionBinding !== undefined) ||
+            (existing.executionBinding !== null && existing.executionBinding !== undefined)) &&
+          (!input.sourceApiKeyId ||
+            !isDeepStrictEqual(existing.executionBinding, input.executionBinding) ||
+            existing.phase !== input.phase ||
+            existing.tradeId !== input.tradeId ||
+            existing.ricardianHash !== input.ricardianHash ||
+            existing.externalReference !== input.externalReference)
+        )
+          throw new GatewayError(
+            409,
+            'CONFLICT',
+            'Handoff key belongs to a different execution binding',
+          );
         // NUMERIC text output carries the column scale, so it compares exactly with canonical input.
         assertSameMonetaryIntent(
           {
@@ -513,8 +537,9 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
            reconciliation_status,
            callback_status,
            request_id,
-           source_api_key_id
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, 'pending', 'pending', 'pending', $14, $15)
+           source_api_key_id,
+           execution_binding
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, 'pending', 'pending', 'pending', $14, $15, $16::jsonb)
          RETURNING
            handoff_id AS "handoffId",
            platform_id AS "platformId",
@@ -528,6 +553,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
            asset_amount AS "assetAmount",
            ricardian_hash AS "ricardianHash",
            external_reference AS "externalReference",
+           execution_binding AS "executionBinding",
            metadata,
            execution_status AS "executionStatus",
            reconciliation_status AS "reconciliationStatus",
@@ -559,6 +585,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
           JSON.stringify(input.metadata ?? {}),
           input.requestId,
           input.sourceApiKeyId ?? null,
+          input.executionBinding ? JSON.stringify(input.executionBinding) : null,
         ],
       );
 
@@ -591,6 +618,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
              asset_amount AS "assetAmount",
              ricardian_hash AS "ricardianHash",
              external_reference AS "externalReference",
+             execution_binding AS "executionBinding",
              metadata,
              execution_status AS "executionStatus",
              reconciliation_status AS "reconciliationStatus",
@@ -809,6 +837,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
            asset_amount AS "assetAmount",
            ricardian_hash AS "ricardianHash",
            external_reference AS "externalReference",
+           execution_binding AS "executionBinding",
            metadata,
            execution_status AS "executionStatus",
            reconciliation_status AS "reconciliationStatus",

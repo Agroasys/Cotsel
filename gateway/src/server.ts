@@ -45,7 +45,7 @@ import { TreasuryReadService } from './core/treasuryReadService';
 import { TreasuryWorkflowService } from './core/treasuryWorkflowService';
 import { ReconciliationReadService } from './core/reconciliationReadService';
 import { RicardianClient } from './core/ricardianClient';
-import { createDownstreamServiceRegistry } from './core/serviceRegistry';
+import { createConfiguredDownstreamServiceRegistry } from './core/configuredServiceRegistry';
 import { ServiceOrchestrator } from './core/serviceOrchestrator';
 import { OracleSettlementProgressionService } from './core/oracleSettlementProgressionService';
 import { Logger } from './logging/logger';
@@ -116,94 +116,14 @@ const failedOperationReplayer = new GatewayFailedOperationReplayer(
 );
 const treasuryReadService = new TreasuryReadService(governanceStatusService);
 const reconciliationReadService = new ReconciliationReadService(settlementStore);
-const downstreamServiceRegistry = createDownstreamServiceRegistry([
-  {
-    key: 'oracle',
-    name: 'Oracle',
-    source: 'oracle_http',
-    baseUrl: config.oracleBaseUrl,
-    healthPath: '/api/oracle/health',
-    auth: config.oracleServiceApiSecret
-      ? {
-          mode: 'oracle_legacy_hmac',
-          headerStyle: 'legacy',
-          apiKey: config.oracleServiceApiKey,
-          apiSecret: config.oracleServiceApiSecret,
-        }
-      : { mode: 'none' },
-    readTimeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
-    mutationTimeoutMs: config.downstreamMutationTimeoutMs ?? 8_000,
-    readRetryBudget: config.downstreamReadRetryBudget ?? 1,
-    mutationRetryBudget: config.downstreamMutationRetryBudget ?? 0,
-  },
-  {
-    key: 'treasury',
-    name: 'Treasury',
-    source: 'treasury_http',
-    baseUrl: config.treasuryBaseUrl,
-    healthPath: '/api/treasury/v1/auth-check',
-    auth: config.treasuryServiceApiSecret
-      ? {
-          mode: 'shared_hmac',
-          headerStyle: 'agroasys',
-          apiKey: config.treasuryServiceApiKey,
-          apiSecret: config.treasuryServiceApiSecret,
-        }
-      : { mode: 'none' },
-    readTimeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
-    mutationTimeoutMs: config.downstreamMutationTimeoutMs ?? 8_000,
-    readRetryBudget: config.downstreamReadRetryBudget ?? 1,
-    mutationRetryBudget: config.downstreamMutationRetryBudget ?? 0,
-  },
-  {
-    key: 'reconciliation',
-    name: 'Reconciliation',
-    source: 'reconciliation_http',
-    baseUrl: config.reconciliationBaseUrl,
-    healthPath: '/health',
-    auth: { mode: 'none' },
-    readTimeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
-    mutationTimeoutMs: config.downstreamMutationTimeoutMs ?? 8_000,
-    readRetryBudget: config.downstreamReadRetryBudget ?? 1,
-    mutationRetryBudget: config.downstreamMutationRetryBudget ?? 0,
-  },
-  {
-    key: 'ricardian',
-    name: 'Ricardian Engine',
-    source: 'ricardian_http',
-    baseUrl: config.ricardianBaseUrl,
-    healthPath: '/api/ricardian/v1/auth-check',
-    auth: config.ricardianServiceApiSecret
-      ? {
-          mode: 'shared_hmac',
-          headerStyle: 'agroasys',
-          apiKey: config.ricardianServiceApiKey,
-          apiSecret: config.ricardianServiceApiSecret,
-        }
-      : { mode: 'none' },
-    readTimeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
-    mutationTimeoutMs: config.downstreamMutationTimeoutMs ?? 8_000,
-    readRetryBudget: config.downstreamReadRetryBudget ?? 1,
-    mutationRetryBudget: config.downstreamMutationRetryBudget ?? 0,
-  },
-  {
-    key: 'notifications',
-    name: 'Notifications',
-    source: 'notifications_http',
-    baseUrl: config.notificationsBaseUrl,
-    auth: { mode: 'none' },
-    readTimeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
-    mutationTimeoutMs: config.downstreamMutationTimeoutMs ?? 8_000,
-    readRetryBudget: config.downstreamReadRetryBudget ?? 1,
-    mutationRetryBudget: config.downstreamMutationRetryBudget ?? 0,
-  },
-]);
+const downstreamServiceRegistry = createConfiguredDownstreamServiceRegistry(config);
 const orchestrator = new ServiceOrchestrator(downstreamServiceRegistry);
 const oracleSettlementProgressionService = new OracleSettlementProgressionService(
   settlementStore,
   orchestrator,
   settlementService,
-  config.immediateInspectionAcceptanceEnabled,
+  () => new Date(),
+  config,
 );
 const treasuryWorkflowService = new TreasuryWorkflowService(orchestrator, auditLogStore);
 const indexerClient = new IndexerGraphqlClient(
@@ -338,6 +258,7 @@ async function bootstrap(): Promise<void> {
       settlementService,
       settlementStore,
       gaslessSettlementService,
+      gaslessTransactionOutcomes: gaslessTransactionOutcomeRuntime.recorder,
       oracleSettlementProgressionService,
       ricardianClient,
       nonceStore: settlementNonceStore,

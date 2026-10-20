@@ -1,3 +1,5 @@
+import { createGaslessFinalityVerifier } from './gaslessChainFinality';
+import { requireReviewedUserActionCapability } from './gaslessExecutionValidation';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,7 +13,6 @@ import type {
   GaslessCreateTradeExecutionInput,
   GaslessExecutionReceipt,
   GaslessSettlementExecutor,
-  GaslessUserActionExecutionInput,
   GaslessWalletUsdcTransferExecutionInput,
 } from './gaslessExecutionTypes';
 import {
@@ -23,9 +24,7 @@ import {
 import type { GaslessTransactionOutcomeRecorder } from './gaslessTransactionOutcomeStore';
 import {
   buildCreateTradeArguments,
-  buildUserActionArguments,
   buildWalletUsdcTransferArguments,
-  getUserActionFunctionName,
   USDC_AUTHORIZATION_ABI,
 } from './gaslessTransactionEncoding';
 
@@ -45,6 +44,7 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     chainId: config.chainId,
     quorum: config.rpcQuorum,
   });
+  const finality = createGaslessFinalityVerifier(config);
   const signer = new Wallet(config.gaslessExecutorPrivateKey, provider);
   const escrow = AgroasysEscrow__factory.connect(config.escrowAddress, signer);
   const usdc = new Contract(config.usdcAddress, USDC_AUTHORIZATION_ABI, signer);
@@ -95,7 +95,20 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
         'Gasless transaction confirmation requires reconciliation',
       );
     }
+    let finalizedEvidence;
+    try {
+      finalizedEvidence = await finality.verifyReceipt(config.chainId, tx.hash, receipt);
+    } catch {
+      finalizedEvidence = null;
+    }
+    if (!finalizedEvidence)
+      throw new GaslessTransactionOutcomePendingError(
+        tx.hash,
+        'confirmation_pending',
+        'Gasless transaction awaits finalized chain evidence',
+      );
     const outcome = {
+      finalityEvidence: finalizedEvidence,
       blockNumber: BigInt(receipt.blockNumber).toString(),
       blockHash: receipt.blockHash,
       gasUsed: BigInt(receipt.gasUsed ?? 0n).toString(),
@@ -114,6 +127,7 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
 
     return {
       txHash: tx.hash,
+      finalityEvidence: finalizedEvidence,
       blockNumber: BigInt(receipt.blockNumber).toString(),
       gasUsed: gasUsed.toString(),
       effectiveGasPriceWei: effectiveGasPriceWei.toString(),
@@ -195,48 +209,6 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     return { gasPrice: effectiveFeePerGasWei };
   }
 
-  async function simulateUserAction(input: GaslessUserActionExecutionInput): Promise<bigint> {
-    await assertSignerBalance();
-    const args = buildUserActionArguments(input);
-    let gasEstimate: bigint;
-
-    if (input.action === 'open_dispute') {
-      await escrow.openDisputeWithAuthorization.staticCall(...args);
-      gasEstimate = await escrow.openDisputeWithAuthorization.estimateGas(...args);
-    } else if (input.action === 'cancel_locked_timeout') {
-      await escrow.cancelLockedTradeAfterTimeoutWithAuthorization.staticCall(...args);
-      gasEstimate = await escrow.cancelLockedTradeAfterTimeoutWithAuthorization.estimateGas(
-        ...args,
-      );
-    } else if (input.action === 'refund_in_transit_timeout') {
-      await escrow.refundInTransitAfterTimeoutWithAuthorization.staticCall(...args);
-      gasEstimate = await escrow.refundInTransitAfterTimeoutWithAuthorization.estimateGas(...args);
-    } else if (input.action === 'finalize_after_dispute_window') {
-      await escrow.finalizeAfterDisputeWindowWithAuthorization.staticCall(...args);
-      gasEstimate = await escrow.finalizeAfterDisputeWindowWithAuthorization.estimateGas(...args);
-    } else {
-      await escrow.finalizeAfterInspectionAcceptanceWithAuthorization.staticCall(...args);
-      gasEstimate = await escrow.finalizeAfterInspectionAcceptanceWithAuthorization.estimateGas(
-        ...args,
-      );
-    }
-
-    if (gasEstimate > gaslessMaxGasLimit) {
-      throw new GatewayError(
-        400,
-        'VALIDATION_ERROR',
-        'Gasless user-action gas estimate exceeds cap',
-        {
-          action: input.action,
-          gasEstimate: gasEstimate.toString(),
-          gasCap: gaslessMaxGasLimit.toString(),
-        },
-      );
-    }
-
-    return gasEstimate;
-  }
-
   async function simulateWalletUsdcTransfer(
     input: GaslessWalletUsdcTransferExecutionInput,
   ): Promise<bigint> {
@@ -262,6 +234,7 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
       operation: string;
       resourceType: 'settlement_handoff' | 'platform_transfer';
       resourceId: string;
+      sourceApiKeyId?: string | null;
       destinationAddress: string;
       data: string;
     },
@@ -289,6 +262,7 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
         resourceType: input.resourceType,
         resourceId: input.resourceId,
         operation: input.operation,
+        sourceApiKeyId: input.sourceApiKeyId ?? null,
       },
       transactionOutcomeRecorder,
       (signed) => provider.broadcastTransaction(signed),
@@ -327,34 +301,12 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
       };
     },
 
-    async simulateUserAction(input) {
-      return {
-        gasEstimate: await simulateUserAction(input),
-      };
+    async simulateUserAction() {
+      return requireReviewedUserActionCapability();
     },
 
-    async executeUserAction(input) {
-      const gasEstimate = await simulateUserAction(input);
-      const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await signAndBroadcast(
-        {
-          requestId: input.requestId,
-          operation: input.action,
-          resourceType: 'settlement_handoff',
-          resourceId: input.handoffId,
-          destinationAddress: config.escrowAddress,
-          data: escrowInterface.encodeFunctionData(
-            getUserActionFunctionName(input.action),
-            buildUserActionArguments(input),
-          ),
-        },
-        gasEstimate,
-        feeOverrides,
-      );
-      return {
-        txHash: tx.hash,
-        receipt: await waitForConfirmedReceipt(tx),
-      };
+    async executeUserAction() {
+      return requireReviewedUserActionCapability();
     },
 
     async simulateWalletUsdcTransfer(input) {
@@ -370,6 +322,7 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
           operation: input.action,
           resourceType: 'platform_transfer',
           resourceId: input.platformTransferId,
+          sourceApiKeyId: input.sourceApiKeyId ?? null,
           destinationAddress: config.usdcAddress,
           data: usdcInterface.encodeFunctionData(
             'transferWithAuthorization',

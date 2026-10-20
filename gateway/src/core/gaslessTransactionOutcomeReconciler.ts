@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { TransactionReceipt, TransactionResponse } from 'ethers';
+import type { GaslessFinalityVerifier } from './gaslessChainFinality';
 import { Logger } from '../logging/logger';
 import type {
   GaslessConfirmedOutcome,
@@ -9,13 +10,14 @@ import type {
   GaslessTransactionOutcomeStore,
 } from './gaslessTransactionOutcomeStore';
 
-interface GaslessOutcomeProvider {
+export interface GaslessOutcomeProvider {
   getTransactionReceipt(transactionHash: string): Promise<TransactionReceipt | null>;
   getTransaction(transactionHash: string): Promise<TransactionResponse | null>;
   getTransactionCount(address: string, blockTag: 'latest' | 'pending'): Promise<number>;
 }
 
 export interface GaslessOutcomeObserver {
+  onOrphaned(record: GaslessTransactionOutcomeRecord): Promise<void>;
   onBroadcastUnknown(record: GaslessTransactionOutcomeRecord): Promise<void>;
   onConfirmationPending(record: GaslessTransactionOutcomeRecord): Promise<void>;
   onConfirmed(
@@ -43,9 +45,12 @@ export class GaslessTransactionOutcomeReconciler {
 
   constructor(
     private readonly store: GaslessTransactionOutcomeStore,
-    private readonly provider: GaslessOutcomeProvider,
+    private readonly provider:
+      | GaslessOutcomeProvider
+      | ((record: GaslessTransactionOutcomeRecord) => GaslessOutcomeProvider),
     private readonly observer: GaslessOutcomeObserver,
     private readonly intervalMs: number,
+    private readonly finality: GaslessFinalityVerifier,
   ) {}
 
   start(): void {
@@ -73,7 +78,7 @@ export class GaslessTransactionOutcomeReconciler {
             transactionHash: record.transactionHash,
             applicationRequestId: record.applicationRequestId,
             outcomeStatus: record.outcomeStatus,
-            error: error instanceof Error ? error.message : String(error),
+            errorType: error instanceof Error ? error.name : 'UnknownError',
           });
         } finally {
           try {
@@ -81,7 +86,7 @@ export class GaslessTransactionOutcomeReconciler {
           } catch (error) {
             Logger.error('Failed to rotate gasless transaction recovery candidate', {
               transactionHash: record.transactionHash,
-              error: error instanceof Error ? error.message : String(error),
+              errorType: error instanceof Error ? error.name : 'UnknownError',
             });
           }
         }
@@ -92,14 +97,60 @@ export class GaslessTransactionOutcomeReconciler {
   }
 
   private async reconcile(record: GaslessTransactionOutcomeRecord): Promise<void> {
-    const receipt = await this.provider.getTransactionReceipt(record.transactionHash);
+    if (record.failureCode === 'FINALIZED_BLOCK_ORPHANED') {
+      // Keep this operation reserved until governed reconciliation; never automatically rebroadcast.
+      if (record.projectedOutcomeStatus !== 'confirmation_pending') {
+        await this.observer.onOrphaned(record);
+        await this.store.markProjectionApplied(record.transactionHash, 'confirmation_pending');
+      }
+      return;
+    }
+    if (
+      record.blockNumber &&
+      record.blockHash &&
+      ['confirmed', 'reverted'].includes(record.outcomeStatus)
+    ) {
+      const canonicality = await this.finality.revalidateBlock(
+        record.chainId,
+        record.blockNumber,
+        record.blockHash,
+      );
+      if (canonicality === 'orphaned') {
+        await this.store.markOrphaned(record.transactionHash);
+        await this.observer.onOrphaned({
+          ...record,
+          outcomeStatus: 'confirmation_pending',
+          failureCode: 'FINALIZED_BLOCK_ORPHANED',
+        });
+        await this.store.markProjectionApplied(record.transactionHash, 'confirmation_pending');
+        return;
+      }
+      if (canonicality !== 'canonical') return;
+    }
+    const provider = typeof this.provider === 'function' ? this.provider(record) : this.provider;
+    const receipt = await provider.getTransactionReceipt(record.transactionHash);
     if (receipt) {
-      const outcome = receiptOutcome(receipt);
+      const evidence = await this.finality.verifyReceipt(
+        record.chainId,
+        record.transactionHash,
+        receipt,
+      );
+      if (!evidence) {
+        if (!['confirmed', 'reverted'].includes(record.outcomeStatus)) {
+          await this.store.markConfirmationPending(record.transactionHash);
+          if (record.projectedOutcomeStatus !== 'confirmation_pending') {
+            await this.observer.onConfirmationPending(record);
+            await this.store.markProjectionApplied(record.transactionHash, 'confirmation_pending');
+          }
+        }
+        return;
+      }
+      const outcome = { ...receiptOutcome(receipt), finalityEvidence: evidence };
       if (receipt.status === 1) {
         if (record.projectedOutcomeStatus !== 'confirmed') {
           await this.observer.onConfirmed(record, outcome);
         }
-        if (record.outcomeStatus !== 'confirmed') {
+        if (record.outcomeStatus !== 'confirmed' || !record.finalityEvidence) {
           await this.store.markConfirmed(record.transactionHash, outcome);
         }
         await this.store.markProjectionApplied(record.transactionHash, 'confirmed');
@@ -107,7 +158,7 @@ export class GaslessTransactionOutcomeReconciler {
         if (record.projectedOutcomeStatus !== 'reverted') {
           await this.observer.onReverted(record, outcome);
         }
-        if (record.outcomeStatus !== 'reverted') {
+        if (record.outcomeStatus !== 'reverted' || !record.finalityEvidence) {
           await this.store.markReverted(record.transactionHash, outcome);
         }
         await this.store.markProjectionApplied(record.transactionHash, 'reverted');
@@ -115,7 +166,8 @@ export class GaslessTransactionOutcomeReconciler {
       return;
     }
 
-    const transaction = await this.provider.getTransaction(record.transactionHash);
+    if (['confirmed', 'reverted'].includes(record.outcomeStatus)) return;
+    const transaction = await provider.getTransaction(record.transactionHash);
     if (transaction) {
       if (record.projectedOutcomeStatus !== 'confirmation_pending') {
         await this.observer.onConfirmationPending(record);
@@ -134,10 +186,10 @@ export class GaslessTransactionOutcomeReconciler {
       observedTransactionHash &&
       observedTransactionHash.toLowerCase() !== record.transactionHash.toLowerCase()
     ) {
-      const observedReceipt = await this.provider.getTransactionReceipt(observedTransactionHash);
+      const observedReceipt = await provider.getTransactionReceipt(observedTransactionHash);
       const observedTransaction = observedReceipt
         ? null
-        : await this.provider.getTransaction(observedTransactionHash);
+        : await provider.getTransaction(observedTransactionHash);
       if (observedReceipt || observedTransaction) {
         const failureCode = observedReceipt
           ? 'RECOVERY_OBSERVED_HASH_HAS_RECEIPT'
@@ -154,8 +206,8 @@ export class GaslessTransactionOutcomeReconciler {
     }
 
     const [confirmedSignerNonce, pendingSignerNonce] = await Promise.all([
-      this.provider.getTransactionCount(record.signerAddress, 'latest'),
-      this.provider.getTransactionCount(record.signerAddress, 'pending'),
+      provider.getTransactionCount(record.signerAddress, 'latest'),
+      provider.getTransactionCount(record.signerAddress, 'pending'),
     ]);
     const failureCode =
       confirmedSignerNonce > record.nonce

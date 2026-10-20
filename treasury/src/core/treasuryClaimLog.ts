@@ -11,6 +11,7 @@
  * expects. The emitter, the event topic and the decoded arguments are what bind
  * the batch to the sweep that moved the fees.
  */
+import { Interface } from 'ethers';
 import { AgroasysEscrow__factory } from '@agroasys/sdk';
 import { normalizeLogAddress, type SettlementLog } from './chainCanonicality';
 
@@ -73,6 +74,8 @@ function sameAmount(left: string, right: string): boolean {
 export function verifyTreasuryClaimLog(params: {
   logs: ReadonlyArray<SettlementLog> | null;
   emitter: string;
+  tokenAddress: string;
+  treasuryIdentity: string;
   expected: TreasuryClaimFields;
 }): TreasuryClaimLogVerdict {
   if (!params.logs) {
@@ -116,5 +119,41 @@ export function verifyTreasuryClaimLog(params: {
     };
   }
 
+  if (!sameAddress(observed.treasuryIdentity, params.treasuryIdentity))
+    return {
+      matched: false,
+      detail: 'TreasuryClaimed accounting identity differs from the original escrow treasury',
+    };
+  const token = new Interface([
+    'event Transfer(address indexed from,address indexed to,uint256 value)',
+  ]);
+  const transfers = params.logs
+    .filter((log) => normalizeLogAddress(log.address) === normalizeLogAddress(params.tokenAddress))
+    .flatMap((log) => {
+      try {
+        const parsed = token.parseLog({ topics: [...(log.topics ?? [])], data: log.data ?? '0x' });
+        return parsed?.name === 'Transfer' &&
+          (sameAddress(String(parsed.args.from), emitter) ||
+            sameAddress(String(parsed.args.to), emitter))
+          ? [parsed]
+          : [];
+      } catch {
+        return [];
+      }
+    });
+  const transfer = transfers[0];
+  if (
+    transfers.length !== 1 ||
+    !transfer ||
+    !sameAddress(String(transfer.args.from), emitter) ||
+    !sameAddress(String(transfer.args.to), observed.payoutReceiver) ||
+    !sameAmount(String(transfer.args.value), observed.amountRaw) ||
+    BigInt(observed.amountRaw) <= 0n
+  )
+    return {
+      matched: false,
+      detail:
+        'Treasury sweep token movement differs from its governed receiver and exact claim amount',
+    };
   return { matched: true, claim: observed };
 }

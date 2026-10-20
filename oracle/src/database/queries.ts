@@ -7,8 +7,8 @@ export async function createTrigger(data: CreateTriggerData): Promise<Trigger> {
   try {
     const result = await pool.query(
       `INSERT INTO oracle_triggers
-            (action_key, request_id, idempotency_key, trade_id, trigger_type, request_hash, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (action_key, request_id, idempotency_key, trade_id, trigger_type, request_hash, status, funded_binding)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
             RETURNING *`,
       [
         data.actionKey,
@@ -18,6 +18,7 @@ export async function createTrigger(data: CreateTriggerData): Promise<Trigger> {
         data.triggerType,
         data.requestHash,
         data.status || TriggerStatus.PENDING,
+        JSON.stringify(data.fundedBinding),
       ],
     );
 
@@ -241,3 +242,9 @@ export async function rejectTrigger(
   );
   return result.rows[0] || null;
 }
+
+export {
+  claimTriggerDispatch,
+  getUnresolvedSignerDispatch,
+  resolveSignerDispatch,
+} from './oracle-dispatch-reservation';

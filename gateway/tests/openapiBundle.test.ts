@@ -40,7 +40,7 @@ describe('dashboard gateway OpenAPI bundle', () => {
     expect(runtimeBundle).toBe(committedBundle);
 
     const spec = loadOpenApiSpec();
-    expect(Object.keys(spec.paths)).toHaveLength(78);
-    expect(Object.keys(spec.components?.schemas ?? {})).toHaveLength(212);
+    expect(Object.keys(spec.paths)).toHaveLength(80);
+    expect(Object.keys(spec.components?.schemas ?? {})).toHaveLength(217);
   });
 });

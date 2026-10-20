@@ -68,6 +68,9 @@ describe('SweepExecutionMatcherService', () => {
 
     expect(result.status).toBe('EXECUTED');
     expect(queries.recordSweepBatchExecution).toHaveBeenCalledWith({
+      finalizedEvidence: expect.objectContaining({
+        policyVersion: 'treasury_dual_rpc_finalized_v1',
+      }),
       claim: expect.objectContaining({
         matchedSweepBatchId: 11,
         txHash: '0xclaim',
@@ -75,7 +78,11 @@ describe('SweepExecutionMatcherService', () => {
         payoutReceiver: PAYOUT,
       }),
       actor: 'executor-3',
-      metadata: undefined,
+      metadata: expect.objectContaining({
+        settlementFinalizedEvidence: expect.objectContaining({
+          policyVersion: 'treasury_dual_rpc_finalized_v1',
+        }),
+      }),
     });
   });
 
@@ -272,7 +279,7 @@ describe('SweepExecutionMatcherService', () => {
         indexerClient: {
           fetchTreasuryClaimEventByTxHash: jest.fn().mockResolvedValue(indexedClaim),
         },
-        claimVerifier: new FinalizedTransactionVerifier({ provider: null }),
+        claimVerifier: new FinalizedTransactionVerifier({ witnesses: [], rail: null }),
       });
 
       await expect(

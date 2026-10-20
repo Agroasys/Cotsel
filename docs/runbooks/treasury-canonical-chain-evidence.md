@@ -290,3 +290,51 @@ would still require an operator-led correction, not an automatic one.
 
 External provider and bank completion remains outside Cotsel authority and
 requires independently verifiable evidence.
+
+## Independent sweep receipt verification
+
+Audience: Treasury operators and settlement reviewers.
+Prerequisites: Approved escrow/token deployment, two independent RPC providers, compatible migration `202610160008`, and an approved maker/checker sweep batch.
+Outcome: One exact canonical treasury claim matches the approved receiver and allocated accruals.
+
+Set `TREASURY_ESCROW_ADDRESS` and `TREASURY_USDC_ADDRESS` to approved deployment identities.
+Configure `RPC_URL`, `RPC_FALLBACK_URLS`, and `CHAIN_ID` for that deployment.
+Use distinct RPC hostnames and verify their operational independence.
+A single RPC does not qualify a sweep receipt.
+Do not infer the token or escrow from a customer-supplied event.
+
+The retained matcher requires agreement on the chain, receipt, canonical block, complete log identity, and finalized coverage.
+It reads the escrow's original `treasuryAddress()` and `usdcToken()` at the receipt block through both witnesses.
+It compares the accounting treasury separately from the batch's approved payout receiver.
+The TreasuryClaimed amount must match one exact USDC transfer from the escrow to that receiver.
+Missing, wrong-token, wrong-recipient, duplicated, or contradictory movements block the match.
+
+Apply migration `202610160008` before enabling the compatible matcher.
+The existing batch transaction retains `settlementFinalizedEvidence` and rechecks verification freshness after its lock.
+The evidence and matched receiver cannot be replaced through later lifecycle metadata.
+A repeated verification of an executed batch rechecks its original block evidence.
+Legacy executed sweeps without retained proof require governed reconciliation.
+Do not replace old evidence with a newly mined observation to restore success.
+
+Provider outages return a restricted reason. Raw RPC diagnostics and credential-bearing URLs are excluded.
+These changes reuse the existing Treasury batch accounting, maker/checker policy, indexer, and reconciliation infrastructure.
+They do not create a second fee ledger in Agroasys or automatically clear backend fee accruals.
+Cross-system accounting attribution and deployed acceptance remain separate gates.
+
+Run controlled local checks with `TREASURY_POSTGRES_TESTS=true pnpm --filter treasury test`.
+Use only the disposable local PostgreSQL configuration documented by the test harness.
+Retain live provider, RPC independence, receiver approval, and deployed sweep evidence separately.
+
+### Revalidation before downstream accounting
+
+Revalidate the original matched sweep before handoff progression, batch close, and revenue realization.
+The matcher rechecks the original receiver, amount, semantic claim, and USDC movement.
+The database command compares fresh evidence with the immutable original receipt after acquiring its locks.
+Missing, stale, or contradictory evidence blocks progression.
+A new block identity requires governed reconciliation; it cannot replace the original proof.
+
+Revenue realization locks the discovered batch before its entry and rereads their relationship.
+The command checks proof freshness again before insertion.
+It stores the server-verified evidence beside the realization and retains the existing one-posting constraint.
+Caller metadata cannot provide or replace the authoritative finality evidence.
+Legacy sweeps without original proof remain blocked pending independent classification.

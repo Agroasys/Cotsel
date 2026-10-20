@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomUUID } from 'crypto';
+import { isDeepStrictEqual } from 'util';
 import { GatewayError } from '../errors';
 import { validateExecutionTransition } from './settlementStateMachine';
 import {
@@ -61,6 +62,22 @@ export function createInMemorySettlementStore(
       const existingId = platformIndex.get(key);
       if (existingId) {
         const existing = handoffs.get(existingId)!;
+        if (existing.sourceApiKeyId !== (input.sourceApiKeyId ?? null))
+          throw new GatewayError(403, 'FORBIDDEN', 'Handoff belongs to another service identity');
+        if (
+          (input.phase === 'gasless_create_trade' || existing.phase === 'gasless_create_trade') &&
+          (!input.sourceApiKeyId ||
+            !isDeepStrictEqual(existing.executionBinding, input.executionBinding) ||
+            existing.phase !== input.phase ||
+            existing.tradeId !== input.tradeId ||
+            existing.ricardianHash !== input.ricardianHash ||
+            existing.externalReference !== input.externalReference)
+        )
+          throw new GatewayError(
+            409,
+            'CONFLICT',
+            'Handoff key belongs to a different execution binding',
+          );
         assertSameMonetaryIntent(
           {
             displayCurrency: existing.displayCurrency,
@@ -97,6 +114,7 @@ export function createInMemorySettlementStore(
         ricardianHash: input.ricardianHash ?? null,
         externalReference: input.externalReference ?? null,
         metadata: structuredClone(input.metadata ?? {}),
+        executionBinding: structuredClone(input.executionBinding ?? null),
         executionStatus: 'pending',
         reconciliationStatus: 'pending',
         callbackStatus: 'pending',

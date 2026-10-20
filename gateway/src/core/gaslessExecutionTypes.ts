@@ -111,6 +111,7 @@ export interface GaslessCreateTradeExecutionResult {
 }
 
 export interface GaslessExecutionReceipt {
+  finalityEvidence?: import('./gaslessChainFinality').GaslessFinalityEvidence;
   txHash: string;
   blockNumber: string;
   gasUsed: string;

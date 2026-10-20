@@ -48,8 +48,8 @@ import { WebhookIndexerAlerts, type IndexerAlerts } from './alerts';
 import { createQuarantinePool, QuarantineStore } from './quarantine';
 import { haltOnPoisonLog, PoisonLogHaltError, type PoisonLogDeps } from './poisonLog';
 import { ESCROW_ABI_FINGERPRINT } from './preflight';
-import { createIndexerReadinessCheck, readProcessorCheckpoint } from './chainReadiness';
-import { startProbeServer } from './probeServer';
+import { readProcessorCheckpoint } from './chainReadiness';
+import { createIndexerProbeOptions, startProbeServer } from './probeServer';
 import { logBootstrapEvent, runStartupGates } from './startup';
 
 const config = loadConfig();
@@ -916,20 +916,14 @@ let selectedRpcUrl: string | null = null;
 let startupComplete = false;
 
 async function bootstrap(): Promise<void> {
-  await startProbeServer({
-    port: config.readinessPort,
-    readiness: createIndexerReadinessCheck({
+  await startProbeServer(
+    createIndexerProbeOptions(config, {
       startupComplete: () => startupComplete,
       rpcUrl: () => selectedRpcUrl,
-      chainId: config.chainId,
       readCheckpoint,
       countUnresolvedQuarantine: () => quarantine.countUnresolved(),
-      finalityConfirmationBlocks: config.finalityConfirmationBlocks,
-      maxCheckpointLagBlocks: config.readinessMaxCheckpointLagBlocks,
-      startBlock: config.startBlock,
-      rpcTimeoutMs: config.rpcRequestTimeoutMs ?? undefined,
     }),
-  });
+  );
 
   selectedRpcUrl = (await applyReachableRpcEndpoint()).url;
   await runStartupGates({ config, rpcUrl: selectedRpcUrl, quarantine, alerts, readCheckpoint });

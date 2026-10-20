@@ -238,3 +238,25 @@ test('shared package changes select every transitive consumer through the full s
     needs[job].result = 'success';
   }
 });
+
+test('the three-part compatibility stack runs PR checks while publication remains main-only', () => {
+  for (const name of ['release-gate', 'release-images']) {
+    const workflow = fs.readFileSync(
+      new URL(`../../.github/workflows/${name}.yml`, import.meta.url),
+      'utf8',
+    );
+    const triggers = workflow.slice(workflow.indexOf('on:'), workflow.indexOf('permissions:'));
+    assert.match(
+      triggers,
+      /pull_request:\n {4}branches:\n {6}- main\n {6}- codex\/revision2-cotsel-foundations\n {6}- codex\/revision2-cotsel-lifecycle\n/u,
+    );
+    assert.match(triggers, /push:\n {4}branches:\n {6}- main\n/u);
+    assert.doesNotMatch(triggers, /pull_request_target|branches:\n {6}- ['"]?\*|workflow_run/u);
+  }
+  const images = fs.readFileSync(
+    new URL('../../.github/workflows/release-images.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(images, /if: github\.ref == 'refs\/heads\/main'/u);
+  assert.match(images, /if \[ "\$GITHUB_REF" = "refs\/heads\/main" \]; then/u);
+});

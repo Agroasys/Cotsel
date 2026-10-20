@@ -1,3 +1,4 @@
+import { fundedBindingFixture } from './helpers/settlementExecutionBindingFixtures';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -8,6 +9,10 @@ import type { SettlementHandoffRecord, SettlementStore } from '../src/core/settl
 
 const handoff = (phase: string, metadata: Record<string, unknown> = {}) =>
   ({
+    executionBinding: fundedBindingFixture(phase),
+    sourceApiKeyId: 'platform-main',
+    platformHandoffId: '42',
+    ricardianHash: `0x${'5'.repeat(64)}`,
     handoffId: 'sth-42',
     tradeId: '9001',
     phase,
@@ -15,6 +20,11 @@ const handoff = (phase: string, metadata: Record<string, unknown> = {}) =>
     reconciliationStatus: 'pending',
   }) as unknown as SettlementHandoffRecord;
 
+const deployment = {
+  chainId: 31337,
+  escrowAddress: `0x${'1'.repeat(40)}`,
+  usdcAddress: `0x${'2'.repeat(40)}`,
+};
 const executionRecorder = () =>
   ({
     recordExecutionEvent: jest.fn().mockResolvedValue({}),
@@ -28,11 +38,6 @@ describe('OracleSettlementProgressionService', () => {
       'inspection_available_packaged_local',
       '/api/oracle/confirm-inspection-available/packaged-local',
     ],
-    [
-      'final_release_after_inspection_acceptance',
-      '/api/oracle/finalize-after-inspection-acceptance',
-    ],
-    ['final_release_after_notice_deadline', '/api/oracle/finalize-trade'],
   ])('maps %s to the authoritative oracle command', async (phase, path) => {
     const store = { getHandoff: jest.fn().mockResolvedValue(handoff(phase)) };
     const orchestrator = {
@@ -48,6 +53,8 @@ describe('OracleSettlementProgressionService', () => {
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
       settlementService,
+      () => new Date(),
+      deployment,
     );
 
     const result = await service.executeHandoff('sth-42', 'req-42');
@@ -57,7 +64,7 @@ describe('OracleSettlementProgressionService', () => {
       expect.objectContaining({
         method: 'POST',
         path,
-        body: { tradeId: '9001', requestId: 'req-42' },
+        body: { tradeId: '9001', requestId: 'req-42', fundedBinding: fundedBindingFixture(phase) },
         authenticated: true,
         readOnly: false,
       }),
@@ -76,9 +83,11 @@ describe('OracleSettlementProgressionService', () => {
     );
   });
 
-  it('classifies a converged final release as already completed', async () => {
+  it('classifies a converged initial release as already completed', async () => {
     const store = {
-      getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_notice_deadline')),
+      getHandoff: jest
+        .fn()
+        .mockResolvedValue(handoff('initial_release_after_custody_and_documents')),
     };
     const orchestrator = {
       fetch: jest.fn().mockResolvedValue(
@@ -97,6 +106,8 @@ describe('OracleSettlementProgressionService', () => {
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
       executionRecorder(),
+      () => new Date(),
+      deployment,
     );
 
     const result = await service.executeHandoff('sth-42', 'req-42');
@@ -109,7 +120,9 @@ describe('OracleSettlementProgressionService', () => {
 
   it('records confirmed oracle truth without marking it reconciled', async () => {
     const store = {
-      getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_notice_deadline')),
+      getHandoff: jest
+        .fn()
+        .mockResolvedValue(handoff('initial_release_after_custody_and_documents')),
     };
     const orchestrator = {
       fetch: jest.fn().mockResolvedValue(
@@ -129,6 +142,8 @@ describe('OracleSettlementProgressionService', () => {
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
       settlementService,
+      () => new Date(),
+      deployment,
     );
 
     await service.executeHandoff('sth-42', 'req-confirmed');
@@ -152,6 +167,8 @@ describe('OracleSettlementProgressionService', () => {
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
       executionRecorder(),
+      () => new Date(),
+      deployment,
     );
 
     await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
@@ -161,26 +178,30 @@ describe('OracleSettlementProgressionService', () => {
     expect(orchestrator.fetch).not.toHaveBeenCalled();
   });
 
-  it('can disable oracle-only immediate acceptance release by deployment policy', async () => {
-    const store = {
-      getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_inspection_acceptance')),
-    };
-    const orchestrator = { fetch: jest.fn() };
-    const service = new OracleSettlementProgressionService(
-      store as unknown as SettlementStore,
-      orchestrator as unknown as DownstreamServiceOrchestrator,
-      executionRecorder(),
-      false,
-    );
+  it.each(['final_release_after_inspection_acceptance', 'final_release_after_notice_deadline'])(
+    'rejects unreviewed Oracle-only %s before any remote request or execution event',
+    async (phase) => {
+      const store = {
+        getHandoff: jest.fn().mockResolvedValue(handoff(phase)),
+      };
+      const orchestrator = { fetch: jest.fn() };
+      const recorder = executionRecorder();
+      const service = new OracleSettlementProgressionService(
+        store as unknown as SettlementStore,
+        orchestrator as unknown as DownstreamServiceOrchestrator,
+        recorder,
+      );
 
-    await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
-      statusCode: 409,
-      code: 'CONFLICT',
-    });
-    expect(orchestrator.fetch).not.toHaveBeenCalled();
-  });
+      await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'CONFLICT',
+      });
+      expect(orchestrator.fetch).not.toHaveBeenCalled();
+      expect(recorder.recordExecutionEvent).not.toHaveBeenCalled();
+    },
+  );
 
-  it('falls back to deadline finalization after the notice window expires', async () => {
+  it('preserves the approved acceptance purpose after the notice window expires', async () => {
     const store = {
       getHandoff: jest.fn().mockResolvedValue(
         handoff('final_release_after_inspection_acceptance', {
@@ -200,20 +221,15 @@ describe('OracleSettlementProgressionService', () => {
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
       executionRecorder(),
-      false,
       () => new Date('2026-07-17T08:00:01.000Z'),
+      deployment,
     );
 
-    const result = await service.executeHandoff('sth-42', 'req-42');
-
-    expect(orchestrator.fetch).toHaveBeenCalledWith(
-      'oracle',
-      expect.objectContaining({ path: '/api/oracle/finalize-trade' }),
-    );
-    expect(result).toMatchObject({
-      phase: 'final_release_after_notice_deadline',
-      oraclePath: '/api/oracle/finalize-trade',
+    await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'CONFLICT',
     });
+    expect(orchestrator.fetch).not.toHaveBeenCalled();
   });
 
   it('fails closed when a legacy handoff is not bound to an on-chain trade id', async () => {
@@ -228,6 +244,8 @@ describe('OracleSettlementProgressionService', () => {
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
       executionRecorder(),
+      () => new Date(),
+      deployment,
     );
 
     await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
@@ -239,7 +257,9 @@ describe('OracleSettlementProgressionService', () => {
 
   it('fails closed when the oracle rejects or returns malformed truth', async () => {
     const store = {
-      getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_inspection_acceptance')),
+      getHandoff: jest
+        .fn()
+        .mockResolvedValue(handoff('initial_release_after_custody_and_documents')),
     };
     const orchestrator = {
       fetch: jest
@@ -252,6 +272,8 @@ describe('OracleSettlementProgressionService', () => {
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
       executionRecorder(),
+      () => new Date(),
+      deployment,
     );
 
     await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
@@ -264,7 +286,9 @@ describe('OracleSettlementProgressionService', () => {
     'does not complete a handoff when the oracle reports %s',
     async (status) => {
       const store = {
-        getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_notice_deadline')),
+        getHandoff: jest
+          .fn()
+          .mockResolvedValue(handoff('initial_release_after_custody_and_documents')),
       };
       const orchestrator = {
         fetch: jest.fn().mockResolvedValue(
@@ -278,6 +302,8 @@ describe('OracleSettlementProgressionService', () => {
         store as unknown as SettlementStore,
         orchestrator as unknown as DownstreamServiceOrchestrator,
         executionRecorder(),
+        () => new Date(),
+        deployment,
       );
 
       await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
@@ -286,4 +312,70 @@ describe('OracleSettlementProgressionService', () => {
       });
     },
   );
+  it('routes an original funded trade only to its approved retained Oracle after cutover', async () => {
+    const stored = handoff('initial_release_after_custody_and_documents');
+    const fetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ success: true, status: 'SUBMITTED' }), { status: 200 }),
+      );
+    const config = {
+      ...deployment,
+      chainId: 84532,
+      escrowAddress: `0x${'6'.repeat(40)}`,
+      retainedSettlementRails: [
+        {
+          ...deployment,
+          rpcUrl: 'https://primary.example.test',
+          rpcFallbackUrls: ['https://witness.example.test'],
+          railManifestSha256: 'a'.repeat(64),
+          indexerCoverageUrl: 'https://indexer.example.test',
+          reconciliationCoverageUrl: 'https://recon.example.test',
+          executionOracleBaseUrl: 'https://retained-oracle.example.test',
+        },
+      ],
+    };
+    const create = (value: typeof config) =>
+      new OracleSettlementProgressionService(
+        { getHandoff: async () => stored } as never,
+        { fetch } as never,
+        executionRecorder(),
+        () => new Date(),
+        value,
+      );
+    await create(config).executeHandoff('sth-42', 'req-42');
+    expect(fetch).toHaveBeenCalledWith(
+      `retained_oracle:31337:${deployment.escrowAddress}`,
+      expect.objectContaining({
+        body: expect.objectContaining({ fundedBinding: stored.executionBinding }),
+      }),
+    );
+    fetch.mockClear();
+    await expect(
+      create({ ...config, retainedSettlementRails: [] }).executeHandoff('sth-42', 'req-42'),
+    ).rejects.toMatchObject({ statusCode: 503 });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('rejects missing and changed stored bindings before contacting an executor', async () => {
+    for (const change of [
+      { executionBinding: null },
+      { tradeId: '9002' },
+      { sourceApiKeyId: 'different-owner' },
+      { phase: 'final_release_after_notice_deadline' },
+    ]) {
+      const fetch = jest.fn();
+      const stored = { ...handoff('initial_release_after_custody_and_documents'), ...change };
+      const service = new OracleSettlementProgressionService(
+        { getHandoff: async () => stored } as never,
+        { fetch } as never,
+        executionRecorder(),
+        () => new Date(),
+        deployment,
+      );
+      await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
+        statusCode: 409,
+      });
+      expect(fetch).not.toHaveBeenCalled();
+    }
+  });
 });

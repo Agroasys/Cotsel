@@ -1,3 +1,5 @@
+import { executionBindingFixture } from './helpers/settlementExecutionBindingFixtures';
+import { buildCreateTradeInput } from './helpers/gaslessManagedSignerFixtures';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -210,6 +212,14 @@ describe('settlement callback dispatcher', () => {
       platformHandoffId: 'gasless-sponsorship:sponsor-1',
       tradeId: 'order:42',
       phase: 'gasless_create_trade',
+      sourceApiKeyId: 'controlled-service',
+      externalReference: 'controlled-operation',
+      ricardianHash: buildCreateTradeInput('controlled', 'a').ricardianHash,
+      executionBinding: executionBindingFixture(
+        buildCreateTradeInput('controlled', 'a'),
+        'controlled-service',
+        config.usdcAddress,
+      ),
       settlementChannel: 'cotsel_escrow',
       displayCurrency: 'USD',
       displayAmount: 100,

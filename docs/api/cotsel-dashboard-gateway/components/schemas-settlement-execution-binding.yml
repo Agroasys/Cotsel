@@ -1,0 +1,274 @@
+{
+  'components':
+    {
+      'schemas':
+        {
+          'SettlementExecutionBinding':
+            {
+              'oneOf':
+                [
+                  { '$ref': '#/components/schemas/SettlementCreateTradeBinding' },
+                  { '$ref': '#/components/schemas/SettlementFundedBinding' },
+                ],
+            },
+          'SettlementFinalityEvidence':
+            {
+              'type': 'object',
+              'required':
+                [
+                  'chainId',
+                  'blockNumber',
+                  'finalizedBlockNumber',
+                  'transactionHash',
+                  'blockHash',
+                  'finalizedBlockHash',
+                  'policyVersion',
+                  'rpcWitnesses',
+                  'projectionCoverage',
+                ],
+              'properties':
+                {
+                  'chainId': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]*)$' },
+                  'blockNumber': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]*)$' },
+                  'finalizedBlockNumber': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]*)$' },
+                  'transactionHash': { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
+                  'blockHash': { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
+                  'finalizedBlockHash': { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
+                  'policyVersion': { 'const': 'gasless_dual_rpc_finalized_v1' },
+                  'rpcWitnesses':
+                    {
+                      'type': 'array',
+                      'minItems': 2,
+                      'maxItems': 2,
+                      'items': { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
+                    },
+                  'projectionCoverage':
+                    {
+                      'type': 'object',
+                      'required': ['version', 'tradeId', 'indexer', 'reconciliation'],
+                      'properties':
+                        {
+                          'version': { 'const': 'cotsel.financial-projection-coverage.v1' },
+                          'tradeId': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]*)$' },
+                          'indexer':
+                            {
+                              'type': 'object',
+                              'required': ['blockNumber', 'blockHash'],
+                              'properties':
+                                {
+                                  'blockNumber':
+                                    { 'type': 'string', 'pattern': '^(0|[1-9][0-9]*)$' },
+                                  'blockHash': { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
+                                },
+                            },
+                          'reconciliation':
+                            {
+                              'type': 'object',
+                              'required': ['runKey', 'blockNumber', 'blockHash', 'verifiedAt'],
+                              'properties':
+                                {
+                                  'runKey': { 'type': 'string' },
+                                  'blockNumber':
+                                    { 'type': 'string', 'pattern': '^(0|[1-9][0-9]*)$' },
+                                  'blockHash': { 'type': 'string', 'pattern': '^0x[0-9a-f]{64}$' },
+                                  'verifiedAt': { 'type': 'string', 'format': 'date-time' },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+          'SettlementCreateTradeBinding':
+            {
+              'type': 'object',
+              'additionalProperties': false,
+              'required':
+                [
+                  'scopeVersion',
+                  'sourceOperationId',
+                  'packageId',
+                  'approvalScopeFingerprint',
+                  'ricardianHash',
+                  'executionScopeHash',
+                  'chainId',
+                  'totalAmount',
+                  'logisticsAmount',
+                  'platformFeesAmount',
+                  'supplierFirstTranche',
+                  'supplierSecondTranche',
+                  'escrowAddress',
+                  'tokenAddress',
+                  'buyerAddress',
+                  'supplierAddress',
+                  'expiresAt',
+                  'buyerAuthorization',
+                  'usdcAuthorization',
+                ],
+              'properties':
+                {
+                  'scopeVersion':
+                    { 'type': 'string', 'const': 'agroasys.cotsel-execution-binding.v1' },
+                  'ownerServiceId':
+                    {
+                      'type': 'string',
+                      'minLength': 1,
+                      'maxLength': 255,
+                      'description': 'Derived from authenticated service credentials. A supplied value must match.',
+                    },
+                  'sourceOperationId': { 'type': 'string', 'minLength': 1, 'maxLength': 255 },
+                  'packageId': { 'type': 'string', 'minLength': 1, 'maxLength': 255 },
+                  'approvalScopeFingerprint':
+                    { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{64}$' },
+                  'ricardianHash': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{64}$' },
+                  'executionScopeHash': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{64}$' },
+                  'chainId':
+                    {
+                      'type': 'string',
+                      'pattern': '^(0|[1-9][0-9]{0,77})$',
+                      'description': 'Canonical unsigned decimal integer within uint256.',
+                    },
+                  'totalAmount':
+                    {
+                      'type': 'string',
+                      'pattern': '^(0|[1-9][0-9]{0,77})$',
+                      'description': 'Canonical unsigned decimal integer within uint256.',
+                    },
+                  'logisticsAmount':
+                    {
+                      'type': 'string',
+                      'pattern': '^(0|[1-9][0-9]{0,77})$',
+                      'description': 'Canonical unsigned decimal integer within uint256.',
+                    },
+                  'platformFeesAmount':
+                    {
+                      'type': 'string',
+                      'pattern': '^(0|[1-9][0-9]{0,77})$',
+                      'description': 'Canonical unsigned decimal integer within uint256.',
+                    },
+                  'supplierFirstTranche':
+                    {
+                      'type': 'string',
+                      'pattern': '^(0|[1-9][0-9]{0,77})$',
+                      'description': 'Canonical unsigned decimal integer within uint256.',
+                    },
+                  'supplierSecondTranche':
+                    {
+                      'type': 'string',
+                      'pattern': '^(0|[1-9][0-9]{0,77})$',
+                      'description': 'Canonical unsigned decimal integer within uint256.',
+                    },
+                  'escrowAddress': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{40}$' },
+                  'tokenAddress': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{40}$' },
+                  'buyerAddress': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{40}$' },
+                  'supplierAddress': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{40}$' },
+                  'expiresAt':
+                    {
+                      'type': 'string',
+                      'format': 'date-time',
+                      'description': 'Exact ISO timestamp captured at package issuance.',
+                    },
+                  'buyerAuthorization':
+                    {
+                      'type': 'object',
+                      'additionalProperties': false,
+                      'required': ['nonce', 'deadline'],
+                      'properties':
+                        {
+                          'nonce': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                          'deadline': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                        },
+                    },
+                  'usdcAuthorization':
+                    {
+                      'type': 'object',
+                      'additionalProperties': false,
+                      'required': ['from', 'to', 'value', 'validAfter', 'validBefore', 'nonce'],
+                      'properties':
+                        {
+                          'from': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{40}$' },
+                          'to': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{40}$' },
+                          'value': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                          'validAfter': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                          'validBefore': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                          'nonce': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{64}$' },
+                        },
+                    },
+                },
+              'description': 'Immutable complete funding instruction. Required for new gasless create-trade handoffs; legacy missing bindings cannot execute.',
+            },
+          'SettlementFundedBinding':
+            {
+              'type': 'object',
+              'additionalProperties': false,
+              'required':
+                [
+                  'scopeVersion',
+                  'ownerServiceId',
+                  'sourceOperationId',
+                  'phase',
+                  'chainId',
+                  'escrowAddress',
+                  'tokenAddress',
+                  'tradeId',
+                  'buyerAddress',
+                  'supplierAddress',
+                  'ricardianHash',
+                  'totalAmount',
+                  'logisticsAmount',
+                  'platformFeesAmount',
+                  'supplierFirstTranche',
+                  'supplierSecondTranche',
+                  'supplierPayoutAmount',
+                  'treasuryAccrualAmount',
+                  'buyerRefundAmount',
+                  'fundingTransactionHash',
+                  'fundingBlockNumber',
+                  'fundingBlockHash',
+                  'originalFundingFingerprint',
+                ],
+              'properties':
+                {
+                  'scopeVersion':
+                    { 'type': 'string', 'const': 'agroasys.funded-settlement-binding.v1' },
+                  'ownerServiceId': { 'type': 'string', 'minLength': 1, 'maxLength': 128 },
+                  'sourceOperationId': { 'type': 'string', 'minLength': 1, 'maxLength': 128 },
+                  'phase':
+                    {
+                      'type': 'string',
+                      'enum':
+                        [
+                          'initial_release_after_custody_and_documents',
+                          'inspection_available_standard',
+                          'inspection_available_packaged_local',
+                          'final_release_after_inspection_acceptance',
+                          'final_release_after_notice_deadline',
+                          'dispute_resolution',
+                        ],
+                    },
+                  'chainId': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                  'escrowAddress': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{40}$' },
+                  'tokenAddress': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{40}$' },
+                  'tradeId': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                  'buyerAddress': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{40}$' },
+                  'supplierAddress': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{40}$' },
+                  'ricardianHash': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{64}$' },
+                  'totalAmount': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                  'logisticsAmount': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                  'platformFeesAmount': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                  'supplierFirstTranche': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                  'supplierSecondTranche':
+                    { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                  'supplierPayoutAmount': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                  'treasuryAccrualAmount':
+                    { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                  'buyerRefundAmount': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                  'fundingTransactionHash': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{64}$' },
+                  'fundingBlockNumber': { 'type': 'string', 'pattern': '^(0|[1-9][0-9]{0,77})$' },
+                  'fundingBlockHash': { 'type': 'string', 'pattern': '^0x[0-9a-fA-F]{64}$' },
+                  'originalFundingFingerprint': { 'type': 'string', 'pattern': '^[0-9a-f]{64}$' },
+                },
+              'description': 'Immutable original finalized funding and exact progression instruction. Retained Oracle execution revalidates this scope on every submission and retry.',
+            },
+        },
+    },
+}

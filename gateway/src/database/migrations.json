@@ -57,6 +57,41 @@
       "file": "schema/009_gasless_nonce_reservations.sql",
       "sha256": "7b42d08ddfac1322ff69b89c643323efc2f7b0023907a05f44c7983c28064621",
       "schema_sha256": "2b39da7f976bfbc1b3de57bbc1d6c1270ecd5878360895206465a3d05d430a06"
+    },
+    {
+      "version": "202610140010",
+      "name": "gasless_handoff_scope",
+      "file": "schema/010_gasless_handoff_scope.sql",
+      "sha256": "3bf7202ae46f15b74e98d3f5329df4f8f10422eb097d3ded570ddd085a5df337",
+      "schema_sha256": "b2a51dfc8d1c8b0e705de5a1d3299f4b867dd5ecaa3221ac691d2d32aff32de4"
+    },
+    {
+      "version": "202610140011",
+      "name": "gasless_finality",
+      "file": "schema/011_gasless_finality.sql",
+      "sha256": "769739ca0840922feab06275d0531edf27f06b6fa5d60cdf9449af1109ea5fec",
+      "schema_sha256": "6b41607981b62f43872bcb1902ce0b5353b8b7fed5c6fb64360a8e18af419f70"
+    },
+    {
+      "version": "202610140012",
+      "name": "wallet_execution_observation",
+      "file": "schema/012_wallet_execution_observation.sql",
+      "sha256": "f77f51cff13460c859c8ad21fec2cfca66b99879ceb302e8daad03d7708a979b",
+      "schema_sha256": "32d01bf5092030e2b0d4f474396ab39e59d29bccbef9997e05ea9ff029ef0356"
+    },
+    {
+      "version": "202610150013",
+      "name": "typed_execution_binding",
+      "file": "schema/013_typed_execution_binding.sql",
+      "sha256": "3e2e4eda01b435fdfbf4a1eca3ef17349226d83979a0073c06d5827f0f93a8b5",
+      "schema_sha256": "3cfaf65b89022fe69feb4494185860e2cc0a7f32b55b35d790383fb8e8b40379"
+    },
+    {
+      "version": "202610160014",
+      "name": "funded_progression_binding",
+      "file": "schema/014_funded_progression_binding.sql",
+      "sha256": "169546a00cdd43b2a613dd796d4bf2370db0cfda4f96a08d4e9d09b010e7e5ac",
+      "schema_sha256": "55ea2afec5d3770d663a74521627bbfc4ecd117b5e46fa44ed1a3f2e42d6887b"
     }
   ]
 }

@@ -16,6 +16,30 @@ export class GaslessSettlementOutcomeObserver implements GaslessOutcomeObserver 
     private readonly now: () => Date = () => new Date(),
   ) {}
 
+  async onOrphaned(record: GaslessTransactionOutcomeRecord): Promise<void> {
+    if (record.resourceType !== 'settlement_handoff') return;
+    await this.settlementService.recordExecutionEvent({
+      handoffId: record.resourceId,
+      eventType: 'chain_evidence_orphaned',
+      executionStatus: 'confirmation_pending',
+      reconciliationStatus: 'drift',
+      providerStatus: 'gasless_finalized_block_orphaned',
+      txHash: record.transactionHash,
+      detail:
+        'Recorded finalized chain evidence was orphaned. Governed reconciliation is required.',
+      metadata: {
+        originalBlockNumber: record.blockNumber,
+        originalBlockHash: record.blockHash,
+        chainId: record.chainId,
+        rebroadcastPerformed: false,
+        moneyMovementFreezeRequired: true,
+      },
+      observedAt: this.now().toISOString(),
+      requestId: record.applicationRequestId,
+      sourceApiKeyId: null,
+    });
+  }
+
   async onBroadcastUnknown(record: GaslessTransactionOutcomeRecord): Promise<void> {
     await this.recordHandoffOutcome(record, 'broadcast_unknown');
   }

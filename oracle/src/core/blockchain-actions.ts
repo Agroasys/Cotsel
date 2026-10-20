@@ -13,19 +13,20 @@ export async function submitTriggerAction(
   sdkClient: SDKClient,
   triggerType: TriggerType,
   tradeId: string,
+  onSubmitted?: (hash: string) => Promise<void>,
 ): Promise<BlockchainResult> {
   switch (triggerType) {
     case TriggerType.RELEASE_STAGE_1:
-      return await sdkClient.releaseFundsStage1(tradeId);
+      return await sdkClient.releaseFundsStage1(tradeId, onSubmitted);
 
     // CONFIRM_ARRIVAL is retained as an inbound trigger name for upstream callers
     // (agroasys-backend whitelists it) and maps onto the standard inspection window.
     case TriggerType.CONFIRM_ARRIVAL:
     case TriggerType.CONFIRM_INSPECTION_AVAILABLE_STANDARD:
-      return await sdkClient.confirmInspectionAvailable(tradeId, 72 * 60 * 60);
+      return await sdkClient.confirmInspectionAvailable(tradeId, 72 * 60 * 60, onSubmitted);
 
     case TriggerType.CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL:
-      return await sdkClient.confirmInspectionAvailable(tradeId, 48 * 60 * 60);
+      return await sdkClient.confirmInspectionAvailable(tradeId, 48 * 60 * 60, onSubmitted);
 
     case TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE:
       throw new ValidationError(
@@ -33,7 +34,7 @@ export async function submitTriggerAction(
       );
 
     case TriggerType.FINALIZE_TRADE:
-      return await sdkClient.finalizeTrade(tradeId);
+      return await sdkClient.finalizeTrade(tradeId, onSubmitted);
 
     default:
       throw new Error(`Unknown trigger type: ${triggerType}`);

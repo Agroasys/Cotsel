@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
 import { Pool } from 'pg';
+import { readFinancialCoverage } from '../core/financialCoverage';
 import { assertMigrationHistory, runVersionedMigrations } from '@agroasys/shared-db/migrate';
 
 // postgres-test-support is untyped CommonJS test tooling, not part of the
@@ -253,6 +254,50 @@ test(
       // The cursor was held short of the window end rather than advanced past
       // ids the enumeration never reached.
       assert.equal(run.rows[0].next_cursor, '2000');
+    });
+  },
+);
+
+test(
+  'financial coverage uses a retained finalized anchor and cannot bypass newer drift',
+  { skip: !dockerAvailable },
+  async () => {
+    await withMigratedDatabase(async (pool) => {
+      async function recordedRun(key: string, height: number, drift: number) {
+        const result = await pool.query(
+          `INSERT INTO reconcile_runs(run_key,mode,status,completed_at,drift_count,
+        coverage_complete,indexer_enumeration_truncated,coverage_to_block,chain_evidence)
+        VALUES ($1,'DAEMON','COMPLETED',NOW(),$2,true,false,$3,$4::jsonb) RETURNING id`,
+          [
+            key,
+            drift,
+            height,
+            JSON.stringify({
+              version: 'cotsel.reconciliation-coverage.v1',
+              blockNumber: String(height),
+            }),
+          ],
+        );
+        await pool.query(
+          "INSERT INTO reconcile_run_trades(run_id,run_key,trade_id) VALUES ($1,$2,'7')",
+          [result.rows[0].id, key],
+        );
+      }
+      await recordedRun('retained-clean', 100, 0);
+      await recordedRun('indexer-ahead', 200, 0);
+      assert.equal(
+        (await readFinancialCoverage(pool as never, '7', '150', 60_000))?.runKey,
+        'retained-clean',
+      );
+      assert.equal(await readFinancialCoverage(pool as never, '7', '99', 60_000), null);
+      assert.equal(await readFinancialCoverage(pool as never, '8', '150', 60_000), null);
+      await pool.query(
+        "INSERT INTO reconcile_trade_containments(trade_id,incident_reference,state,opened_run_key) VALUES ('7','controlled-coverage-incident','CONTAINED','retained-clean')",
+      );
+      assert.equal(await readFinancialCoverage(pool as never, '7', '150', 60_000), null);
+      await pool.query("DELETE FROM reconcile_trade_containments WHERE trade_id='7'");
+      await recordedRun('newer-drift', 300, 1);
+      assert.equal(await readFinancialCoverage(pool as never, '7', '150', 60_000), null);
     });
   },
 );

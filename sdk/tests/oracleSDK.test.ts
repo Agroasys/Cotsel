@@ -88,6 +88,7 @@ function makeSdkUnit(authorizedOracle = '0x1111111111111111111111111111111111111
 
 function mockSuccessCall(mock: jest.Mock) {
   const tx = {
+    hash: RECEIPT.hash,
     wait: jest.fn().mockResolvedValue(RECEIPT),
   };
   mock.mockResolvedValue(tx);
@@ -110,6 +111,19 @@ describe('OracleSDK unit', () => {
     expect(contractWithSigner.releaseFundsStage1).toHaveBeenCalledWith(2n);
     expect(tx.wait).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
+  });
+
+  test('reports the broadcast identity before waiting and preserves it when receipt waiting fails', async () => {
+    const { sdk, contractWithSigner } = makeSdkUnit();
+    const { signer } = makeOracleSigner();
+    const tx = mockSuccessCall(contractWithSigner.releaseFundsStage1);
+    tx.wait.mockRejectedValue(new Error('controlled lost receipt response'));
+    const observed = jest.fn().mockResolvedValue(undefined);
+    await expect(sdk.releaseFundsStage1(2n, signer, observed)).rejects.toThrow(
+      'lost receipt response',
+    );
+    expect(observed).toHaveBeenCalledWith(RECEIPT.hash);
+    expect(observed.mock.invocationCallOrder[0]).toBeLessThan(tx.wait.mock.invocationCallOrder[0]!);
   });
 
   test('confirmInspectionAvailable should reject unauthorized oracle signer', async () => {

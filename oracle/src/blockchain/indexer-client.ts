@@ -173,12 +173,16 @@ export class IndexerClient {
     return statusMap[status];
   }
 
-  async findConfirmationEvent(txHash: string, tradeId: string): Promise<IndexerEvent | null> {
+  async findConfirmationEvent(
+    txHash: string,
+    tradeId: string,
+    expectedEventName: string,
+  ): Promise<IndexerEvent | null> {
     try {
       const query = `
-                query GetTradeEvent($txHash: String!) {
+                query GetTradeEvent($txHash: String!, $eventName: String!) {
                     tradeEvents(
-                        where: { txHash_eq: $txHash }
+                        where: { txHash_eq: $txHash, eventName_eq: $eventName }
                         orderBy: timestamp_DESC
                         limit: 1
                     ) {
@@ -203,7 +207,7 @@ export class IndexerClient {
           },
           body: JSON.stringify({
             query,
-            variables: { txHash },
+            variables: { txHash, eventName: expectedEventName },
           }),
         },
         config.indexerGraphqlRequestTimeoutMs,
@@ -229,7 +233,11 @@ export class IndexerClient {
 
       const event = events[0];
 
-      if (event.trade.tradeId !== tradeId) {
+      if (
+        event.trade.tradeId !== tradeId ||
+        event.eventName !== expectedEventName ||
+        event.txHash.toLowerCase() !== txHash.toLowerCase()
+      ) {
         Logger.warn('TX hash found but trade_id mismatch', {
           txHash,
           expectedTradeId: tradeId,

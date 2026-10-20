@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { createSettlementObservationRouter } from './settlementObservation';
 import { NextFunction, Request, Response, Router } from 'express';
 import { GatewayConfig } from '../config/env';
 import { GatewayError } from '../errors';
@@ -8,9 +9,11 @@ import { createIdempotencyMiddleware } from '../middleware/idempotency';
 import { successResponse } from '../responses';
 import { IdempotencyStore } from '../core/idempotencyStore';
 import { GaslessSettlementExecutionService } from '../core/gaslessSettlementExecutionService';
-import type { GaslessUserAction } from '../core/gaslessSettlementExecutionService';
+import { requireReviewedUserActionCapability } from '../core/gaslessExecutionValidation';
+import type { GaslessTransactionOutcomeStore } from '../core/gaslessTransactionOutcomeStore';
 import { createServiceAuthMiddleware } from '../core/serviceAuth';
 import { SettlementService } from '../core/settlementService';
+import { parseSettlementExecutionBinding } from '../core/settlementExecutionBinding';
 import {
   ASSET_AMOUNT_SPEC,
   DISPLAY_AMOUNT_SPEC,
@@ -33,6 +36,7 @@ export interface SettlementRouterOptions {
   settlementService: SettlementService;
   settlementStore: SettlementStore;
   gaslessSettlementService?: GaslessSettlementExecutionService | null;
+  gaslessTransactionOutcomes?: Pick<GaslessTransactionOutcomeStore, 'listWalletTransferOutcomes'>;
   oracleSettlementProgressionService?: OracleSettlementProgressionService | null;
   ricardianClient?: RicardianClient | null;
   nonceStore: { consume(apiKey: string, nonce: string, ttlSeconds: number): Promise<boolean> };
@@ -76,6 +80,12 @@ function requireInteger(value: unknown, field: string): number {
 
 function requireEventType(value: unknown): (typeof SETTLEMENT_EVENT_TYPES)[number] {
   const eventType = requireString(value, 'eventType');
+  if (eventType === 'chain_evidence_orphaned')
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      'Chain canonicality events belong to the retained observer',
+    );
   if (!SETTLEMENT_EVENT_TYPES.includes(eventType as (typeof SETTLEMENT_EVENT_TYPES)[number])) {
     throw new GatewayError(400, 'VALIDATION_ERROR', 'eventType is not supported', {
       allowed: SETTLEMENT_EVENT_TYPES,
@@ -151,10 +161,11 @@ async function handleRequest(
   handler: () => Promise<unknown>,
   res: Response,
   next: NextFunction,
+  status = 202,
 ): Promise<void> {
   try {
     const payload = await handler();
-    res.status(202).json(successResponse(payload));
+    res.status(status).json(successResponse(payload));
   } catch (error) {
     next(error);
   }
@@ -164,7 +175,7 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
   const router = Router();
   const idempotency = createIdempotencyMiddleware(options.idempotencyStore);
   const serviceAuth = createServiceAuthMiddleware({
-    enabled: options.config.settlementIngressEnabled,
+    enabled: true,
     maxSkewSeconds: options.config.settlementServiceAuthMaxSkewSeconds,
     nonceTtlSeconds: options.config.settlementServiceAuthNonceTtlSeconds,
     sharedSecret: options.config.settlementServiceAuthSharedSecret,
@@ -173,7 +184,7 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
   });
 
   router.use('/settlement', (req, _res, next) => {
-    if (!options.config.settlementIngressEnabled) {
+    if (req.method !== 'GET' && !options.config.settlementIngressEnabled) {
       next(
         new GatewayError(403, 'FORBIDDEN', 'Settlement ingress is disabled', {
           reason: 'settlement_ingress_disabled',
@@ -187,7 +198,7 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
 
   router.use('/settlement', serviceAuth);
   router.use('/wallet/usdc/gasless-transfers', (req, _res, next) => {
-    if (!options.config.settlementIngressEnabled) {
+    if (req.method !== 'GET' && !options.config.settlementIngressEnabled) {
       next(
         new GatewayError(403, 'FORBIDDEN', 'Settlement ingress is disabled', {
           reason: 'settlement_ingress_disabled',
@@ -199,6 +210,8 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
   });
   router.use('/wallet/usdc/gasless-transfers', serviceAuth);
 
+  router.use(createSettlementObservationRouter(options));
+
   router.post('/settlement/handoffs', idempotency, (req, res, next) =>
     handleRequest(
       async () => {
@@ -208,6 +221,7 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           [
             'platformId',
             'platformHandoffId',
+            'executionBinding',
             'tradeId',
             'phase',
             'settlementChannel',
@@ -223,6 +237,10 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
         );
         const amountLexemes = readTopLevelJsonNumberLexemes(req.rawBody);
         const handoff = await options.settlementService.createHandoff({
+          executionBinding:
+            body.executionBinding === null || body.executionBinding === undefined
+              ? null
+              : parseSettlementExecutionBinding(body.executionBinding, getServiceApiKeyId(req)),
           platformId: requireString(body.platformId, 'platformId'),
           platformHandoffId: requireString(body.platformHandoffId, 'platformHandoffId'),
           tradeId: requireString(body.tradeId, 'tradeId'),
@@ -272,6 +290,8 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           ricardianDocumentRegistration: Boolean(options.ricardianClient),
           atomicExecutionEventCallbackOutbox: true,
           durableOracleExecutionEvents: Boolean(options.oracleSettlementProgressionService),
+          immutableUserActionBindings: false,
+          enabledUserActions: [],
         },
       }),
     );
@@ -469,46 +489,7 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           });
         }
 
-        const body = requireObject(req.body, 'body');
-        rejectUnexpectedFields(
-          body,
-          [
-            'action',
-            'handoffId',
-            'chainId',
-            'contractAddress',
-            'expiresAt',
-            'payloadHash',
-            'userAddress',
-            'tradeId',
-            'userAuthorization',
-          ],
-          'body',
-        );
-        const userAuthorization = requireObject(body.userAuthorization, 'userAuthorization');
-        rejectUnexpectedFields(
-          userAuthorization,
-          ['nonce', 'deadline', 'signature'],
-          'userAuthorization',
-        );
-
-        return options.gaslessSettlementService.executeUserAction({
-          action: requireString(body.action, 'action') as GaslessUserAction,
-          handoffId: requireString(body.handoffId, 'handoffId'),
-          chainId: requireInteger(body.chainId, 'chainId'),
-          contractAddress: requireString(body.contractAddress, 'contractAddress'),
-          expiresAt: requireString(body.expiresAt, 'expiresAt'),
-          payloadHash: requireString(body.payloadHash, 'payloadHash'),
-          userAddress: requireString(body.userAddress, 'userAddress'),
-          tradeId: requireString(body.tradeId, 'tradeId'),
-          userAuthorization: {
-            nonce: requireString(userAuthorization.nonce, 'userAuthorization.nonce'),
-            deadline: requireString(userAuthorization.deadline, 'userAuthorization.deadline'),
-            signature: requireString(userAuthorization.signature, 'userAuthorization.signature'),
-          },
-          requestId: getRequestId(req),
-          sourceApiKeyId: getServiceApiKeyId(req),
-        });
+        return requireReviewedUserActionCapability();
       },
       res,
       next,

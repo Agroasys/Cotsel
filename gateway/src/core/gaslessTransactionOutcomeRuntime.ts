@@ -1,6 +1,8 @@
+import { selectObservedSettlementRail } from '../config/retainedSettlementRails';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { createGaslessFinalityVerifier } from './gaslessChainFinality';
 import type { Pool } from 'pg';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import type { GatewayConfig } from '../config/gatewayConfig';
@@ -26,21 +28,31 @@ export function createGaslessTransactionOutcomeRuntime(
   settlementService: SettlementService,
 ): GaslessTransactionOutcomeRuntime {
   const recorder = createPostgresGaslessTransactionOutcomeRecorder(pool);
-  const reconciler = config.gaslessExecutionEnabled
-    ? new GaslessTransactionOutcomeReconciler(
-        recorder,
-        createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, {
-          chainId: config.chainId,
+  const providers = new Map<string, ReturnType<typeof createManagedRpcProvider>>();
+  const reconciler = new GaslessTransactionOutcomeReconciler(
+    recorder,
+    (record) => {
+      const rail = selectObservedSettlementRail(config, record.chainId, record.destinationAddress);
+      if (!rail) throw new Error('Historical operation requires approved retained rail evidence');
+      const key = `${rail.chainId}:${rail.escrowAddress.toLowerCase()}`;
+      let provider = providers.get(key);
+      if (!provider) {
+        provider = createManagedRpcProvider(rail.rpcUrl, rail.rpcFallbackUrls, {
+          chainId: rail.chainId,
           quorum: config.rpcQuorum,
-        }),
-        new GaslessSettlementOutcomeObserver(settlementStore, settlementService),
-        config.gaslessOutcomeReconciliationIntervalMs ?? 5_000,
-      )
-    : null;
+        });
+        providers.set(key, provider);
+      }
+      return provider;
+    },
+    new GaslessSettlementOutcomeObserver(settlementStore, settlementService),
+    config.gaslessOutcomeReconciliationIntervalMs ?? 5_000,
+    createGaslessFinalityVerifier(config),
+  );
 
   return {
     recorder,
-    start: () => reconciler?.start(),
-    stop: () => reconciler?.stop(),
+    start: () => reconciler.start(),
+    stop: () => reconciler.stop(),
   };
 }

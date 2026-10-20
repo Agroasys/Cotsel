@@ -1,3 +1,4 @@
+import { fundedBindingFixture } from './helpers/fundedBinding';
 import { TriggerManager } from '../src/core/trigger-manager';
 import { buildContainmentGuard, type ContainmentGuard } from '../src/core/containment-guard';
 import { ErrorType, Trigger, TriggerStatus, TriggerType } from '../src/types/trigger';
@@ -11,11 +12,15 @@ import {
 } from '../src/database/queries';
 
 jest.mock('@agroasys/sdk', () => ({
+  ...jest.requireActual('@agroasys/sdk'),
   TradeStatus: { LOCKED: 0, IN_TRANSIT: 1, ARRIVAL_CONFIRMED: 2, FROZEN: 3, CLOSED: 4 },
 }));
 
 jest.mock('../src/database/queries', () => ({
   createTrigger: jest.fn(),
+  claimTriggerDispatch: jest.fn().mockResolvedValue(true),
+  getUnresolvedSignerDispatch: jest.fn().mockResolvedValue(null),
+  resolveSignerDispatch: jest.fn().mockResolvedValue(undefined),
   getTriggerByIdempotencyKey: jest.fn(),
   getLatestTriggerByActionKey: jest.fn(),
   updateTrigger: jest.fn(),
@@ -73,6 +78,7 @@ function buildTrigger(status: TriggerStatus = TriggerStatus.PENDING): Trigger {
     idempotency_key: 'RELEASE_STAGE_1:1:req-1',
     trade_id: '1',
     trigger_type: TriggerType.RELEASE_STAGE_1,
+    funded_binding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
     request_hash: null,
     attempt_count: 0,
     status,
@@ -100,6 +106,11 @@ function buildTrigger(status: TriggerStatus = TriggerStatus.PENDING): Trigger {
 
 function buildSdkClient(): TriggerManagerSdkClient {
   return {
+    getDispatchSignerScope: jest
+      .fn()
+      .mockResolvedValue('31337:0x3333333333333333333333333333333333333333'),
+    verifyDispatchFinality: jest.fn(),
+    assertFundedBinding: jest.fn().mockResolvedValue(undefined),
     getTrade: jest.fn().mockResolvedValue(buildTrade()),
     releaseFundsStage1: jest
       .fn()
@@ -156,6 +167,7 @@ describe('PRES-11 containment blocks the next progression', () => {
         tradeId: '1',
         requestId: 'req-1',
         triggerType: TriggerType.RELEASE_STAGE_1,
+        fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
       }),
     ).rejects.toThrow(/reconciliation containment RECON-20260912-AB12CD34/);
 
@@ -180,10 +192,11 @@ describe('PRES-11 containment blocks the next progression', () => {
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
     });
 
     expect(response.status).toBe(TriggerStatus.SUBMITTED);
-    expect(sdkClient.releaseFundsStage1).toHaveBeenCalledWith('1');
+    expect(sdkClient.releaseFundsStage1).toHaveBeenCalledWith('1', expect.any(Function));
   });
 
   it('refuses at the submission point when the containment opens after acceptance', async () => {
@@ -211,6 +224,7 @@ describe('PRES-11 containment blocks the next progression', () => {
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1),
     });
 
     // Accepted, then refused at the submission point: the trigger exhausts its

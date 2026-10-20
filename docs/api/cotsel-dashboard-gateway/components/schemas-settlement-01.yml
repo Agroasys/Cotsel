@@ -107,6 +107,10 @@ components:
           type:
             - string
             - 'null'
+        executionBinding:
+          oneOf:
+            - $ref: '#/components/schemas/SettlementExecutionBinding'
+            - type: 'null'
         metadata:
           type: object
           additionalProperties: true
@@ -291,6 +295,23 @@ components:
         - settlementChannel
         - displayCurrency
         - displayAmount
+      allOf:
+        - if:
+            properties:
+              phase:
+                enum:
+                  [
+                    gasless_create_trade,
+                    initial_release_after_custody_and_documents,
+                    inspection_available_standard,
+                    inspection_available_packaged_local,
+                    final_release_after_inspection_acceptance,
+                    final_release_after_notice_deadline,
+                    dispute_resolution,
+                  ]
+            required: [phase]
+          then:
+            required: [executionBinding, externalReference, ricardianHash]
       properties:
         platformId:
           type: string
@@ -335,6 +356,8 @@ components:
           type: string
         externalReference:
           type: string
+        executionBinding:
+          $ref: '#/components/schemas/SettlementExecutionBinding'
         metadata:
           type: object
           additionalProperties: true

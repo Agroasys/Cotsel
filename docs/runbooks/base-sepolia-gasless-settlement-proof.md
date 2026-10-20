@@ -187,3 +187,141 @@ CRITICAL drift, or if relayer failure creates ambiguous fund movement.
 - `docs/runbooks/production-readiness-checklist.md`
 - `docs/runbooks/base-mainnet-go-no-go.md`
 - `docs/runbooks/base-mainnet-cutover-and-rollback.md`
+
+## Wallet integrity candidate acceptance
+
+The integrity candidate uses `gasless_create_trade_scope_v1` for immutable execution scope.
+Verify the complete normalized execution hash and issuing service identity before dispatch.
+A new transport hash must not change buyer, supplier, amounts, rail, authorization, or signature.
+
+Apply the handoff-scope and finalized-evidence migrations before candidate startup.
+The retained observer requires two RPC witnesses with different hostnames.
+Confirm independent provider operation separately; hostname difference alone is insufficient.
+Require receipt, canonical block, chain, logs, and common finalized-head agreement.
+A mined receipt remains pending until this policy passes.
+
+Retain confirmed outcomes for ongoing canonicality checks.
+On unanimous orphaning, emit `chain_evidence_orphaned` and keep the original operation reserved.
+The public execution-event ingress cannot create this observer event.
+Confirm that Agroasys accepts this callback event before gateway promotion.
+Preserve the original event and transaction when accounting requires correction.
+Do not rebroadcast or repeat funding to resolve an unknown outcome.
+
+Local Node 22 tests and disposable PostgreSQL checks establish implementation behavior only.
+The actual provider project, connection, approved accounts, chain deployment, and protected rollout still require independent acceptance.
+
+## Revision 2 execution and financial confirmation
+
+Audience: staging release operators and settlement reviewers. Scope: candidate implementation evidence before enablement.
+
+New gasless handoffs require `executionBinding` with scope version `agroasys.cotsel-execution-binding.v1`.
+The gateway derives `ownerServiceId` from authenticated service credentials. Metadata cannot replace this binding.
+A retry must retain the package, operation, authorization, recipient, rail, amount, and execution hash.
+Migration `202610150013` preserves legacy missing bindings. These records cannot enter new execution.
+
+Financial confirmation uses the existing indexer probe and reconciliation health server:
+
+1. Apply reconciliation migration `202610150004` before deploying the updated worker.
+2. Deploy the updated indexer probe and retained reconciliation worker.
+3. Set `GATEWAY_INDEXER_COVERAGE_URL` to the approved internal indexer `/coverage` URL.
+4. Set `GATEWAY_RECONCILIATION_COVERAGE_URL` to the approved internal reconciliation `/coverage` URL.
+5. Restrict these service probe endpoints to approved internal traffic.
+6. Wait for a complete, clean reconciliation run with captured chain evidence.
+7. Verify the authenticated gateway transaction-finality endpoint against the exact receipt.
+
+The indexer returns its actual processor checkpoint after its existing readiness checks pass.
+Reconciliation returns a retained clean run covering the requested trade at an anchor now covered by finality.
+A comparison can qualify after its captured anchor becomes finalized. Older clean evidence cannot bypass newer drift or incomplete runs.
+Contained trades, incomplete runs, missing evidence, and expired coverage remain pending.
+Both RPC witnesses must independently match the receipt, finalized head, indexer checkpoint, and reconciliation anchor.
+The reconciliation anchor must be finalized. Neither latest-block reads nor confirmation counts replace finality.
+Legacy runs without captured chain evidence are unproven. Do not synthesize a backfill.
+
+`GET /settlement/transactions/:transactionHash/finality` requires service authentication.
+The endpoint returns `503` while matching financial evidence is unavailable.
+Agroasys also checks the returned transaction and block identity against its own RPC witnesses.
+An issuance pause leaves authenticated reads and the retained outcome observer available.
+Do not disable the observer to stop new dispatch.
+
+Local contract probes and disposable PostgreSQL migration proofs do not establish live provider, RPC, or deployed-rail acceptance.
+
+## Original funded progression and durable Oracle dispatch
+
+Audience: release operators and independent settlement reviewers.
+Prerequisites: Verified original funded packages, approved deployment manifests, and compatible Agroasys, gateway, SDK, and Oracle versions.
+Outcome: Original funded participants and rail remain unchanged through payout submission and retry.
+
+Stop Oracle mutation workers before migrations `202610160002` and `202610160003`.
+Apply the Oracle migrations through the retained migration runner.
+Migration `202610160003` uses the runner's transaction and a five-second lock timeout.
+Its partial unique index requires the Oracle mutation lane to remain stopped during creation.
+Apply gateway migration `202610160014` before enabling funded progression registration.
+Deploy the compatible SDK and Oracle before enabling gateway progression.
+
+Agroasys builds `agroasys.funded-settlement-binding.v1` from the original finalized funding package.
+The gateway checks its issuing service, source handoff, phase, trade, commercial hash, and exact movement amounts.
+The gateway retains that complete instruction in its immutable typed binding.
+Missing legacy bindings block new financial execution. Do not invent a legacy provider claim or binding revision.
+
+Oracle retains the same binding on its trigger and on governed re-drives.
+Before each first submission, independently verify the original funding receipt through two RPC witnesses.
+Require its successful receipt, canonical finalized block, exact TradeLocked event, and original buyer-to-escrow USDC movement.
+Compare the current contract trade with the original participants and funded breakdown.
+Recheck containment before acquiring the durable dispatch claim.
+
+A committed dispatch claim permits one submission for the logical financial action.
+Persist an observed transaction hash before waiting for its receipt.
+A timeout after the claim remains unresolved. Do not submit again or clear the claim.
+The existing confirmation worker continues observing an original submitted hash after its normal observation deadline.
+A claimed operation without a hash remains blocked for independent reconciliation.
+Application timeouts, worker restarts, status resets, and a new request ID do not prove non-execution.
+
+### Retained deployment configuration
+
+`GATEWAY_RETAINED_SETTLEMENT_RAILS_JSON` defaults to `[]`.
+Each approved record requires `chainId`, `escrowAddress`, `usdcAddress`, `rpcUrl`, `rpcFallbackUrls`,
+`indexerCoverageUrl`, `reconciliationCoverageUrl`, and `railManifestSha256`.
+An observation record alone cannot enable execution.
+Add `executionOracleBaseUrl` only after approving that retained Oracle deployment and service authentication.
+Use an HTTPS URL without URL credentials or a fragment.
+The gateway selects the retained executor by the immutable chain, escrow, and token tuple.
+The destination Oracle independently rejects a binding for a different configured deployment.
+A request cannot supply an RPC endpoint or executor URL.
+Keep retained indexer and reconciliation coverage healthy before confirming any payout financially.
+
+### Local verification commands
+
+Run `pnpm --filter oracle test` for Oracle unit and retry checks.
+Run `pnpm --filter gateway test` for gateway and public contract checks.
+Build the SDK before running `pnpm --filter @agroasys/shared-db run test:funded-binding:postgres`.
+The PostgreSQL proof creates disposable databases on loopback and rejects remote database hosts.
+Keep these controlled results separate from actual provider, deployed-chain, and operational acceptance.
+
+## Oracle dispatch exclusion and original confirmation
+
+Apply Oracle migrations `202610160003` and `202610160004` with mutation workers stopped.
+Keep original observation available during the compatibility window.
+Do not run earlier Oracle mutation workers after this cutover.
+
+Oracle reserves one dispatch per financial action and one unresolved dispatch per chain and signer address.
+A transaction hash alone does not release the signer reservation.
+Two independent RPC witnesses must establish finalized canonical inclusion of that exact original transaction.
+A finalized revert consumes its nonce, but does not prove payment success.
+A hashless accepted send remains unresolved and blocks new sends from the same signer.
+Unattributed legacy dispatches also block new sends until governed reconciliation establishes their original identity.
+
+Use one coordinated Oracle database for each chain and signer address.
+Verify that the signer is not shared with another Oracle database, relayer, external sender, or unmanaged process.
+Record this separation in the approved deployment manifest.
+The implementation cannot coordinate an undisclosed external user of the same key.
+
+This conservative exclusion permits one unresolved transaction per Oracle signer.
+It can limit throughput until finalized evidence becomes available.
+Record the approved capacity expectation before cohort enablement.
+Do not remove the exclusion to meet a throughput target.
+
+Oracle confirmation requires the original transaction input, funded participants, expected semantic event, actual token movement,
+independent finalized block agreement, and matching indexer event.
+Advanced trade state, a safe block, and elapsed application time cannot confirm the original operation.
+The retained observer preserves unresolved operations after its notification deadline.
+Re-drive cannot convert a changed trade state into success or resubmit an earlier accepted transaction.

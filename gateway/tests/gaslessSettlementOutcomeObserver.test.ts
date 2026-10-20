@@ -58,6 +58,24 @@ function createObserver(initialStatus: SettlementExecutionStatus) {
 }
 
 describe('gasless settlement outcome projection', () => {
+  test('withdraws confirmed success while retaining original operation and recorded block evidence', async () => {
+    const { observer, recordExecutionEvent } = createObserver('confirmed');
+    await observer.onOrphaned({ ...OUTCOME, blockNumber: '100', blockHash: `0x${'d'.repeat(64)}` });
+    expect(recordExecutionEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        handoffId: OUTCOME.resourceId,
+        eventType: 'chain_evidence_orphaned',
+        executionStatus: 'confirmation_pending',
+        reconciliationStatus: 'drift',
+        txHash: OUTCOME.transactionHash,
+        metadata: expect.objectContaining({
+          originalBlockNumber: '100',
+          moneyMovementFreezeRequired: true,
+          rebroadcastPerformed: false,
+        }),
+      }),
+    );
+  });
   test('bridges queued state through confirmation-pending after a pre-projection crash', async () => {
     const { observer, recordExecutionEvent } = createObserver('queued');
 

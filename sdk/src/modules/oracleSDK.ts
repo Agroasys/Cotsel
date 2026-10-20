@@ -28,12 +28,14 @@ export class OracleSDK extends Client {
   async releaseFundsStage1(
     tradeId: string | bigint,
     oracleSigner: ethers.Signer,
+    onSubmitted?: (transactionHash: string) => Promise<void>,
   ): Promise<OracleResult> {
     await this.verifyOracle(oracleSigner);
 
     try {
       const contractWithSigner = this.contract.connect(oracleSigner);
       const tx = await contractWithSigner.releaseFundsStage1(tradeId);
+      if (onSubmitted) await onSubmitted(tx.hash);
       const receipt = await tx.wait();
 
       if (!receipt) {
@@ -57,6 +59,7 @@ export class OracleSDK extends Client {
     tradeId: string | bigint,
     windowSeconds: number,
     oracleSigner: ethers.Signer,
+    onSubmitted?: (transactionHash: string) => Promise<void>,
   ): Promise<OracleResult> {
     await this.verifyOracle(oracleSigner);
 
@@ -73,6 +76,7 @@ export class OracleSDK extends Client {
     try {
       const contractWithSigner = this.contract.connect(oracleSigner);
       const tx = await contractWithSigner.confirmInspectionAvailable(tradeId, windowSeconds);
+      if (onSubmitted) await onSubmitted(tx.hash);
       const receipt = await tx.wait();
 
       if (!receipt) {
@@ -96,12 +100,14 @@ export class OracleSDK extends Client {
   async finalizeAfterDisputeWindow(
     tradeId: string | bigint,
     signer: ethers.Signer,
+    onSubmitted?: (transactionHash: string) => Promise<void>,
   ): Promise<OracleResult> {
     await this.assertSignerCompatibility(signer);
 
     try {
       const contractWithSigner = this.contract.connect(signer);
       const tx = await contractWithSigner.finalizeAfterDisputeWindow(tradeId);
+      if (onSubmitted) await onSubmitted(tx.hash);
       const receipt = await tx.wait();
 
       if (!receipt) {

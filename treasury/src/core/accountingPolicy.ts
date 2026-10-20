@@ -67,8 +67,15 @@ export function assertBatchExecutionMatchable(params: {
   observedTxHash: string;
   observedPayoutReceiver: string;
   observedAmountRaw: string;
+  verificationOnly?: boolean;
 }): void {
-  if (params.batchStatus !== 'APPROVED') {
+  if (
+    params.batchStatus !== 'APPROVED' &&
+    !(
+      params.verificationOnly === true &&
+      ['EXECUTED', 'HANDED_OFF', 'CLOSED'].includes(params.batchStatus)
+    )
+  ) {
     throw new CallerSafeError(
       `Matched sweep execution requires batch status APPROVED; received ${params.batchStatus}`,
     );

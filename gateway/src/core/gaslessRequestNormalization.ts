@@ -287,3 +287,15 @@ export function normalizeWalletUsdcTransferInput(
   }
   return normalized;
 }
+
+/** Immutable handoff scope excludes transport identifiers and includes both signatures. */
+export function createGaslessExecutionScopeHash(input: GaslessCreateTradeExecutionInput): string {
+  const {
+    handoffId: _handoffId,
+    payloadHash: _payloadHash,
+    requestId: _requestId,
+    sourceApiKeyId: _sourceApiKeyId,
+    ...scope
+  } = input;
+  return keccak256(toUtf8Bytes(stableJson({ version: 'gasless_create_trade_scope_v1', ...scope })));
+}

@@ -2,6 +2,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import http from 'http';
+import { config } from './config';
+import { readFinancialCoverage } from './core/financialCoverage';
 import { pool, testConnection } from './database/connection';
 
 const HEALTH_PORT = parseInt(process.env.RECONCILIATION_HEALTH_PORT ?? '9090', 10);
@@ -81,6 +83,32 @@ export function startHealthServer(): http.Server {
 
       if (req.url === '/health') {
         json(res, 200, { success: true, service: 'reconciliation', status: 'ok', timestamp });
+        return;
+      }
+
+      const path = new URL(req.url ?? '/', 'http://reconciliation.internal');
+      if (path.pathname === '/coverage') {
+        try {
+          const tradeId = path.searchParams.get('tradeId');
+          const finalizedBlockNumber = path.searchParams.get('finalizedBlockNumber');
+          const coverage =
+            tradeId && finalizedBlockNumber
+              ? await readFinancialCoverage(
+                  pool,
+                  tradeId,
+                  finalizedBlockNumber,
+                  config.coverageMaxAgeMs,
+                )
+              : null;
+          json(res, coverage ? 200 : 503, {
+            service: 'reconciliation',
+            ready: Boolean(coverage),
+            coverage,
+            observedAt: timestamp,
+          });
+        } catch {
+          json(res, 503, { service: 'reconciliation', ready: false, coverage: null });
+        }
         return;
       }
 

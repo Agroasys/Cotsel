@@ -62,23 +62,14 @@ Purpose:
   `SUBMITTED` or `CONFIRMED`. `TERMINAL_FAILURE`, `EXHAUSTED_NEEDS_REDRIVE`,
   `REJECTED`, pending, and executing states must fail closed at the gateway and
   must not complete the upstream settlement handoff.
-- **Mainnet blocker:** immediate final release after inspection acceptance
-  currently trusts Agroasys participant authorization plus the Cotsel oracle
-  boundary; the escrow contract does not yet verify a buyer EIP-712 acceptance
-  signature. Before mainnet enablement, add a buyer-signed acceptance action
-  bound to chain ID, escrow address, trade ID, nonce, and expiry; relay it through
-  the existing gasless authorization path; and remove the oracle-only immediate
-  acceptance entry point. Until that contract upgrade is deployed and rehearsed,
-  immediate acceptance must remain disabled in mainnet policy and final release
-  must use the no-dispute deadline or governed dispute resolution.
-- While immediate acceptance is disabled, an early buyer acceptance must still
-  complete automatically: before the deadline the gateway fails that phase
-  closed; at or after the exact notice deadline it may remap the same durable
-  handoff to `final_release_after_notice_deadline`, and Agroasys may submit a
-  separate deadline-fallback handoff if the immediate handoff already exhausted
-  its retries. Both routes execute `/api/oracle/finalize-trade`. Reconciliation
-  must prove only one final-tranche movement, and any failure after the deadline
-  is a settlement-blocking incident rather than a manual normal path.
+- The escrow source includes buyer-signed inspection acceptance. This fact does not establish deployed bytecode or an accepted browser journey.
+  Verify the deployed signature path before enabling immediate buyer acceptance.
+  Oracle-only inspection acceptance is prohibited in every environment.
+  `GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED=true` fails configuration validation.
+- Preserve the stored phase during execution. An inspection-acceptance handoff cannot become deadline finalization after expiry.
+  A separately captured deadline instruction may proceed only after prior execution exposure is independently resolved.
+  Preserve unresolved outcomes and require finalized evidence of exactly one final-tranche movement.
+  The normal customer flow remains blocked from immediate release until its signed provider, browser, and deployed-chain gate passes.
 
 ## 2) Gas and Fee Expectations
 

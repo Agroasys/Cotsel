@@ -1,3 +1,4 @@
+import { parseSettlementFundedBinding, type SettlementFundedBinding } from '@agroasys/sdk';
 import { Request, Response } from 'express';
 import {
   HttpError,
@@ -28,6 +29,7 @@ import { storedFailureMessage, ValidationError } from '../utils/errors';
 type TriggerRequestBody = {
   tradeId?: string;
   requestId?: string;
+  fundedBinding?: unknown;
 };
 
 type RedriveRequestBody = TriggerRequestBody & {
@@ -125,11 +127,22 @@ function sendOracleError(
   });
 }
 
-function parseTriggerBody(body: unknown): { tradeId: string; requestId: string } {
+function parseTriggerBody(body: unknown): {
+  tradeId: string;
+  requestId: string;
+  fundedBinding: SettlementFundedBinding;
+} {
   const payload = requireObject(body, 'body') as unknown as TriggerRequestBody;
+  let fundedBinding: SettlementFundedBinding;
+  try {
+    fundedBinding = parseSettlementFundedBinding(payload.fundedBinding);
+  } catch {
+    throw new ValidationError('A complete original funded binding is required');
+  }
 
   return {
     tradeId: requireString(payload.tradeId, 'tradeId'),
+    fundedBinding,
     requestId: requireString(payload.requestId, 'requestId'),
   };
 }
@@ -259,10 +272,11 @@ export class OracleController {
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
-      const { tradeId, requestId } = parseTriggerBody(req.body);
+      const { tradeId, requestId, fundedBinding } = parseTriggerBody(req.body);
       const result = await this.triggerManager.executeTrigger({
         tradeId,
         requestId,
+        fundedBinding,
         triggerType: TriggerType.RELEASE_STAGE_1,
         requestHash: req.hmacSignature,
       });
@@ -279,10 +293,11 @@ export class OracleController {
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
-      const { tradeId, requestId } = parseTriggerBody(req.body);
+      const { tradeId, requestId, fundedBinding } = parseTriggerBody(req.body);
       const result = await this.triggerManager.executeTrigger({
         tradeId,
         requestId,
+        fundedBinding,
         triggerType: TriggerType.CONFIRM_ARRIVAL,
         requestHash: req.hmacSignature,
       });
@@ -336,10 +351,11 @@ export class OracleController {
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
-      const { tradeId, requestId } = parseTriggerBody(req.body);
+      const { tradeId, requestId, fundedBinding } = parseTriggerBody(req.body);
       const result = await this.triggerManager.executeTrigger({
         tradeId,
         requestId,
+        fundedBinding,
         triggerType: TriggerType.FINALIZE_TRADE,
         requestHash: req.hmacSignature,
       });
@@ -360,10 +376,11 @@ export class OracleController {
     operation: string,
   ): Promise<void> {
     try {
-      const { tradeId, requestId } = parseTriggerBody(req.body);
+      const { tradeId, requestId, fundedBinding } = parseTriggerBody(req.body);
       const result = await this.triggerManager.executeTrigger({
         tradeId,
         requestId,
+        fundedBinding,
         triggerType,
         requestHash: req.hmacSignature,
       });

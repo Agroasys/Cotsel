@@ -364,3 +364,36 @@ test('probe server reports ready and fails closed when the check throws', async 
     await close(server);
   }
 });
+
+test('coverage probe reports the retained checkpoint only while readiness is healthy', async () => {
+  let healthy = true;
+  let checkpoint = {
+    chainId: '84532',
+    escrowAddress: `0x${'1'.repeat(40)}`,
+    blockNumber: '100',
+    blockHash: HASH_A,
+  };
+  let reads = 0;
+  const server = createProbeServer({
+    readiness: async () => ({ ready: healthy, dependencies: [] }),
+    coverage: async () => {
+      reads++;
+      return checkpoint;
+    },
+  });
+  const base = await listen(server);
+  try {
+    const response = await fetch(`${base}/coverage`);
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).checkpoint, checkpoint);
+    healthy = false;
+    assert.equal((await fetch(`${base}/coverage`)).status, 503);
+    assert.equal(reads, 1);
+    healthy = true;
+    checkpoint = null;
+    assert.equal((await fetch(`${base}/coverage`)).status, 503);
+    assert.equal((await fetch(`${base}/coverage`, { method: 'POST' })).status, 405);
+  } finally {
+    await close(server);
+  }
+});

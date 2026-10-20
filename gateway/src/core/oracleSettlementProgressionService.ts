@@ -1,3 +1,6 @@
+import type { GatewayConfig } from '../config/gatewayConfig';
+import type { DownstreamServiceKey } from './serviceRegistry';
+import { parseSettlementFundedBinding } from '@agroasys/sdk';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,8 +13,6 @@ const ORACLE_PATH_BY_PHASE = {
   initial_release_after_custody_and_documents: '/api/oracle/release-stage1',
   inspection_available_standard: '/api/oracle/confirm-inspection-available/standard',
   inspection_available_packaged_local: '/api/oracle/confirm-inspection-available/packaged-local',
-  final_release_after_inspection_acceptance: '/api/oracle/finalize-after-inspection-acceptance',
-  final_release_after_notice_deadline: '/api/oracle/finalize-trade',
 } as const;
 
 type ExecutableSettlementPhase = keyof typeof ORACLE_PATH_BY_PHASE;
@@ -31,8 +32,11 @@ export class OracleSettlementProgressionService {
     private readonly settlementStore: SettlementStore,
     private readonly orchestrator: DownstreamServiceOrchestrator,
     private readonly settlementService: SettlementService,
-    private readonly immediateInspectionAcceptanceEnabled = true,
     private readonly now: () => Date = () => new Date(),
+    private readonly deployment?: Pick<
+      GatewayConfig,
+      'chainId' | 'escrowAddress' | 'usdcAddress' | 'retainedSettlementRails'
+    >,
   ) {}
 
   async executeHandoff(
@@ -53,12 +57,54 @@ export class OracleSettlementProgressionService {
       );
     }
 
+    let fundedBinding;
+    try {
+      fundedBinding = parseSettlementFundedBinding(handoff.executionBinding);
+    } catch {
+      throw new GatewayError(409, 'CONFLICT', 'Original funded progression binding is required');
+    }
+    if (
+      fundedBinding.ownerServiceId !== handoff.sourceApiKeyId ||
+      fundedBinding.sourceOperationId !== handoff.platformHandoffId ||
+      fundedBinding.tradeId !== handoff.tradeId ||
+      fundedBinding.phase !== handoff.phase ||
+      fundedBinding.ricardianHash !== handoff.ricardianHash?.toLowerCase()
+    )
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'Stored progression differs from its immutable funded binding',
+      );
     const phase = this.requireExecutablePhase(handoff);
     const path = ORACLE_PATH_BY_PHASE[phase];
-    const response = await this.orchestrator.fetch('oracle', {
+    let oracleService: DownstreamServiceKey;
+    if (
+      this.deployment &&
+      String(this.deployment.chainId) === fundedBinding.chainId &&
+      this.deployment.escrowAddress.toLowerCase() === fundedBinding.escrowAddress &&
+      this.deployment.usdcAddress.toLowerCase() === fundedBinding.tokenAddress
+    )
+      oracleService = 'oracle';
+    else {
+      const retained = this.deployment?.retainedSettlementRails?.find(
+        (rail) =>
+          String(rail.chainId) === fundedBinding.chainId &&
+          rail.escrowAddress === fundedBinding.escrowAddress &&
+          rail.usdcAddress === fundedBinding.tokenAddress &&
+          rail.executionOracleBaseUrl,
+      );
+      if (!retained)
+        throw new GatewayError(
+          503,
+          'UPSTREAM_UNAVAILABLE',
+          'Original funded deployment has no approved retained Oracle executor',
+        );
+      oracleService = `retained_oracle:${retained.chainId}:${retained.escrowAddress}`;
+    }
+    const response = await this.orchestrator.fetch(oracleService, {
       method: 'POST',
       path,
-      body: { tradeId: handoff.tradeId, requestId },
+      body: { tradeId: handoff.tradeId, requestId, fundedBinding },
       readOnly: false,
       authenticated: true,
       operation: `oracle:settlement:${phase}`,
@@ -129,26 +175,20 @@ export class OracleSettlementProgressionService {
   }
 
   private requireExecutablePhase(handoff: SettlementHandoffRecord): ExecutableSettlementPhase {
-    if (
-      handoff.phase === 'final_release_after_inspection_acceptance' &&
-      !this.immediateInspectionAcceptanceEnabled
-    ) {
-      const noticeDeadline = this.resolveNoticeDeadline(handoff);
-      if (noticeDeadline && noticeDeadline.getTime() <= this.now().getTime()) {
-        return 'final_release_after_notice_deadline';
-      }
-
+    if (handoff.phase === 'final_release_after_notice_deadline')
       throw new GatewayError(
         409,
         'CONFLICT',
-        'Immediate inspection-acceptance release is disabled until buyer-signed on-chain acceptance is available. Deadline finalization will become available when the inspection notice window expires.',
-        {
-          handoffId: handoff.handoffId,
-          phase: handoff.phase,
-          noticeDeadlineAt: noticeDeadline?.toISOString() ?? null,
-        },
+        'settlement_client_upgrade_required: Notice-deadline finalization has no reviewed lifecycle package.',
+        { handoffId: handoff.handoffId, phase: handoff.phase },
       );
-    }
+    if (handoff.phase === 'final_release_after_inspection_acceptance')
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'Buyer-signed inspection acceptance is required. Oracle execution cannot substitute deadline finalization.',
+        { handoffId: handoff.handoffId, phase: handoff.phase },
+      );
 
     if (handoff.phase in ORACLE_PATH_BY_PHASE) {
       return handoff.phase as ExecutableSettlementPhase;
@@ -160,14 +200,6 @@ export class OracleSettlementProgressionService {
       'This settlement phase does not support automatic oracle progression',
       { handoffId: handoff.handoffId, phase: handoff.phase },
     );
-  }
-
-  private resolveNoticeDeadline(handoff: SettlementHandoffRecord): Date | null {
-    const value = handoff.metadata.noticeDeadlineAt;
-    if (typeof value !== 'string') return null;
-
-    const timestamp = Date.parse(value);
-    return Number.isFinite(timestamp) ? new Date(timestamp) : null;
   }
 
   private async readResponseBody(

@@ -190,4 +190,27 @@ describe('SweepExecutionMatcherService claim binding', () => {
       expect(queries.recordSweepBatchExecution).not.toHaveBeenCalled();
     });
   });
+  it('revalidates an already executed sweep and does not restore stale success after orphaning', async () => {
+    jest
+      .mocked(queries.getSweepBatchDetail)
+      .mockResolvedValue({ ...batchDetailFixture, batch: executedBatchFixture } as never);
+    jest.mocked(queries.getTreasuryClaimEventByBatchId).mockResolvedValue({
+      source_event_id: 'event-90',
+      tx_hash: indexedClaim.txHash,
+      block_number: 101,
+      observed_at: indexedClaim.timestamp,
+      amount_raw: indexedClaim.claimAmount,
+      treasury_identity: TREASURY,
+      payout_receiver: PAYOUT,
+      triggered_by: SIGNER,
+    } as never);
+    const matcher = new SweepExecutionMatcherService({
+      indexerClient: { fetchTreasuryClaimEventByTxHash: jest.fn() },
+      claimVerifier: claimVerifier({ receipts: [] }),
+    });
+    await expect(
+      matcher.matchApprovedBatch({ batchId: 11, txHash: '0xclaim', actor: 'controlled-reviewer' }),
+    ).rejects.toThrow('has no receipt');
+    expect(queries.recordSweepBatchExecution).not.toHaveBeenCalled();
+  });
 });

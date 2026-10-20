@@ -40,6 +40,17 @@ process.env.TREASURY_INTERNAL_MUTATION_API_KEYS = 'treasury-gateway,treasury-che
 // Only the dashboard gateway may act for an operator it authenticated.
 process.env.TREASURY_OPERATOR_DELEGATION_API_KEYS = 'treasury-gateway';
 
+// These tests isolate actor/provider/fee-accrual policy. Sweep chain verification has its own receipt and PostgreSQL proofs.
+jest.mock('../src/core/sweepExecutionMatcher', () => ({
+  SweepExecutionMatcherService: jest.fn().mockImplementation(() => ({
+    revalidateMatchedBatch: jest
+      .fn()
+      .mockImplementation(async () =>
+        jest.requireActual('./helpers/sweepFinality').controlledSweepFinality(),
+      ),
+  })),
+}));
+
 jest.mock('../src/database/queries', () => ({
   ...jest.requireActual('../src/database/queries'),
   updateSweepBatchStatus: jest.fn(),

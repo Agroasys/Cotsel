@@ -59,3 +59,66 @@ components:
         timestamp:
           type: string
           format: date-time
+    WalletUsdcExecutionObservationResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          type: object
+          additionalProperties: false
+          required: [platformTransferId, outcomes]
+          properties:
+            platformTransferId:
+              type: string
+            outcomes:
+              type: array
+              maxItems: 10
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                  [
+                    transactionHash,
+                    observedTransactionHash,
+                    applicationRequestId,
+                    outcomeStatus,
+                    chainId,
+                    destinationAddress,
+                    calldataHash,
+                  ]
+                properties:
+                  transactionHash:
+                    type: string
+                    pattern: '^0x[0-9a-fA-F]{64}$'
+                  observedTransactionHash:
+                    type: [string, 'null']
+                  applicationRequestId:
+                    type: string
+                  outcomeStatus:
+                    type: string
+                    enum:
+                      [
+                        broadcast_pending,
+                        broadcast_unknown,
+                        confirmation_pending,
+                        confirmed,
+                        reverted,
+                        replaced,
+                        failed,
+                      ]
+                  chainId:
+                    type: integer
+                    minimum: 1
+                  destinationAddress:
+                    type: string
+                    pattern: '^0x[0-9a-fA-F]{40}$'
+                  calldataHash:
+                    type: string
+                    pattern: '^0x[0-9a-fA-F]{64}$'

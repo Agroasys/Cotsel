@@ -1,3 +1,11 @@
+import { verifyOracleProgressionReceipt } from './progression-receipt';
+import { createOracleDispatchWitnesses, verifyOracleDispatchFinality } from './dispatch-finality';
+import { createFundedSettlementVerifier } from './funded-settlement-verifier';
+import {
+  parseSettlementFundedBinding,
+  assertFundedTradeMatchesBinding,
+  type SettlementFundedBinding,
+} from '@agroasys/sdk';
 import { ethers } from 'ethers';
 import { OracleSDK, Trade } from '@agroasys/sdk';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
@@ -75,10 +83,13 @@ function createOracleSigner(
 }
 
 export class SDKClient {
+  private dispatchWitnesses: ReturnType<typeof createOracleDispatchWitnesses>;
+  private dispatchChainId: number;
   private sdk: OracleSDK;
   private provider: ethers.AbstractProvider;
   private signer: ethers.Signer;
   private signerProbe: () => Promise<void>;
+  private verifyFunding: (binding: SettlementFundedBinding) => Promise<void>;
 
   constructor(
     rpcUrl: string,
@@ -89,6 +100,12 @@ export class SDKClient {
     chainId: number,
     rpcOptions: { quorum?: number; stallTimeoutMs?: number } = {},
   ) {
+    this.dispatchChainId = chainId;
+    this.dispatchWitnesses = createOracleDispatchWitnesses([rpcUrl, ...rpcFallbackUrls]);
+    this.verifyFunding = createFundedSettlementVerifier(
+      { chainId, escrowAddress, tokenAddress: usdcAddress },
+      [rpcUrl, ...rpcFallbackUrls],
+    );
     const provider = createManagedRpcProvider(rpcUrl, rpcFallbackUrls, {
       chainId,
       quorum: rpcOptions.quorum,
@@ -132,6 +149,28 @@ export class SDKClient {
     return oracleAddress;
   }
 
+  async getDispatchSignerScope(): Promise<string> {
+    return `${this.dispatchChainId}:${(await this.signer.getAddress()).toLowerCase()}`;
+  }
+
+  async verifyDispatchFinality(signerScope: string, transactionHash: string) {
+    return verifyOracleDispatchFinality(this.dispatchWitnesses, signerScope, transactionHash);
+  }
+
+  async verifyProgressionReceipt(
+    signerScope: string,
+    transactionHash: string,
+    binding: SettlementFundedBinding,
+  ) {
+    await this.assertFundedBinding(binding);
+    return verifyOracleProgressionReceipt(
+      this.dispatchWitnesses,
+      signerScope,
+      transactionHash,
+      binding,
+    );
+  }
+
   private async getBlockNumberForTag(tag: 'latest' | 'safe' | 'finalized'): Promise<number | null> {
     const block = await this.provider.getBlock(tag);
     return block ? Number(block.number) : null;
@@ -157,7 +196,13 @@ export class SDKClient {
 
   async getTransactionReceiptBlockNumber(txHash: string): Promise<number | null> {
     const receipt = await this.provider.getTransactionReceipt(txHash);
-    return receipt ? Number(receipt.blockNumber) : null;
+    return receipt?.status === 1 ? Number(receipt.blockNumber) : null;
+  }
+
+  async assertFundedBinding(value: SettlementFundedBinding): Promise<void> {
+    const binding = parseSettlementFundedBinding(value);
+    await this.verifyFunding(binding);
+    assertFundedTradeMatchesBinding(await this.getTrade(binding.tradeId), binding);
   }
 
   async getTrade(tradeId: string): Promise<Trade> {
@@ -180,10 +225,13 @@ export class SDKClient {
     return this.sdk.isTradePaused(BigInt(tradeId));
   }
 
-  async releaseFundsStage1(tradeId: string): Promise<BlockchainResult> {
+  async releaseFundsStage1(
+    tradeId: string,
+    onSubmitted?: (hash: string) => Promise<void>,
+  ): Promise<BlockchainResult> {
     Logger.info('Executing releaseFundsStage1', { tradeId });
 
-    const result = await this.sdk.releaseFundsStage1(tradeId, this.signer);
+    const result = await this.sdk.releaseFundsStage1(tradeId, this.signer, onSubmitted);
 
     Logger.info('Stage 1 release successful', {
       tradeId,
@@ -199,10 +247,16 @@ export class SDKClient {
   async confirmInspectionAvailable(
     tradeId: string,
     windowSeconds: number,
+    onSubmitted?: (hash: string) => Promise<void>,
   ): Promise<BlockchainResult> {
     Logger.info('Executing confirmInspectionAvailable', { tradeId, windowSeconds });
 
-    const result = await this.sdk.confirmInspectionAvailable(tradeId, windowSeconds, this.signer);
+    const result = await this.sdk.confirmInspectionAvailable(
+      tradeId,
+      windowSeconds,
+      this.signer,
+      onSubmitted,
+    );
 
     Logger.info('Inspection availability confirmation successful', {
       tradeId,
@@ -216,10 +270,13 @@ export class SDKClient {
     };
   }
 
-  async finalizeTrade(tradeId: string): Promise<BlockchainResult> {
+  async finalizeTrade(
+    tradeId: string,
+    onSubmitted?: (hash: string) => Promise<void>,
+  ): Promise<BlockchainResult> {
     Logger.info('Executing finalizeTrade', { tradeId });
 
-    const result = await this.sdk.finalizeAfterDisputeWindow(tradeId, this.signer);
+    const result = await this.sdk.finalizeAfterDisputeWindow(tradeId, this.signer, onSubmitted);
 
     Logger.info('Trade finalization successful', {
       tradeId,

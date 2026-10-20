@@ -1,3 +1,8 @@
+import { assertSweepFinalityForProgression } from '../../core/sweepFinalityProgression';
+import {
+  assertFreshTreasuryFinalizedEvidence,
+  type TreasuryFinalizedEvidence,
+} from '../../core/finalizedTransaction';
 /**
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -20,6 +25,7 @@ import { listTransitionActors, recordTransitionActor } from './transitionActors'
 import { upsertTreasuryClaimEventWith, type TreasuryClaimEventUpsert } from './treasuryClaims';
 
 interface SweepBatchStatusUpdate {
+  finalizedSweepEvidence?: TreasuryFinalizedEvidence;
   batchId: number;
   status: SweepBatchStatus;
   actor: string;
@@ -82,6 +88,9 @@ async function applySweepBatchStatusUpdate(
   if (sweepTransitionRequiresCanonicalEntries(data.status)) {
     await assertSweepBatchEntriesCanonical(client, data.batchId);
   }
+
+  if (data.status === 'HANDED_OFF' || data.status === 'CLOSED')
+    assertSweepFinalityForProgression(existing, data.finalizedSweepEvidence);
 
   const approvalRequestedAt =
     data.status === 'PENDING_APPROVAL' ? new Date() : existing.approval_requested_at;
@@ -162,6 +171,7 @@ async function applySweepBatchStatusUpdate(
  * without ever executing the batch.
  */
 export async function recordSweepBatchExecution(data: {
+  finalizedEvidence: TreasuryFinalizedEvidence;
   claim: TreasuryClaimEventUpsert & { matchedSweepBatchId: number };
   actor: string;
   metadata?: Record<string, unknown>;
@@ -173,9 +183,28 @@ export async function recordSweepBatchExecution(data: {
 
     // The batch is locked before the claim row, the order the status update
     // takes it in, so a concurrent transition waits here instead of deadlocking.
-    await client.query(`SELECT id FROM sweep_batches WHERE id = $1 FOR UPDATE`, [
-      data.claim.matchedSweepBatchId,
-    ]);
+    const locked = await client.query<{ metadata: Record<string, unknown> }>(
+      `SELECT metadata FROM sweep_batches WHERE id=$1 FOR UPDATE`,
+      [data.claim.matchedSweepBatchId],
+    );
+    const lockedBatch = locked.rows[0];
+    if (!lockedBatch) throw new Error('Sweep batch not found');
+    assertFreshTreasuryFinalizedEvidence(
+      data.finalizedEvidence,
+      data.claim.txHash,
+      String(data.claim.blockNumber),
+    );
+    const recorded = lockedBatch.metadata.settlementFinalizedEvidence as
+      Record<string, unknown> | undefined;
+    if (
+      recorded &&
+      (recorded.policyVersion !== data.finalizedEvidence.policyVersion ||
+        recorded.chainId !== data.finalizedEvidence.chainId ||
+        recorded.transactionHash !== data.finalizedEvidence.transactionHash ||
+        recorded.blockNumber !== data.finalizedEvidence.blockNumber ||
+        recorded.blockHash !== data.finalizedEvidence.blockHash)
+    )
+      throw new Error('Original finalized sweep evidence requires governed reconciliation');
     const claimEvent = await upsertTreasuryClaimEventWith(client, data.claim);
     const batch = await applySweepBatchStatusUpdate(client, {
       batchId: data.claim.matchedSweepBatchId,
@@ -187,6 +216,7 @@ export async function recordSweepBatchExecution(data: {
       metadata: {
         ...(data.metadata ?? {}),
         matchedTreasuryClaimEventId: claimEvent.source_event_id,
+        settlementFinalizedEvidence: recorded ?? data.finalizedEvidence,
       },
     });
 

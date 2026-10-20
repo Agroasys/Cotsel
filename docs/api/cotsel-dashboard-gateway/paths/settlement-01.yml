@@ -79,6 +79,8 @@ paths:
                           - ricardianDocumentRegistration
                           - atomicExecutionEventCallbackOutbox
                           - durableOracleExecutionEvents
+                          - immutableUserActionBindings
+                          - enabledUserActions
                         properties:
                           ricardianDocumentRegistration:
                             type: boolean
@@ -86,6 +88,14 @@ paths:
                             type: boolean
                           durableOracleExecutionEvents:
                             type: boolean
+                          immutableUserActionBindings:
+                            type: boolean
+                            const: false
+                          enabledUserActions:
+                            type: array
+                            maxItems: 0
+                            items:
+                              type: string
                   timestamp:
                     type: string
                     format: date-time
@@ -138,7 +148,8 @@ paths:
       description: |
         Service-authenticated, idempotent execution step used after handoff ingress. The gateway maps the stored
         settlement phase to the matching oracle command. It supports custody-and-document release, standard or
-        packaged-local inspection availability, buyer inspection acceptance, and notice-deadline finalization.
+        packaged-local inspection availability and notice-deadline finalization. Buyer inspection acceptance
+        requires the existing buyer-signed user-action route. Stored phases cannot be substituted.
         Governed dispute resolutions are deliberately rejected and must follow their administrative workflow.
         The stored trade identifier must be a numeric on-chain Cotsel trade id.
       operationId: executeSettlementHandoffOracleProgression
@@ -269,12 +280,13 @@ paths:
     post:
       tags:
         - Settlement
-      summary: Execute a backend-authorized gasless user action
+      summary: Disabled pending reviewed lifecycle-action support
+      deprecated: true
       description: |
-        Service-authenticated Cotsel execution boundary for gasless escrow user actions after trade creation.
-        Supported actions are open dispute, cancel locked timeout, refund in-transit timeout, and finalize after
-        dispute window. Cotsel validates the signed user-action payload, simulates the allowlisted contract call,
-        signs/broadcasts with the configured executor key, and records settlement lifecycle events.
+        This service-authenticated compatibility endpoint rejects every user action with
+        settlement_client_upgrade_required before accepting an execution event, simulating,
+        reserving a signer, or broadcasting. Immutable user-action bindings and complete
+        reviewed Agroasys journeys must ship before any action is enabled. Existing observation continues.
       operationId: createGaslessUserActionExecution
       security: []
       parameters:
@@ -307,6 +319,39 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '409':
           $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /wallet/usdc/gasless-transfers/{transferId}/outcomes:
+    get:
+      tags:
+        - Settlement
+      summary: Observe retained original wallet execution outcomes
+      description: |
+        Requires signed service authentication with a fresh nonce. Returns only outcomes recorded for the
+        authenticated issuing service and original platform transfer ID. This read does not broadcast,
+        issue authorizations, retire signatures, or establish Agroasys accounting success. Legacy records
+        without an issuing service identity are not returned. Consumers independently verify each hash.
+      operationId: observeSponsoredWalletUsdcTransfer
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: transferId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{1,128}$'
+      responses:
+        '200':
+          description: Retained service-bound transaction candidates, possibly empty.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletUsdcExecutionObservationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
         '503':
           $ref: '#/components/responses/UpstreamUnavailableError'
   /wallet/usdc/gasless-transfers:
