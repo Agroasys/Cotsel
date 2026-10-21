@@ -70,6 +70,18 @@ describe('test-only paired bridge protocol boundary', () => {
       }),
     ).toMatchObject({ command: 'inspectCounters' });
   });
+  test.each([
+    'https://rpc.example.test',
+    'http://127.0.0.1.evil.test:8545',
+    'http://user@127.0.0.1:8545',
+    'http://127.0.0.1:8545/path',
+    'file:///tmp/rpc',
+  ])('rejects non-loopback local chain transport %s', async (url) => {
+    const seed = await start();
+    expect(() =>
+      parsePairedCommand({ ...seed, localRpcUrls: [url, 'http://localhost:8546'] }),
+    ).toThrow();
+  });
   test.each(['unexpected_sql', 'privateKey', 'fundingApproved', 'enableProduction'])(
     'rejects extra authority/config key %s',
     async (key) => {

@@ -2,6 +2,7 @@
 // Controlled ports only: local fixture signatures, no network or chain submission.
 import {
   FeeData,
+  JsonRpcProvider,
   Transaction,
   Wallet,
   type Block,
@@ -28,25 +29,30 @@ export function pairedLifecyclePorts(
   let signerInvocations = 0,
     broadcastCalls = 0,
     fundingReads = 0;
-  const witnesses: UserActionFundingWitness[] = seed.fundingWitnesses.map((value) => ({
-    getNetwork: async () => {
-      fundingReads++;
-      return { chainId: BigInt(value.chainId) } as Network;
-    },
-    getTransactionReceipt: async (hash: string) => {
-      fundingReads++;
-      return hash.toLowerCase() === value.receipt.hash
-        ? (structuredClone(value.receipt) as unknown as TransactionReceipt)
-        : null;
-    },
-    getBlock: async (height) => {
-      fundingReads++;
-      const number = height === 'finalized' ? value.finalizedBlockNumber : Number(height);
-      return structuredClone(
-        value.blocks.find((block) => block.number === number) ?? null,
-      ) as Block | null;
-    },
-  }));
+  const local = seed.localRpcUrls?.map(
+    (url) => new JsonRpcProvider(url, undefined, { cacheTimeout: -1 }),
+  );
+  const witnesses: UserActionFundingWitness[] =
+    local ??
+    seed.fundingWitnesses.map((value) => ({
+      getNetwork: async () => {
+        fundingReads++;
+        return { chainId: BigInt(value.chainId) } as Network;
+      },
+      getTransactionReceipt: async (hash: string) => {
+        fundingReads++;
+        return hash.toLowerCase() === value.receipt.hash
+          ? (structuredClone(value.receipt) as unknown as TransactionReceipt)
+          : null;
+      },
+      getBlock: async (height) => {
+        fundingReads++;
+        const number = height === 'finalized' ? value.finalizedBlockNumber : Number(height);
+        return structuredClone(
+          value.blocks.find((block) => block.number === number) ?? null,
+        ) as Block | null;
+      },
+    }));
   const wallet = new Wallet('0x' + '77'.repeat(32));
   const sign = async (tx: TransactionRequest) => {
     await pauseSigning();
@@ -58,13 +64,21 @@ export function pairedLifecyclePorts(
     escrowAddress: binding.escrowAddress,
     usdcAddress: binding.tokenAddress,
     provider: {
-      call: async () => '0x',
-      estimateGas: async () => 100_000n,
+      call: async (tx) => (local ? local[0]!.call(tx) : '0x'),
+      estimateGas: async (tx) => (local ? local[0]!.estimateGas(tx) : 100_000n),
       getBalance: async () => 10n ** 18n,
       getFeeData: async () => new FeeData(null, 2n, 1n),
-      getTransactionCount: async () => 7,
+      getTransactionCount: async (address, tag) =>
+        local ? local[0]!.getTransactionCount(address, tag) : 7,
       broadcastTransaction: async (signed) => {
         broadcastCalls++;
+        if (local) {
+          const results = await Promise.all(
+            local.map((provider) => provider.broadcastTransaction(signed)),
+          );
+          await Promise.all(results.map((result) => result.wait()));
+          return results[0]!;
+        }
         // Local port retains the real signed identity; no network submission occurs.
         return { hash: Transaction.from(signed).hash!, wait: async () => null } as never;
       },
@@ -125,6 +139,7 @@ export function pairedLifecyclePorts(
         witnesses,
         value,
       ),
+    close: () => local?.forEach((provider) => provider.destroy()),
     counters: () => ({ signerInvocations, broadcastCalls, fundingReads }),
   };
 }

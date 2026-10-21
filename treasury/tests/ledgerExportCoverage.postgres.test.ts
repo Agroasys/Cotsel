@@ -62,14 +62,21 @@ describePostgres('treasury ledger export coverage', () => {
     await admin?.end();
   }, 60000);
 
-  async function insertEntry(suffix: string, withPayoutEvent: boolean): Promise<number> {
+  // Explicit timestamps keep cutoff behavior independent of host/database clock skew.
+  const cutoff = new Date('2026-01-01T00:00:00.000Z');
+
+  async function insertEntry(
+    suffix: string,
+    withPayoutEvent: boolean,
+    createdAt: Date = cutoff,
+  ): Promise<number> {
     const result = await pool.query<{ id: number }>(
       `INSERT INTO treasury_ledger_entries (
          entry_key, trade_id, tx_hash, block_number, event_name,
-         component_type, amount_raw, source_timestamp
-       ) VALUES ($1, $2, $3, 100, 'PlatformFeesPaidStage1', 'PLATFORM_FEE', '1000', NOW())
+         component_type, amount_raw, source_timestamp, created_at
+       ) VALUES ($1, $2, $3, 100, 'PlatformFeesPaidStage1', 'PLATFORM_FEE', '1000', $4, $4)
        RETURNING id`,
-      [`export-${suffix}`, `trade-${suffix}`, `0xtx-${suffix}`],
+      [`export-${suffix}`, `trade-${suffix}`, `0xtx-${suffix}`, createdAt],
     );
     const id = result.rows[0].id;
 
@@ -88,7 +95,6 @@ describePostgres('treasury ledger export coverage', () => {
     const orphanId = await insertEntry('orphan', false);
     await insertEntry('normal', true);
 
-    const cutoff = new Date();
     const snapshot = await queries.getLedgerExportSnapshot(cutoff);
     const page = await queries.getLedgerEntriesForExport({ cutoff, cursor: null, limit: 100 });
 
@@ -104,7 +110,6 @@ describePostgres('treasury ledger export coverage', () => {
   });
 
   it('scans every candidate exactly once across keyset pages', async () => {
-    const cutoff = new Date();
     const snapshot = await queries.getLedgerExportSnapshot(cutoff);
 
     const seen: number[] = [];
@@ -125,9 +130,8 @@ describePostgres('treasury ledger export coverage', () => {
   });
 
   it('excludes rows created after the cutoff', async () => {
-    const cutoff = new Date();
     const before = await queries.getLedgerExportSnapshot(cutoff);
-    await insertEntry('after-cutoff', true);
+    await insertEntry('after-cutoff', true, new Date(cutoff.getTime() + 1));
     const after = await queries.getLedgerExportSnapshot(cutoff);
     const page = await queries.getLedgerEntriesForExport({ cutoff, cursor: null, limit: 100 });
 

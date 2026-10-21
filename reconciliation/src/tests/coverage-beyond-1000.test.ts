@@ -125,8 +125,8 @@ test('every trade beyond the former 1,000 cap is enumerated exactly once', () =>
 
   assert.equal(enumerated.length, Number(CHAIN_TRADE_COUNT));
   assert.equal(new Set(enumerated).size, Number(CHAIN_TRADE_COUNT));
-  assert.equal(enumerated[0], '1');
-  assert.equal(enumerated[enumerated.length - 1], CHAIN_TRADE_COUNT.toString());
+  assert.equal(enumerated[0], '0');
+  assert.equal(enumerated[enumerated.length - 1], (CHAIN_TRADE_COUNT - 1n).toString());
   assert.equal(finalCursor, CHAIN_TRADE_COUNT);
 
   // 2,500 trades over a 1,000 budget: three runs, and only the last is complete.
@@ -134,9 +134,9 @@ test('every trade beyond the former 1,000 cap is enumerated exactly once', () =>
   assert.deepEqual(
     runs.map((run) => [run.from.toString(), run.to.toString(), run.tail.toString()]),
     [
-      ['1', '1000', '1500'],
-      ['1001', '2000', '500'],
-      ['2001', '2500', '0'],
+      ['0', '999', '1500'],
+      ['1000', '1999', '500'],
+      ['2000', '2499', '0'],
     ],
   );
   assert.deepEqual(

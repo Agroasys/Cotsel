@@ -66,7 +66,7 @@ export async function verifySettlementProjectionCoverage(
   }
   if (tradeIds.size !== 1) return null;
   const [tradeId] = tradeIds;
-  if (!decimal(tradeId) || tradeId === '0') return null;
+  if (!decimal(tradeId)) return null;
   const reconciliationUrl = new URL(config.reconciliationCoverageUrl);
   reconciliationUrl.searchParams.set('tradeId', tradeId);
   reconciliationUrl.searchParams.set('finalizedBlockNumber', String(finalizedBlockNumber));

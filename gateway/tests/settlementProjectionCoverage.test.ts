@@ -28,7 +28,7 @@ const receipt = {
   blockNumber: 100,
   logs: [{ address: config.escrowAddress, ...event }],
 };
-function fixture() {
+function fixture(tradeId = '7') {
   const indexer = {
     service: 'indexer',
     ready: true,
@@ -46,7 +46,7 @@ function fixture() {
     observedAt: new Date().toISOString(),
     coverage: {
       runKey: 'retained-run',
-      tradeId: '7',
+      tradeId,
       verifiedAt: new Date().toISOString(),
       evidence: {
         version: 'cotsel.reconciliation-coverage.v1',
@@ -69,11 +69,37 @@ function fixture() {
         ),
     );
   const canonical = jest.fn().mockResolvedValue(true);
-  const verify = () => verifySettlementProjectionCoverage(config, receipt as never, 115, canonical);
+  const observed =
+    tradeId === '7'
+      ? receipt
+      : {
+          ...receipt,
+          logs: [
+            {
+              address: config.escrowAddress,
+              ...abi.encodeEventLog(abi.getEvent('TradeLocked')!, [
+                BigInt(tradeId),
+                `0x${'3'.repeat(40)}`,
+                `0x${'4'.repeat(40)}`,
+                100n,
+                10n,
+                10n,
+                40n,
+                40n,
+                `0x${'a'.repeat(64)}`,
+              ]),
+            },
+          ],
+        };
+  const verify = () =>
+    verifySettlementProjectionCoverage(config, observed as never, 115, canonical);
   return { indexer, reconciliation, fetch, canonical, verify };
 }
 describe('retained indexer and reconciliation financial coverage', () => {
   afterEach(() => jest.restoreAllMocks());
+  test('verifies the unchanged escrow first trade, whose ID is zero', async () => {
+    await expect(fixture('0').verify()).resolves.toMatchObject({ tradeId: '0' });
+  });
   test('requires an actual indexed checkpoint and a matching finalized run that includes the trade', async () => {
     const f = fixture();
     await expect(f.verify()).resolves.toMatchObject({

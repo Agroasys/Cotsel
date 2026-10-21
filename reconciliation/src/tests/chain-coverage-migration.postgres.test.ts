@@ -259,7 +259,7 @@ test(
 );
 
 test(
-  'financial coverage uses a retained finalized anchor and cannot bypass newer drift',
+  'financial coverage uses UTC completion independently of Node timezone and cannot bypass newer drift',
   { skip: !dockerAvailable },
   async () => {
     await withMigratedDatabase(async (pool) => {
@@ -267,7 +267,7 @@ test(
         const result = await pool.query(
           `INSERT INTO reconcile_runs(run_key,mode,status,completed_at,drift_count,
         coverage_complete,indexer_enumeration_truncated,coverage_to_block,chain_evidence)
-        VALUES ($1,'DAEMON','COMPLETED',NOW(),$2,true,false,$3,$4::jsonb) RETURNING id`,
+        VALUES ($1,'DAEMON','COMPLETED',($5::timestamptz AT TIME ZONE 'UTC'),$2,true,false,$3,$4::jsonb) RETURNING id`,
           [
             key,
             drift,
@@ -276,6 +276,7 @@ test(
               version: 'cotsel.reconciliation-coverage.v1',
               blockNumber: String(height),
             }),
+            new Date(Date.now() - 1000),
           ],
         );
         await pool.query(
@@ -289,6 +290,9 @@ test(
         (await readFinancialCoverage(pool as never, '7', '150', 60_000))?.runKey,
         'retained-clean',
       );
+      await pool.query("SET TIME ZONE 'Africa/Dar_es_Salaam'");
+      assert.equal(await readFinancialCoverage(pool as never, '7', '150', 60_000), null);
+      await pool.query("SET TIME ZONE 'UTC'");
       assert.equal(await readFinancialCoverage(pool as never, '7', '99', 60_000), null);
       assert.equal(await readFinancialCoverage(pool as never, '8', '150', 60_000), null);
       await pool.query(
