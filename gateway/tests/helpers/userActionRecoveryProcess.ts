@@ -254,6 +254,8 @@ async function run(message: RecoveryProcessInput) {
           router.post(
             '/test-only/user-action',
             requestRateLimiter.middleware,
+            // The shared-edge write limiter runs before auth; CodeQL models only known packages.
+            // codeql[js/missing-rate-limiting]
             createServiceAuthMiddleware({
               enabled: true,
               maxSkewSeconds: 300,
