@@ -335,8 +335,8 @@
     },
     {
       "component": "gateway",
-      "headIdentity": "202610160014_funded_progression_binding",
-      "checksumSha256": "810a5a75935a7661d0d78a10fcd37e60da63ba2c83a238b7701e67339c3c37ee"
+      "headIdentity": "202610180016_user_action_requests",
+      "checksumSha256": "551df0d3ebf8cb1ee123d8327d81046869db72dd2cb6d484d1d8b8e054665db9"
     },
     {
       "component": "indexer",

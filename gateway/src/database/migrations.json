@@ -92,6 +92,20 @@
       "file": "schema/014_funded_progression_binding.sql",
       "sha256": "169546a00cdd43b2a613dd796d4bf2370db0cfda4f96a08d4e9d09b010e7e5ac",
       "schema_sha256": "55ea2afec5d3770d663a74521627bbfc4ecd117b5e46fa44ed1a3f2e42d6887b"
+    },
+    {
+      "version": "202610170015",
+      "name": "user_action_binding",
+      "file": "schema/015_user_action_binding.sql",
+      "sha256": "3203a934e6a2cf4eb90d5284cb40ffe4e31635e1d24bfc46b7d062ccb9e7b041",
+      "schema_sha256": "39b1094d7ece3db3088ebe8f08f030d658062941ec09160918a35db97d7ea029"
+    },
+    {
+      "version": "202610180016",
+      "name": "user_action_requests",
+      "file": "schema/016_user_action_requests.sql",
+      "sha256": "9fac7b6061994f44a39c3df60e9126a880a052cba14a6f1ba40c7c6ef8ab4841",
+      "schema_sha256": "32f16444995685ae8df1c5fd8154d1784959d812faff77d6a757492ff98aba3a"
     }
   ]
 }

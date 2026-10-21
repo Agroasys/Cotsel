@@ -106,6 +106,7 @@ export function gaslessBroadcastFailureCode(error: unknown): string {
 
 export function createPostgresGaslessTransactionOutcomeRecorder(
   pool: Pool,
+  recoveryScope?: 'user_action',
 ): GaslessTransactionOutcomeStore {
   function allowedCurrentStatuses(status: GaslessTransactionOutcomeStatus): string[] {
     if (status === 'broadcast_unknown') {
@@ -312,10 +313,11 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
            failure_code AS "failureCode",
            updated_at AS "updatedAt"
          FROM gasless_transaction_outcomes
-         WHERE outcome_status IN (
+         WHERE (outcome_status IN (
              'broadcast_pending', 'broadcast_unknown', 'confirmation_pending', 'confirmed', 'reverted'
            )
-            OR projected_outcome_status IS DISTINCT FROM outcome_status
+            OR projected_outcome_status IS DISTINCT FROM outcome_status)
+         ${recoveryScope === 'user_action' ? `AND EXISTS (SELECT 1 FROM gasless_user_action_requests r WHERE r.request_id::text=gasless_transaction_outcomes.application_request_id AND r.handoff_id=gasless_transaction_outcomes.resource_id AND gasless_transaction_outcomes.resource_type='settlement_handoff' AND r.action=gasless_transaction_outcomes.operation AND r.owner_service_id=gasless_transaction_outcomes.source_api_key_id)` : ''}
          ORDER BY COALESCE(last_reconciliation_attempt_at, created_at) ASC
          LIMIT $1`,
         [limit],

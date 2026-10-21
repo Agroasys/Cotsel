@@ -46,6 +46,14 @@ removal only after gateway access logs, contract tests, and dashboard live parit
 | `GET /ricardian/:tradeId`                                 | `gateway/src/routes/ricardian.ts`      | `ricardian.ts`             |
 | `GET /evidence/:tradeId`                                  | `gateway/src/routes/ricardian.ts`      | `evidence.ts`              |
 
+## Owned Settlement Observation Reads
+
+This service-authenticated route supports retained operation recovery. It is not a dashboard execution capability.
+
+| Route                                                                          | Cotsel module                                         | Consumer                   |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------- | -------------------------- |
+| `GET /settlement/gasless-executions/user-action/operations/:sourceOperationId` | `gateway/src/routes/settlementUserActionInventory.ts` | Issuing settlement service |
+
 ## Observed Dashboard Gateway Mutations
 
 | Route                                                        | Cotsel module                               | Dashboard adapter         |

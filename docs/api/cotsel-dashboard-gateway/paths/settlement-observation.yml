@@ -45,3 +45,40 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '503':
           description: Finalized matching evidence is not available yet.
+  /settlement/gasless-executions/user-action/operations/{sourceOperationId}:
+    get:
+      tags: [Settlement]
+      summary: Read the issuing service's retained user-action operation inventory
+      description: Existing service HMAC authentication is required. This read remains available when execution is denied. A missing or foreign operation returns the same 404; it never proves non-execution. No authorization signatures or signed bytes are returned.
+      operationId: getSettlementUserActionOperationInventory
+      security: []
+      parameters:
+        - name: sourceOperationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Bounded immutable instruction, attempt and outcome inventory owned by the authenticated service.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, timestamp]
+                properties:
+                  success: { const: true }
+                  timestamp: { type: string, format: date-time }
+                  data:
+                    $ref: '#/components/schemas/SettlementUserActionInventory'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Service authentication failed.
+        '404':
+          description: No operation belongs to the authenticated issuing service.
+        '409':
+          description: Inventory exceeds the automatic observation bound or is inconsistent.
+        '503':
+          description: Operation inventory is unavailable.

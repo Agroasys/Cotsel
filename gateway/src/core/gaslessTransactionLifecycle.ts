@@ -46,7 +46,7 @@ export class GaslessTransactionRevertedError extends GatewayError {
   }
 }
 
-function requireSignedTransactionIdentity(
+export function requireSignedTransactionIdentity(
   signedTransaction: string,
   context: GaslessTransactionContext,
 ): GaslessTransactionIdentity {

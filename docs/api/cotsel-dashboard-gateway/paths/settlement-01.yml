@@ -286,7 +286,9 @@ paths:
         This service-authenticated compatibility endpoint rejects every user action with
         settlement_client_upgrade_required before accepting an execution event, simulating,
         reserving a signer, or broadcasting. Immutable user-action bindings and complete
-        reviewed Agroasys journeys must ship before any action is enabled. Existing observation continues.
+        reviewed Agroasys journeys remain required before activation. Owning execution adapters are present
+        behind the unconditional denial; their v1 result describes controlled internal execution only.
+        Existing observation continues.
       operationId: createGaslessUserActionExecution
       security: []
       parameters:
@@ -304,7 +306,7 @@ paths:
               $ref: '#/components/schemas/SettlementGaslessUserActionExecutionRequest'
       responses:
         '202':
-          description: Gasless user-action execution submitted, or the durable outcome of an earlier ambiguous attempt returned for the same idempotency key.
+          description: Dormant contract only. The public route unconditionally denies execution; controlled owning adapters return stable accepted-request identity and retained original transaction evidence.
           content:
             application/json:
               schema:

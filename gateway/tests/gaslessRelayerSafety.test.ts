@@ -161,11 +161,9 @@ function createService(
             '100',
           )),
       simulateUserAction: async () => ({ gasEstimate: 210000n }),
-      executeUserAction: async () =>
-        buildConfirmedSubmission(
-          '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-          '100',
-        ),
+      executeUserAction: async () => {
+        throw new Error('Unexpected guarded user-action execution');
+      },
       simulateWalletUsdcTransfer: async () => ({ gasEstimate: 110000n }),
       executeWalletUsdcTransfer: async () =>
         buildConfirmedSubmission(

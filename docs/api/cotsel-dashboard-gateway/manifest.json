@@ -14,7 +14,7 @@
     "paths/ricardian-01.yml",
     "paths/evidence-01.yml",
     "paths/settlement-01.yml",
-    "paths/settlement-02.yml",
+    "paths/settlement-observation.yml",
     "paths/governance-01.yml",
     "paths/governance-02.yml",
     "paths/governance-03.yml",
@@ -43,6 +43,8 @@
     "components/schemas-treasury-03.yml",
     "components/schemas-treasury-04.yml",
     "components/schemas-compliance-01.yml",
-    "components/schemas-settlement-execution-binding.yml"
+    "components/schemas-settlement-execution-binding.yml",
+    "components/schemas-settlement-user-action-binding.yml",
+    "components/schemas-settlement-user-action-inventory.yml"
   ]
 }

@@ -60,6 +60,9 @@ export interface GaslessUserActionAuthorization {
 }
 
 export interface GaslessUserActionExecutionInput {
+  actionPackageId?: string;
+  sourceOperationId?: string;
+  approvalScopeFingerprint?: string;
   action: GaslessUserAction;
   handoffId: string;
   chainId: number;
@@ -121,6 +124,24 @@ export interface GaslessExecutionReceipt {
   executorBalanceWei: string;
 }
 
+export interface GaslessUserActionExecutionResult {
+  schemaVersion: 'cotsel.user-action-execution.v1';
+  requestId: string;
+  sourceOperationId: string;
+  actionPackageId: string;
+  handoffId: string;
+  action: GaslessUserAction;
+  requestFingerprint: string;
+  executionStatus: 'accepted' | 'signing';
+  transactionHash: string | null;
+  attempts: Array<{ eventType: string; transactionHash: string | null }>;
+  outcomes: Array<{
+    transactionHash: string;
+    observedTransactionHash: string | null;
+    outcomeStatus: string;
+  }>;
+}
+
 export interface GaslessExecutionSubmission {
   txHash: string;
   receipt?: GaslessExecutionReceipt;
@@ -171,7 +192,9 @@ export interface GaslessSettlementExecutor {
   simulateUserAction(
     input: GaslessUserActionExecutionInput,
   ): Promise<{ gasEstimate?: bigint | string | number | null }>;
-  executeUserAction(input: GaslessUserActionExecutionInput): Promise<GaslessExecutionSubmission>;
+  executeUserAction(
+    input: GaslessUserActionExecutionInput,
+  ): Promise<GaslessUserActionExecutionResult>;
   simulateWalletUsdcTransfer(
     input: GaslessWalletUsdcTransferExecutionInput,
   ): Promise<{ gasEstimate?: bigint | string | number | null }>;

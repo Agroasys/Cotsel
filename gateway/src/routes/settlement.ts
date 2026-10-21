@@ -1,3 +1,6 @@
+import { parseOwnedUserAction } from '../core/userActionEngine/ingress';
+import { createUserActionInventoryRouter } from './settlementUserActionInventory';
+import type { ReadUserActionInventory } from '../core/userActionEngine/inventory';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -36,6 +39,7 @@ export interface SettlementRouterOptions {
   settlementService: SettlementService;
   settlementStore: SettlementStore;
   gaslessSettlementService?: GaslessSettlementExecutionService | null;
+  readUserActionInventory?: ReadUserActionInventory;
   gaslessTransactionOutcomes?: Pick<GaslessTransactionOutcomeStore, 'listWalletTransferOutcomes'>;
   oracleSettlementProgressionService?: OracleSettlementProgressionService | null;
   ricardianClient?: RicardianClient | null;
@@ -197,6 +201,7 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
   });
 
   router.use('/settlement', serviceAuth);
+  router.use(createUserActionInventoryRouter(options.readUserActionInventory));
   router.use('/wallet/usdc/gasless-transfers', (req, _res, next) => {
     if (req.method !== 'GET' && !options.config.settlementIngressEnabled) {
       next(
@@ -489,7 +494,10 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           });
         }
 
-        return requireReviewedUserActionCapability();
+        requireReviewedUserActionCapability();
+        return options.gaslessSettlementService!.executeUserAction(
+          parseOwnedUserAction(req.body, getRequestId(req), getServiceApiKeyId(req)),
+        );
       },
       res,
       next,

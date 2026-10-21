@@ -1,3 +1,5 @@
+import type { UserActionAdapterBinding } from './userActionEngine/adapter';
+import type { UserActionFundingVerifier } from './userActionFundingVerification';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -13,6 +15,7 @@ import type {
   GaslessRelayerReadinessSnapshot,
   GaslessSettlementExecutor,
   GaslessUserActionExecutionInput,
+  GaslessUserActionExecutionResult,
   GaslessWalletUsdcTransferExecutionInput,
 } from './gaslessExecutionTypes';
 import { createManagedSignerGaslessSettlementExecutor } from './gaslessManagedSignerExecutor';
@@ -37,6 +40,7 @@ export type {
   GaslessUserAction,
   GaslessUserActionAuthorization,
   GaslessUserActionExecutionInput,
+  GaslessUserActionExecutionResult,
   GaslessUsdcAuthorization,
   GaslessWalletUsdcTransferExecutionInput,
 } from './gaslessExecutionTypes';
@@ -61,6 +65,8 @@ export class GaslessSettlementExecutionService {
       escrowAddress: string;
       usdcAddress: string;
       requestMaxTtlSeconds: number;
+      userActionAdapter?: UserActionAdapterBinding;
+      verifyUserActionFunding?: UserActionFundingVerifier;
       broadcastPaused?: boolean;
       signerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
       rpcFallbackCount?: number;
@@ -80,7 +86,9 @@ export class GaslessSettlementExecutionService {
       broadcastLock?: GaslessRelayerBroadcastLock;
       now?: () => Date;
     },
-  ) {}
+  ) {
+    options.userActionAdapter?.bindRuntime(this.createWorkflowContext());
+  }
 
   async executeWalletUsdcTransfer(input: GaslessWalletUsdcTransferExecutionInput): Promise<{
     platformTransferId: string;
@@ -113,6 +121,11 @@ export class GaslessSettlementExecutionService {
       settlementService: this.settlementService,
       store: this.store,
       executor: this.executor,
+      userActionAdapter: this.options.userActionAdapter,
+      recordExecutorBalance: (balance) => {
+        this.lastExecutorBalanceWei = balance;
+      },
+      verifyUserActionFunding: this.options.verifyUserActionFunding,
       chainId: this.options.chainId,
       escrowAddress: this.options.escrowAddress,
       usdcAddress: this.options.usdcAddress,
@@ -232,7 +245,7 @@ export class GaslessSettlementExecutionService {
   }
   async executeUserAction(
     input: GaslessUserActionExecutionInput,
-  ): Promise<GaslessCreateTradeExecutionResult> {
+  ): Promise<GaslessUserActionExecutionResult> {
     return executeUserActionWorkflow(this.createWorkflowContext(), input);
   }
 }

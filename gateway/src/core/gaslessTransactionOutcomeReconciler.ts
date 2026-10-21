@@ -51,6 +51,7 @@ export class GaslessTransactionOutcomeReconciler {
     private readonly observer: GaslessOutcomeObserver,
     private readonly intervalMs: number,
     private readonly finality: GaslessFinalityVerifier,
+    private readonly beforeReconcile?: (limit: number) => Promise<void>,
   ) {}
 
   start(): void {
@@ -69,6 +70,14 @@ export class GaslessTransactionOutcomeReconciler {
     if (this.running) return;
     this.running = true;
     try {
+      try {
+        await this.beforeReconcile?.(limit);
+      } catch {
+        // Repair can never sign/submit. Its failure must not stop unrelated retained observations.
+        Logger.error('Lifecycle signed-identity repair requires recovery', {
+          reason: 'user_action_identity_repair_unavailable',
+        });
+      }
       const records = await this.store.listRecoveryCandidates(limit);
       for (const record of records) {
         try {

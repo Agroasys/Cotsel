@@ -1,3 +1,8 @@
+import type { UserActionFundingVerifier } from './userActionFundingVerification';
+import {
+  parseSettlementUserActionBinding,
+  assertUserActionMatchesBinding,
+} from './settlementUserActionBinding';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -185,3 +190,48 @@ function assertPayloadHash(
 
 export const assertCreateTradePayloadHash = assertPayloadHash;
 export const assertUserActionPayloadHash = assertPayloadHash;
+
+export type LoadUserActionHandoff = (id: string) => Promise<SettlementHandoffRecord | null>;
+/** Shared by the workflow and both executor custody paths, before signer or capacity use. */
+export async function validateBoundUserAction(
+  input: GaslessUserActionExecutionInput,
+  load: LoadUserActionHandoff | undefined,
+  tokenAddress: string,
+  verifyFunding?: UserActionFundingVerifier,
+  isCommittedReplay?: (input: GaslessUserActionExecutionInput) => Promise<boolean>,
+): Promise<void> {
+  if (
+    !load ||
+    !input.actionPackageId ||
+    !input.sourceOperationId ||
+    !input.approvalScopeFingerprint
+  )
+    return requireReviewedUserActionCapability();
+  const handoff = await load(input.handoffId);
+  if (
+    !handoff ||
+    handoff.sourceApiKeyId !== input.sourceApiKeyId ||
+    handoff.phase !== 'gasless_user_action' ||
+    handoff.settlementChannel !== 'cotsel_escrow' ||
+    handoff.tradeId !== input.tradeId ||
+    handoff.externalReference !== input.sourceOperationId
+  )
+    throw new GatewayError(
+      409,
+      'CONFLICT',
+      'Original immutable owned user-action handoff is required',
+    );
+  const binding = parseSettlementUserActionBinding(handoff.executionBinding, input.sourceApiKeyId);
+  assertUserActionMatchesBinding(binding, input, tokenAddress);
+  assertUserActionPayloadHash(input);
+  if (isCommittedReplay && (await isCommittedReplay(input))) return;
+  if (['submitted', 'confirmed', 'reconciled', 'failed'].includes(handoff.executionStatus))
+    throw new GatewayError(409, 'CONFLICT', 'Original user-action execution requires observation');
+  if (!verifyFunding)
+    throw new GatewayError(
+      503,
+      'UPSTREAM_UNAVAILABLE',
+      'Independent user-action funding verifier is required',
+    );
+  await verifyFunding(binding);
+}

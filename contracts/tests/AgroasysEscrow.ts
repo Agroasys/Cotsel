@@ -1,3 +1,4 @@
+import { registerLifecycleRaceTests } from './agroasysEscrow/lifecycle-races';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -453,4 +454,5 @@ describe('AgroasysEscrow', function () {
   registerDisputeTests(getAgroasysEscrowHarness);
   registerGovernanceTests(getAgroasysEscrowHarness);
   registerExpiryBoundaryTests(getAgroasysEscrowHarness);
+  registerLifecycleRaceTests(getAgroasysEscrowHarness);
 });

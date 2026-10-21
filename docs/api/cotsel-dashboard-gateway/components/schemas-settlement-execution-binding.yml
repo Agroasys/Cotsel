@@ -9,6 +9,7 @@
                 [
                   { '$ref': '#/components/schemas/SettlementCreateTradeBinding' },
                   { '$ref': '#/components/schemas/SettlementFundedBinding' },
+                  { '$ref': '#/components/schemas/SettlementUserActionBinding' },
                 ],
             },
           'SettlementFinalityEvidence':

@@ -1,8 +1,21 @@
+import { bindUserActionCustodyPolicy } from './userActionEngine/custodyBinding';
+import {
+  requireUserActionAdapter,
+  type UserActionAdapterBinding,
+} from './userActionEngine/adapter';
+import {
+  createUserActionFundingVerifier,
+  type UserActionFundingVerifier,
+} from './userActionFundingVerification';
 import {
   createGaslessFinalityVerifier,
   type GaslessFinalityVerifier,
 } from './gaslessChainFinality';
-import { requireReviewedUserActionCapability } from './gaslessExecutionValidation';
+import {
+  requireReviewedUserActionCapability,
+  validateBoundUserAction,
+  type LoadUserActionHandoff,
+} from './gaslessExecutionValidation';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -75,6 +88,9 @@ function buildSigningRequestId(input: {
 export function createManagedSignerGaslessSettlementExecutor(
   config: ManagedSignerGaslessConfig,
   dependencies?: {
+    userActionAdapter?: UserActionAdapterBinding;
+    loadUserActionHandoff?: LoadUserActionHandoff;
+    verifyUserActionFunding?: UserActionFundingVerifier;
     provider?: GaslessManagedProvider;
     finalityVerifier?: GaslessFinalityVerifier;
     signerTransport?: ManagedSignerTransport;
@@ -83,6 +99,8 @@ export function createManagedSignerGaslessSettlementExecutor(
     nonceReservationStore: GaslessNonceReservationStore;
   },
 ): GaslessSettlementExecutor {
+  const verifyFunding =
+    dependencies?.verifyUserActionFunding ?? createUserActionFundingVerifier(config);
   const configuredCustodyMode = config.gaslessSignerCustodyMode;
   if (configuredCustodyMode !== 'kms' && configuredCustodyMode !== 'mpc') {
     throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Gasless managed signer mode is invalid');
@@ -372,6 +390,15 @@ export function createManagedSignerGaslessSettlementExecutor(
     );
   }
 
+  dependencies.userActionAdapter?.bindCustody(
+    bindUserActionCustodyPolicy(config, {
+      provider,
+      nonces: nonceReservationStore,
+      outcomes: transactionOutcomeRecorder,
+      finality,
+      signer: { mode: custodyMode, transport: signerTransport },
+    }),
+  );
   return {
     async simulateCreateTrade(input) {
       const { executorAddress } = await assertSignerBalance();
@@ -409,12 +436,28 @@ export function createManagedSignerGaslessSettlementExecutor(
       };
     },
 
-    async simulateUserAction() {
-      return requireReviewedUserActionCapability();
+    async simulateUserAction(input) {
+      await validateBoundUserAction(
+        input,
+        dependencies?.loadUserActionHandoff,
+        config.usdcAddress,
+        verifyFunding,
+        dependencies?.userActionAdapter?.isCommittedReplay,
+      );
+      requireReviewedUserActionCapability();
+      return requireUserActionAdapter(dependencies?.userActionAdapter).simulate(input);
     },
 
-    async executeUserAction() {
-      return requireReviewedUserActionCapability();
+    async executeUserAction(input) {
+      await validateBoundUserAction(
+        input,
+        dependencies?.loadUserActionHandoff,
+        config.usdcAddress,
+        verifyFunding,
+        dependencies?.userActionAdapter?.isCommittedReplay,
+      );
+      requireReviewedUserActionCapability();
+      return requireUserActionAdapter(dependencies?.userActionAdapter).execute(input);
     },
 
     async simulateWalletUsdcTransfer(input) {

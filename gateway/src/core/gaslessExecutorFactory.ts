@@ -1,3 +1,6 @@
+import type { UserActionAdapterBinding } from './userActionEngine/adapter';
+import type { UserActionFundingVerifier } from './userActionFundingVerification';
+import type { LoadUserActionHandoff } from './gaslessExecutionValidation';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -13,6 +16,9 @@ import type { GaslessNonceReservationStore } from './gaslessNonceReservationStor
 export function createEthersGaslessSettlementExecutor(
   config: GaslessExecutorConfig,
   dependencies?: {
+    userActionAdapter?: UserActionAdapterBinding;
+    loadUserActionHandoff?: LoadUserActionHandoff;
+    verifyUserActionFunding?: UserActionFundingVerifier;
     recordValidationEvidence?: ManagedSignerValidationRecorder;
     recordTransactionOutcome: GaslessTransactionOutcomeRecorder;
     nonceReservationStore: GaslessNonceReservationStore;
@@ -32,5 +38,8 @@ export function createEthersGaslessSettlementExecutor(
   return createRawPrivateKeyGaslessSettlementExecutor(
     config,
     dependencies.recordTransactionOutcome,
+    dependencies.loadUserActionHandoff,
+    dependencies.verifyUserActionFunding,
+    { adapter: dependencies.userActionAdapter, nonces: dependencies.nonceReservationStore },
   );
 }

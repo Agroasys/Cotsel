@@ -1,10 +1,11 @@
+import { fundedBindingFixture } from './helpers/fundedBinding';
+import { TriggerType } from '../src/types/trigger';
 /**
  * SPDX-License-Identifier: Apache-2.0
  *
  * WP-10 I-06: injected RPC, signer and database failures reach the caller only
  * as a stable code and a correlation ID; the raw text is kept in the logs.
  */
-import { fundedBindingFixture } from './helpers/fundedBinding';
 import type { NextFunction, Request, Response } from 'express';
 import { OracleController } from '../src/api/controller';
 import { errorHandler } from '../src/middleware/middleware';
@@ -62,7 +63,7 @@ describe('Oracle public errors', () => {
         body: {
           tradeId: '42',
           requestId: 'request-42',
-          fundedBinding: fundedBindingFixture(undefined, '42'),
+          fundedBinding: fundedBindingFixture(TriggerType.RELEASE_STAGE_1, '42'),
         },
         headers: { 'x-request-id': 'gateway-request-42' },
         path: '/release-stage-1',

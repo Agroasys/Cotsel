@@ -48,6 +48,8 @@ export interface GatewayConfig {
   settlementCallbackUrl?: string;
   settlementCallbackApiKey?: string;
   settlementCallbackApiSecret?: string;
+  userActionRetirementEvidenceUrl?: string;
+  userActionRetirementOwningServiceId?: string;
   settlementCallbackRequestTimeoutMs: number;
   settlementCallbackPollIntervalMs: number;
   settlementCallbackMaxAttempts: number;

@@ -108,8 +108,13 @@ components:
           format: date-time
     SettlementGaslessUserActionExecutionRequest:
       type: object
+      additionalProperties: false
+      description: Typed request contract retained for compatibility. Execution remains disabled.
       required:
         - action
+        - actionPackageId
+        - sourceOperationId
+        - approvalScopeFingerprint
         - handoffId
         - chainId
         - contractAddress
@@ -119,6 +124,16 @@ components:
         - tradeId
         - userAuthorization
       properties:
+        actionPackageId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        sourceOperationId:
+          type: string
+          format: uuid
+        approvalScopeFingerprint:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
         action:
           type: string
           enum:
@@ -146,35 +161,14 @@ components:
           type: string
         userAddress:
           type: string
-          description: Buyer wallet that signed the requested escrow action.
+          description: Original authorized wallet that signed this exact action; unsupported journeys remain disabled.
         tradeId:
           type: string
           pattern: ^[0-9]+$
         userAuthorization:
           $ref: '#/components/schemas/SettlementGaslessUserAuthorization'
     SettlementGaslessUserActionExecutionPayload:
-      type: object
-      required:
-        - handoff
-        - acceptedEvent
-        - queuedEvent
-        - simulationEvent
-        - submittedEvent
-        - txHash
-      properties:
-        handoff:
-          $ref: '#/components/schemas/SettlementHandoff'
-        acceptedEvent:
-          $ref: '#/components/schemas/SettlementExecutionEvent'
-        queuedEvent:
-          $ref: '#/components/schemas/SettlementExecutionEvent'
-        simulationEvent:
-          $ref: '#/components/schemas/SettlementExecutionEvent'
-        submittedEvent:
-          $ref: '#/components/schemas/SettlementExecutionEvent'
-        txHash:
-          type: string
-          description: Canonical EVM transaction hash submitted by Cotsel.
+      $ref: '#/components/schemas/SettlementUserActionExecutionResult'
     SettlementGaslessUserActionExecutionResponse:
       type: object
       required:

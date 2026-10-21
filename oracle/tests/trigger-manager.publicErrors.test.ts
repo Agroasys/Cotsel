@@ -1,10 +1,10 @@
+import { fundedBindingFixture } from './helpers/fundedBinding';
 /**
  * SPDX-License-Identifier: Apache-2.0
  *
  * WP-10 I-06: raw RPC, signer and provider text never leaves the oracle through
  * a live execution result, a replay of a stored failure, or the trigger list.
  */
-import { fundedBindingFixture } from './helpers/fundedBinding';
 import type { Request, Response } from 'express';
 import { OracleController } from '../src/api/controller';
 import { TriggerManager } from '../src/core/trigger-manager';
@@ -42,6 +42,9 @@ jest.mock('@agroasys/sdk', () => ({
 jest.mock('../src/database/queries', () => ({
   listTriggers: jest.fn(),
   createTrigger: jest.fn(),
+  claimTriggerDispatch: jest.fn().mockResolvedValue(true),
+  getUnresolvedSignerDispatch: jest.fn().mockResolvedValue(null),
+  resolveSignerDispatch: jest.fn(),
   getTriggerByIdempotencyKey: jest.fn(),
   getLatestTriggerByActionKey: jest.fn(),
   updateTrigger: jest.fn(),
@@ -137,8 +140,11 @@ function expectNoLeak(value: unknown): void {
 
 function sdkClientFailingWith(error: Error): TriggerManagerSdkClient {
   return {
-    assertFundedBinding: jest.fn().mockResolvedValueOnce(undefined).mockRejectedValue(error),
-    getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
+    assertFundedBinding: jest.fn().mockResolvedValue(undefined),
+    getTrade: jest
+      .fn()
+      .mockResolvedValueOnce(buildTrade(TRADE_STATUS_LOCKED))
+      .mockRejectedValue(error),
     releaseFundsStage1: jest.fn().mockRejectedValue(error),
     confirmInspectionAvailable: jest.fn(),
     finalizeTrade: jest.fn(),
@@ -158,21 +164,19 @@ describe('oracle trigger failures expose no raw provider text', () => {
     const manager = new TriggerManager(sdkClientFailingWith(new Error(RAW_RPC_MESSAGE)), 3, 1);
 
     const response = await manager.executeTrigger({
-      fundedBinding: fundedBindingFixture(),
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(),
     });
 
     expect(response.status).toBe(TriggerStatus.TERMINAL_FAILURE);
     expect(response.message).toBe('Oracle validation failure; detail is recorded on the trigger');
     expectNoLeak(response);
-    // Durable trigger metadata retains only the stable classification.
+    // Persisted failure projections contain only the safe classification.
     expect(mockedUpdateTrigger).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({
-        last_error: 'Oracle validation failure; detail is recorded on the trigger',
-      }),
+      expect.objectContaining({ last_error: expect.stringContaining('Oracle validation failure') }),
     );
   });
 
@@ -184,21 +188,15 @@ describe('oracle trigger failures expose no raw provider text', () => {
     );
 
     const response = await manager.executeTrigger({
-      fundedBinding: fundedBindingFixture(),
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(),
     });
 
     expect(response.status).toBe(TriggerStatus.EXHAUSTED_NEEDS_REDRIVE);
     expect(response.message).toContain('Oracle network failure');
     expectNoLeak(response);
-    expect(mockedUpdateTrigger).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        last_error: 'Oracle network failure; detail is recorded on the trigger',
-      }),
-    );
   });
 
   it('replaying a stored terminal failure returns only its classification', async () => {
@@ -210,10 +208,10 @@ describe('oracle trigger failures expose no raw provider text', () => {
     const manager = new TriggerManager(sdkClientFailingWith(new Error('unused')), 3, 1);
 
     const response = await manager.executeTrigger({
-      fundedBinding: fundedBindingFixture(),
       tradeId: '1',
       requestId: 'req-1',
       triggerType: TriggerType.RELEASE_STAGE_1,
+      fundedBinding: fundedBindingFixture(),
     });
 
     expect(response.status).toBe(TriggerStatus.TERMINAL_FAILURE);

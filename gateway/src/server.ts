@@ -1,3 +1,5 @@
+import { createUserActionInventoryReader } from './core/userActionEngine/inventory';
+import { resolveUserActionRetirementDependency } from './config/userActionRetirement';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -98,6 +100,15 @@ const gaslessTransactionOutcomeRuntime = createGaslessTransactionOutcomeRuntime(
   settlementStore,
   settlementService,
 );
+const retirementEvidence = resolveUserActionRetirementDependency(config);
+if (
+  !retirementEvidence &&
+  (config.userActionRetirementEvidenceUrl || config.userActionRetirementOwningServiceId)
+) {
+  Logger.warn('User-action retirement dependency is unavailable', {
+    reason: 'user_action_retirement_dependency_unavailable',
+  });
+}
 const gaslessSettlementService = createConfiguredGaslessSettlementService(
   config,
   pool,
@@ -105,6 +116,7 @@ const gaslessSettlementService = createConfiguredGaslessSettlementService(
   settlementStore,
   managedSignerValidationRecorder,
   gaslessTransactionOutcomeRuntime.recorder,
+  retirementEvidence,
 );
 const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, settlementStore, {
   failedOperationWorkflow: errorHandlerWorkflow,
@@ -259,6 +271,7 @@ async function bootstrap(): Promise<void> {
       settlementStore,
       gaslessSettlementService,
       gaslessTransactionOutcomes: gaslessTransactionOutcomeRuntime.recorder,
+      readUserActionInventory: createUserActionInventoryReader(pool),
       oracleSettlementProgressionService,
       ricardianClient,
       nonceStore: settlementNonceStore,

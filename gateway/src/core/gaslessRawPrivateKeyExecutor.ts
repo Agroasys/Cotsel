@@ -1,5 +1,19 @@
+import { bindUserActionCustodyPolicy } from './userActionEngine/custodyBinding';
+import {
+  requireUserActionAdapter,
+  type UserActionAdapterBinding,
+} from './userActionEngine/adapter';
+import type { GaslessNonceReservationStore } from './gaslessNonceReservationStore';
+import {
+  createUserActionFundingVerifier,
+  type UserActionFundingVerifier,
+} from './userActionFundingVerification';
 import { createGaslessFinalityVerifier } from './gaslessChainFinality';
-import { requireReviewedUserActionCapability } from './gaslessExecutionValidation';
+import {
+  requireReviewedUserActionCapability,
+  validateBoundUserAction,
+  type LoadUserActionHandoff,
+} from './gaslessExecutionValidation';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -31,6 +45,12 @@ import {
 export function createRawPrivateKeyGaslessSettlementExecutor(
   config: GaslessExecutorConfig,
   transactionOutcomeRecorder: GaslessTransactionOutcomeRecorder,
+  loadUserActionHandoff?: LoadUserActionHandoff,
+  verifyFunding: UserActionFundingVerifier = createUserActionFundingVerifier(config),
+  userActionDependencies?: {
+    adapter?: UserActionAdapterBinding;
+    nonces: GaslessNonceReservationStore;
+  },
 ): GaslessSettlementExecutor {
   if (!config.gaslessExecutorPrivateKey) {
     throw new GatewayError(
@@ -269,6 +289,15 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     );
   }
 
+  userActionDependencies?.adapter?.bindCustody(
+    bindUserActionCustodyPolicy(config, {
+      provider,
+      nonces: userActionDependencies.nonces,
+      outcomes: transactionOutcomeRecorder,
+      finality,
+      signer: { mode: 'raw', wallet: signer },
+    }),
+  );
   return {
     async simulateCreateTrade(input) {
       return {
@@ -301,12 +330,28 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
       };
     },
 
-    async simulateUserAction() {
-      return requireReviewedUserActionCapability();
+    async simulateUserAction(input) {
+      await validateBoundUserAction(
+        input,
+        loadUserActionHandoff,
+        config.usdcAddress,
+        verifyFunding,
+        userActionDependencies?.adapter?.isCommittedReplay,
+      );
+      requireReviewedUserActionCapability();
+      return requireUserActionAdapter(userActionDependencies?.adapter).simulate(input);
     },
 
-    async executeUserAction() {
-      return requireReviewedUserActionCapability();
+    async executeUserAction(input) {
+      await validateBoundUserAction(
+        input,
+        loadUserActionHandoff,
+        config.usdcAddress,
+        verifyFunding,
+        userActionDependencies?.adapter?.isCommittedReplay,
+      );
+      requireReviewedUserActionCapability();
+      return requireUserActionAdapter(userActionDependencies?.adapter).execute(input);
     },
 
     async simulateWalletUsdcTransfer(input) {

@@ -15,7 +15,6 @@ import {
   classifyError,
   determineNextStatus,
   publicFailureMessage,
-  storedFailureMessage,
   ValidationError,
 } from '../utils/errors';
 import { incrementOracleExhaustedRetries } from '../metrics/counters';
@@ -179,7 +178,7 @@ export async function executeTriggerWithRetry(
       await updateTrigger(trigger.idempotency_key, {
         status: nextStatus,
         attempt_count: attempt,
-        last_error: storedFailureMessage(oracleError.errorType),
+        last_error: publicFailureMessage(oracleError),
         error_type: oracleError.errorType,
       });
 
