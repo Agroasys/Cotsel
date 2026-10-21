@@ -132,6 +132,31 @@ describeLocal(
       expect(response.event).toBe('result');
       return response.counters!;
     }
+    test('limits both paired and production routes before authentication or signing', async () => {
+      const f = await seed();
+      // The registration used one write request in the shared pre-authentication IP bucket.
+      // Invalid credentials must still consume quota across both route sets.
+      const invalidCaller = { apiKeyId: 'unknown', secret: 'invalid-test-only-secret' };
+      const responses = await Promise.all(
+        Array.from({ length: 21 }, (_, index) =>
+          client.http(
+            index % 2 ? f.ready.baseUrl! : f.ready.productionBaseUrl!,
+            execution,
+            'POST',
+            f.acceptedBody,
+            `denied-${index}`,
+            invalidCaller,
+          ),
+        ),
+      );
+      expect(responses.filter(({ status }) => status === 401)).toHaveLength(19);
+      expect(responses.filter(({ status }) => status === 429)).toHaveLength(2);
+      expect(await counters()).toMatchObject({
+        acceptedRequests: 0,
+        signerInvocations: 0,
+        broadcastCalls: 0,
+      });
+    });
     test.each([
       ['raw', 'finalize_after_inspection_acceptance'],
       ['kms', 'finalize_after_inspection_acceptance'],

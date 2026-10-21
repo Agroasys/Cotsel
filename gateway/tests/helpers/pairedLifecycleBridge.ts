@@ -4,7 +4,9 @@ import { readFileSync } from 'fs';
 import { createServer, type Server } from 'https';
 import { Router } from 'express';
 import { createInMemoryNonceStore } from '@agroasys/shared-auth';
+import { createHttpRateLimiter } from '@agroasys/shared-edge';
 import { createApp } from '../../src/app';
+import { gatewayRateLimitPolicy } from '../../src/httpSecurity';
 import { createSettlementRouter } from '../../src/routes/settlement';
 import { createServiceAuthMiddleware, createServiceApiKeyLookup } from '../../src/core/serviceAuth';
 import { createPostgresIdempotencyStore } from '../../src/core/idempotencyStore';
@@ -39,6 +41,7 @@ const enabled = process.env.COTSEL_PAIRED_LIFECYCLE_FIXTURE === 'true' && Boolea
 if (!enabled) process.exit(2);
 let db: Awaited<ReturnType<typeof createUserActionEnginePostgres>> | undefined;
 let server: Server | undefined;
+let rateLimiter: Awaited<ReturnType<typeof createHttpRateLimiter>> | undefined;
 let unblock: (() => void) | undefined;
 const executions = new Set<Promise<void>>();
 let commandQueue = Promise.resolve();
@@ -61,6 +64,8 @@ async function close() {
     await new Promise<void>((resolve) => server!.close(() => resolve()));
     server = undefined;
   }
+  await rateLimiter?.close();
+  rateLimiter = undefined;
   await db?.close();
   db = undefined;
 }
@@ -289,11 +294,18 @@ async function start(seed: PairedStart) {
   paired.use(actualRoutes());
   root.use('/paired', paired);
   root.use(actualRoutes());
+  rateLimiter = await createHttpRateLimiter({
+    enabled: true,
+    nodeEnv: 'test',
+    keyPrefix: 'gateway-paired-lifecycle-test',
+    classifyRoute: gatewayRateLimitPolicy,
+  });
   const app = createApp(c, {
     version: 'paired-fixture',
     commitSha: 'fixture',
     buildTime: 'fixture',
     readinessCheck: async () => [],
+    requestRateLimitMiddleware: rateLimiter.middleware,
     extraRouter: root,
   });
   server = createServer(
