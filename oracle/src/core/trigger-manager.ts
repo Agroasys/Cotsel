@@ -17,7 +17,7 @@ import {
   incrementOracleApproved,
   incrementOracleRejected,
 } from '../metrics/counters';
-import { WebhookNotifier } from '@agroasys/notifications';
+import type { Notifier } from '@agroasys/notifications';
 import { approveTrigger, rejectTrigger } from '../database/queries';
 import { NOOP_ORACLE_ACTION_LOCK, type OracleActionLock } from './oracle-action-lock';
 import { createContainmentGuard, type ContainmentGuard } from './containment-guard';
@@ -49,7 +49,7 @@ export class TriggerManager {
     private sdkClient: SDKClient,
     private maxAttempts: number = 5,
     private baseDelayMs: number = 1000,
-    private notifier?: WebhookNotifier,
+    private notifier?: Notifier,
     private manualApprovalEnabled: boolean = false,
     private readonly actionLock: OracleActionLock = NOOP_ORACLE_ACTION_LOCK,
     private readonly containmentGuard: ContainmentGuard = createContainmentGuard(),

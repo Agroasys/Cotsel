@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { createCorsOptions, createHttpRateLimiter } from '@agroasys/shared-edge';
-import { WebhookNotifier } from '@agroasys/notifications';
+import { createServiceNotifications, type NotificationDispatcher } from '@agroasys/notifications';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
 import { config } from './config';
 import { createRouter } from './api/routes';
@@ -29,6 +29,7 @@ let confirmationWorker: ConfirmationWorker;
 let indexerClient: IndexerClient;
 let requestRateLimiterClose: (() => Promise<void>) | undefined;
 let containmentGuard: ContainmentGuard | undefined;
+let notificationDispatcher: NotificationDispatcher | undefined;
 
 async function initializeDatabase(): Promise<void> {
   Logger.info('Initializing database...');
@@ -56,6 +57,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
       await containmentGuard.close();
     }
 
+    if (notificationDispatcher) {
+      await notificationDispatcher.stop();
+    }
+
     await closeConnection();
 
     Logger.info('Graceful shutdown completed');
@@ -72,13 +77,21 @@ async function bootstrap() {
 
     indexerClient = new IndexerClient(config.indexerGraphqlUrl);
 
-    const notifier = new WebhookNotifier({
+    // Critical Oracle alerts are committed to `notification_outbox` before a
+    // webhook is tried, so an outage or restart delays a page instead of losing
+    // it, and an undeliverable critical page escalates to the duty owner (H-26).
+    const serviceNotifications = createServiceNotifications({
       enabled: config.notificationsEnabled,
       webhookUrl: config.notificationsWebhookUrl,
+      escalationWebhookUrl: config.notificationsEscalationWebhookUrl,
       cooldownMs: config.notificationsCooldownMs,
       requestTimeoutMs: config.notificationsRequestTimeoutMs,
+      executor: pool,
       logger: Logger,
     });
+    const notifier = serviceNotifications.notifier;
+    notificationDispatcher = serviceNotifications.dispatcher;
+    notificationDispatcher.start();
 
     Logger.info('Validating RPC endpoints for oracle startup', {
       rpcUrl: redactRpcUrlForLogs(config.rpcUrl),

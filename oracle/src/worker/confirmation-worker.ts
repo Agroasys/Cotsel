@@ -1,4 +1,4 @@
-import { WebhookNotifier } from '@agroasys/notifications';
+import type { Notifier } from '@agroasys/notifications';
 import { IndexerClient } from '../blockchain/indexer-client';
 import { SDKClient } from '../blockchain/sdk-client';
 import { getTriggersByStatus, resolveSignerDispatch, updateTrigger } from '../database/queries';
@@ -16,7 +16,7 @@ export class ConfirmationWorker {
   constructor(
     private indexerClient: IndexerClient,
     private sdkClient: SDKClient,
-    private notifier?: WebhookNotifier,
+    private notifier?: Notifier,
   ) {}
   start(): void {
     if (this.isRunning) return;

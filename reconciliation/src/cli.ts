@@ -2,6 +2,7 @@ import { config } from './config';
 import { Logger } from './utils/logger';
 import { closeConnection, testConnection } from './database/connection';
 import { ReconciliationService } from './core/reconciler';
+import { serviceNotifications } from './core/notifications';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from './blockchain/rpc-preflight';
 import { startHealthServer } from './health-server';
 
@@ -57,6 +58,7 @@ async function bootstrap(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     Logger.warn('Received shutdown signal', { signal });
     healthServer.close();
+    await serviceNotifications.dispatcher.stop();
     await closeConnection();
     process.exit(0);
   };
@@ -68,6 +70,9 @@ async function bootstrap(): Promise<void> {
     void shutdown('SIGTERM');
   });
 
+  // The daemon drains the notification outbox on its own timer so a backlog
+  // left by a webhook outage clears between runs, not only at the end of one.
+  serviceNotifications.dispatcher.start();
   await service.runDaemon();
 }
 

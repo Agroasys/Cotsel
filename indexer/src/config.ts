@@ -44,6 +44,7 @@ export interface IndexerConfig {
   // poison-log alerting
   notificationsEnabled: boolean;
   notificationsWebhookUrl: string | null;
+  notificationsEscalationWebhookUrl: string | null;
   notificationsCooldownMs: number;
   notificationsRequestTimeoutMs: number;
 }
@@ -157,6 +158,7 @@ export function loadConfig(): IndexerConfig {
       verifyStartBlockCode: optionalEnvBoolean('VERIFY_START_BLOCK_CODE') ?? true,
       notificationsEnabled: optionalEnvBoolean('NOTIFICATIONS_ENABLED') ?? false,
       notificationsWebhookUrl: optionalEnv('NOTIFICATIONS_WEBHOOK_URL'),
+      notificationsEscalationWebhookUrl: optionalEnv('NOTIFICATIONS_ESCALATION_WEBHOOK_URL'),
       notificationsCooldownMs: optionalEnvNumber('NOTIFICATIONS_COOLDOWN_MS', 0) ?? 300000,
       notificationsRequestTimeoutMs: optionalEnvNumber('NOTIFICATIONS_REQUEST_TIMEOUT_MS') ?? 5000,
     };

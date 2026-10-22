@@ -44,7 +44,7 @@ import {
   handleTreasuryPayoutAddressUpdated,
 } from './handlers/claims';
 import { loadConfig } from './config';
-import { WebhookIndexerAlerts, type IndexerAlerts } from './alerts';
+import { createIndexerAlerts } from './alerts';
 import { createQuarantinePool, QuarantineStore } from './quarantine';
 import { haltOnPoisonLog, PoisonLogHaltError, type PoisonLogDeps } from './poisonLog';
 import { ESCROW_ABI_FINGERPRINT } from './preflight';
@@ -64,12 +64,7 @@ const quarantinePool = createQuarantinePool({
 });
 const quarantine = new QuarantineStore(quarantinePool);
 const readCheckpoint = () => readProcessorCheckpoint(quarantinePool);
-const alerts: IndexerAlerts = new WebhookIndexerAlerts({
-  enabled: config.notificationsEnabled,
-  webhookUrl: config.notificationsWebhookUrl ?? undefined,
-  cooldownMs: config.notificationsCooldownMs,
-  requestTimeoutMs: config.notificationsRequestTimeoutMs,
-});
+const { alerts, dispatcher: notificationDispatcher } = createIndexerAlerts(config, quarantinePool);
 
 function poisonLogDeps(ctx: IndexerContext): PoisonLogDeps {
   return {
@@ -934,14 +929,17 @@ export async function bootstrap(
   await processor.run(database, processBatch);
 }
 
-if (require.main === module)
+if (require.main === module) {
+  notificationDispatcher.start();
   void bootstrap().catch(async (error: unknown) => {
     logBootstrapEvent('error', 'indexer.bootstrap_failed', 'Indexer bootstrap failed', {
       error: error instanceof Error ? error.message : String(error),
     });
+    await notificationDispatcher.stop();
     await quarantinePool.end().catch(() => undefined);
     process.exit(1);
   });
+}
 
 async function getOrLoadOverviewSnapshot(ctx: IndexerContext): Promise<OverviewSnapshot> {
   const snapshot = await ctx.store.get(OverviewSnapshot, OVERVIEW_SNAPSHOT_ID);

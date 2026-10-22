@@ -57,11 +57,17 @@ const schemaExpectations = [
   },
   {
     serviceName: 'oracle',
-    tables: ['oracle_triggers', 'oracle_hmac_nonces'],
+    tables: ['oracle_triggers', 'oracle_hmac_nonces', 'notification_outbox'],
   },
   {
     serviceName: 'reconciliation',
-    tables: ['reconcile_runs', 'reconcile_drifts', 'reconcile_run_trades', 'reconcile_cursors'],
+    tables: [
+      'reconcile_runs',
+      'reconcile_drifts',
+      'reconcile_run_trades',
+      'reconcile_cursors',
+      'notification_outbox',
+    ],
   },
   {
     serviceName: 'ricardian',
