@@ -4,6 +4,7 @@ import type { NotificationEvent, NotificationLogger, NotificationTransport } fro
 import {
   sanitizeDeliveryError,
   type ClaimedEscalation,
+  type ClaimedNotification,
   type NotificationOutbox,
   type OutboxStats,
 } from './outbox';
@@ -20,6 +21,12 @@ export const NOTIFICATION_ESCALATION_TYPE = 'NOTIFICATION_ESCALATION';
 
 export interface NotificationDispatcherConfig {
   outbox: NotificationOutbox;
+  /**
+   * When false the dispatcher sends nothing and leaves every queued row as it
+   * is, so disabling notifications pauses delivery without consuming attempts
+   * or discarding the backlog. Defaults to true.
+   */
+  enabled?: boolean;
   /** The primary severity route. */
   transport: NotificationTransport;
   /**
@@ -124,6 +131,7 @@ export class NotificationDispatcher {
   private readonly logger: NotificationLogger;
   private inFlight: Promise<DispatchSummary> | null = null;
   private timer: NodeJS.Timeout | null = null;
+  private reportedDisabled = false;
 
   constructor(private readonly config: NotificationDispatcherConfig) {
     this.owner = config.owner ?? `${hostname()}:${process.pid}:${randomUUID().slice(0, 8)}`;
@@ -190,71 +198,100 @@ export class NotificationDispatcher {
       escalated: 0,
       escalationFailed: 0,
     };
-    const { outbox } = this.config;
 
+    if (this.config.enabled === false) {
+      await this.reportDisabled();
+      return summary;
+    }
+
+    const { outbox } = this.config;
     summary.deadLettered += await outbox.deadLetterExhausted(this.maxAttempts);
 
-    const claimed = await outbox.claimDue({
-      owner: this.owner,
-      leaseMs: this.leaseMs,
-      limit: this.batchSize,
-      maxAttempts: this.maxAttempts,
-    });
-
-    for (const row of claimed) {
-      try {
-        await this.config.transport.deliver(row.event);
-      } catch (error: unknown) {
-        const message = errorMessage(error);
-        const state = await outbox.markFailed({
-          id: row.id,
-          owner: this.owner,
-          error: message,
-          retryDelayMs: outboxRetryDelayMs(
-            row.attempts,
-            this.retryBaseDelayMs,
-            this.retryMaxDelayMs,
-          ),
-          maxAttempts: this.maxAttempts,
-        });
-        const meta = {
-          outboxId: row.id,
-          source: row.event.source,
-          type: row.event.type,
-          severity: row.event.severity,
-          attempt: row.attempts,
-          maxAttempts: this.maxAttempts,
-          error: sanitizeDeliveryError(message),
-        };
-        if (state === 'DEAD_LETTER') {
-          summary.deadLettered += 1;
-          this.logger.error('Notification dead-lettered after exhausting delivery attempts', meta);
-        } else {
-          summary.retried += 1;
-          this.logger.warn('Notification delivery failed; it stays queued for retry', meta);
-        }
-        continue;
+    // One row is claimed immediately before its send, never a batch up front:
+    // a batch leased together would spend its lease waiting behind earlier
+    // sends, and a replica could then reclaim and deliver rows this pass still
+    // goes on to send.
+    const attempted: string[] = [];
+    for (let sent = 0; sent < this.batchSize; sent += 1) {
+      const [row] = await outbox.claimDue({
+        owner: this.owner,
+        leaseMs: this.leaseMs,
+        limit: 1,
+        maxAttempts: this.maxAttempts,
+        excludeIds: attempted,
+      });
+      if (!row) {
+        break;
       }
-
-      if (await outbox.markDelivered(row.id, this.owner)) {
-        summary.delivered += 1;
-        this.logger.info('Notification delivered from outbox', {
-          outboxId: row.id,
-          source: row.event.source,
-          type: row.event.type,
-          severity: row.event.severity,
-          attempt: row.attempts,
-        });
-      } else {
-        this.logger.warn('Notification delivered after its outbox lease was lost', {
-          outboxId: row.id,
-          type: row.event.type,
-        });
-      }
+      attempted.push(row.id);
+      await this.deliverClaimed(row, summary);
     }
 
     await this.escalate(summary);
     return summary;
+  }
+
+  private async reportDisabled(): Promise<void> {
+    if (this.reportedDisabled) {
+      return;
+    }
+    this.reportedDisabled = true;
+    const { pending, deadLetters } = await this.config.outbox.stats(this.escalateAfterMs);
+    if (pending > 0 || deadLetters > 0) {
+      this.logger.warn('Notifications are disabled; queued notifications are retained unsent', {
+        pending,
+        deadLetters,
+      });
+    }
+  }
+
+  private async deliverClaimed(row: ClaimedNotification, summary: DispatchSummary): Promise<void> {
+    const { outbox } = this.config;
+    try {
+      await this.config.transport.deliver(row.event);
+    } catch (error: unknown) {
+      const message = errorMessage(error);
+      const state = await outbox.markFailed({
+        id: row.id,
+        owner: this.owner,
+        error: message,
+        retryDelayMs: outboxRetryDelayMs(row.attempts, this.retryBaseDelayMs, this.retryMaxDelayMs),
+        maxAttempts: this.maxAttempts,
+      });
+      const meta = {
+        outboxId: row.id,
+        source: row.event.source,
+        type: row.event.type,
+        severity: row.event.severity,
+        attempt: row.attempts,
+        maxAttempts: this.maxAttempts,
+        error: sanitizeDeliveryError(message),
+      };
+      if (state === 'DEAD_LETTER') {
+        summary.deadLettered += 1;
+        this.logger.error('Notification dead-lettered after exhausting delivery attempts', meta);
+      } else {
+        summary.retried += 1;
+        this.logger.warn('Notification delivery failed; it stays queued for retry', meta);
+      }
+      return;
+    }
+
+    if (await outbox.markDelivered(row.id, this.owner)) {
+      summary.delivered += 1;
+      this.logger.info('Notification delivered from outbox', {
+        outboxId: row.id,
+        source: row.event.source,
+        type: row.event.type,
+        severity: row.event.severity,
+        attempt: row.attempts,
+      });
+    } else {
+      this.logger.warn('Notification delivered after its outbox lease was lost', {
+        outboxId: row.id,
+        type: row.event.type,
+      });
+    }
   }
 
   private async escalate(summary: DispatchSummary): Promise<void> {
@@ -271,13 +308,18 @@ export class NotificationDispatcher {
       return;
     }
 
-    const escalations = await outbox.claimEscalations({
-      escalateAfterMs: this.escalateAfterMs,
-      leaseMs: this.leaseMs,
-      limit: this.batchSize,
-    });
-
-    for (const escalation of escalations) {
+    const attempted: string[] = [];
+    for (let sent = 0; sent < this.batchSize; sent += 1) {
+      const [escalation] = await outbox.claimEscalations({
+        escalateAfterMs: this.escalateAfterMs,
+        leaseMs: this.leaseMs,
+        limit: 1,
+        excludeIds: attempted,
+      });
+      if (!escalation) {
+        break;
+      }
+      attempted.push(escalation.id);
       try {
         await escalationTransport.deliver(buildEscalationEvent(escalation));
         await outbox.markEscalated(escalation.id, escalation.reason);

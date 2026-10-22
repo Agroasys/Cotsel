@@ -80,7 +80,13 @@ const MAX_ERROR_LENGTH = 500;
  * like a URL is removed, because a webhook URL is a credential.
  */
 export function sanitizeDeliveryError(message: string): string {
-  const redacted = message.replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, '[redacted-url]');
+  // A linear token scan rather than a URL regex: the message is untrusted and a
+  // backtracking pattern over it is a denial-of-service risk. Any
+  // whitespace-delimited token containing a scheme separator is dropped whole.
+  const redacted = message
+    .split(/(\s+)/)
+    .map((token) => (token.includes('://') ? '[redacted-url]' : token))
+    .join('');
   return redacted.length > MAX_ERROR_LENGTH ? `${redacted.slice(0, MAX_ERROR_LENGTH)}…` : redacted;
 }
 
@@ -151,13 +157,15 @@ export class NotificationOutbox {
    * `SKIP LOCKED` lets several replicas drain the same outbox without sending a
    * row twice, and the attempt is counted at claim time so a worker that dies
    * mid-delivery still spends one of the row's bounded attempts. Critical rows
-   * are taken first.
+   * are taken first. `excludeIds` keeps a pass from retrying a row it has
+   * already attempted, however short that row's backoff.
    */
   async claimDue(input: {
     owner: string;
     leaseMs: number;
     limit: number;
     maxAttempts: number;
+    excludeIds?: readonly string[];
   }): Promise<ClaimedNotification[]> {
     const result = await this.executor.query(
       `UPDATE notification_outbox
@@ -170,12 +178,13 @@ export class NotificationOutbox {
            AND attempts < $4
            AND next_attempt_at <= NOW()
            AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+           AND NOT (id = ANY($5::bigint[]))
          ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END, id
          LIMIT $3
          FOR UPDATE SKIP LOCKED
        )
        RETURNING id::text AS id, event, attempts`,
-      [input.owner, input.leaseMs, input.limit, input.maxAttempts],
+      [input.owner, input.leaseMs, input.limit, input.maxAttempts, input.excludeIds ?? []],
     );
 
     return (result.rows as ClaimRow[]).map((row) => ({
@@ -267,6 +276,7 @@ export class NotificationOutbox {
     escalateAfterMs: number;
     leaseMs: number;
     limit: number;
+    excludeIds?: readonly string[];
   }): Promise<ClaimedEscalation[]> {
     const result = await this.executor.query(
       `UPDATE notification_outbox
@@ -281,13 +291,14 @@ export class NotificationOutbox {
              OR (state = 'PENDING' AND created_at <= NOW() - ($1::bigint * INTERVAL '1 millisecond'))
            )
            AND (escalation_next_attempt_at IS NULL OR escalation_next_attempt_at <= NOW())
+           AND NOT (id = ANY($4::bigint[]))
          ORDER BY id
          LIMIT $3
          FOR UPDATE SKIP LOCKED
        )
        RETURNING id::text AS id, event, attempts, occurrences, last_error, created_at,
          CASE WHEN state = 'DEAD_LETTER' THEN 'DEAD_LETTER' ELSE 'DELIVERY_OVERDUE' END AS reason`,
-      [input.escalateAfterMs, input.leaseMs, input.limit],
+      [input.escalateAfterMs, input.leaseMs, input.limit, input.excludeIds ?? []],
     );
 
     return (result.rows as EscalationRow[]).map((row) => ({

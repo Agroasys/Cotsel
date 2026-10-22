@@ -1,6 +1,10 @@
 import { WebhookNotifier } from './index';
 import type { NotificationEvent, NotificationLogger, Notifier } from './index';
-import { NotificationDispatcher, type NotificationDispatcherConfig } from './dispatcher';
+import {
+  DEFAULT_OUTBOX_LEASE_MS,
+  NotificationDispatcher,
+  type NotificationDispatcherConfig,
+} from './dispatcher';
 import { NotificationOutbox, type EnqueueResult, type OutboxQueryExecutor } from './outbox';
 
 export type DurableEnqueueResult = EnqueueResult | 'disabled';
@@ -97,7 +101,10 @@ export interface ServiceNotificationsConfig {
   executor: OutboxQueryExecutor;
   logger?: NotificationLogger;
   dispatcher?: Partial<
-    Omit<NotificationDispatcherConfig, 'outbox' | 'transport' | 'escalationTransport' | 'logger'>
+    Omit<
+      NotificationDispatcherConfig,
+      'outbox' | 'transport' | 'escalationTransport' | 'logger' | 'enabled'
+    >
   >;
 }
 
@@ -130,7 +137,12 @@ export function createServiceNotifications(
 
   const outbox = new NotificationOutbox(config.executor);
   const dispatcher = new NotificationDispatcher({
+    // A lease must outlast one send, including the webhook timeout, or a slow
+    // route lets another replica take the row mid-delivery.
+    leaseMs: Math.max(DEFAULT_OUTBOX_LEASE_MS, config.requestTimeoutMs * 4),
     ...config.dispatcher,
+    // Disabled notifications pause delivery of the existing backlog too.
+    enabled: config.enabled,
     outbox,
     transport: primary,
     escalationTransport: escalation,

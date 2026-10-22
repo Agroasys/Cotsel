@@ -103,3 +103,67 @@ test(
     });
   },
 );
+
+test(
+  'the indexer runtime role cannot delete outbox rows, even after a bootstrap re-grant',
+  { timeout: 180000, skip: !dockerAvailable },
+  async () => {
+    await withPostgresContainer(async ({ port }) => {
+      const pool = await createAdminPool(port);
+      const client = await pool.connect();
+
+      try {
+        // The same entitlement shape the indexer bootstrap creates: the migrator
+        // owns new tables and its default privileges grant DML, DELETE included,
+        // to the runtime role.
+        await client.query(`CREATE ROLE outbox_migrator NOLOGIN`);
+        await client.query(`CREATE ROLE outbox_runtime NOLOGIN`);
+        await client.query(`GRANT USAGE, CREATE ON SCHEMA public TO outbox_migrator`);
+        await client.query(`GRANT USAGE ON SCHEMA public TO outbox_runtime`);
+        await client.query(
+          `ALTER DEFAULT PRIVILEGES FOR ROLE outbox_migrator IN SCHEMA public
+           GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO outbox_runtime`,
+        );
+        await client.query(
+          `ALTER DEFAULT PRIVILEGES FOR ROLE outbox_migrator IN SCHEMA public
+           GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO outbox_runtime`,
+        );
+
+        await client.query(`SET ROLE outbox_migrator`);
+        await new NotificationOutboxMigration().up({
+          query: (sql, values) => client.query(sql, values),
+        });
+
+        await client.query(`SET ROLE outbox_runtime`);
+        await client.query(
+          `INSERT INTO notification_outbox (source, event_type, severity, dedup_key, event)
+           VALUES ('indexer', 'INDEXER_POISON_LOG', 'critical', 'k', '{}'::jsonb)`,
+        );
+        await assert.rejects(client.query(`DELETE FROM notification_outbox`), /permission denied/);
+        await assert.rejects(client.query(`TRUNCATE notification_outbox`), /permission denied/);
+
+        // A bootstrap that re-grants table privileges cannot reopen deletion.
+        await client.query(`RESET ROLE`);
+        await client.query(`GRANT DELETE, TRUNCATE ON notification_outbox TO outbox_runtime`);
+        await client.query(`SET ROLE outbox_runtime`);
+        await assert.rejects(
+          client.query(`DELETE FROM notification_outbox`),
+          /notification_outbox_rows_are_retained/,
+        );
+        await assert.rejects(
+          client.query(`TRUNCATE notification_outbox`),
+          /notification_outbox_rows_are_retained/,
+        );
+
+        const remaining = await client.query(
+          `SELECT COUNT(*)::int AS count FROM notification_outbox`,
+        );
+        assert.equal(remaining.rows[0].count, 1);
+      } finally {
+        await client.query(`RESET ROLE`).catch(() => undefined);
+        client.release();
+        await pool.end();
+      }
+    });
+  },
+);

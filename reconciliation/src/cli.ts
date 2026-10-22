@@ -70,6 +70,9 @@ async function bootstrap(): Promise<void> {
     void shutdown('SIGTERM');
   });
 
+  // The daemon drains the notification outbox on its own timer so a backlog
+  // left by a webhook outage clears between runs, not only at the end of one.
+  serviceNotifications.dispatcher.start();
   await service.runDaemon();
 }
 

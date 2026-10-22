@@ -118,7 +118,7 @@
       "version": "1785700000000",
       "name": "notification_outbox",
       "file": "migrations/1785700000000-NotificationOutbox.js",
-      "sha256": "1b8e5f21723c9fc083930b0bce9974b9971e008bf0b647899e5109c0142e19ea"
+      "sha256": "97cf23808f0ec3c85363058f23d7206535e95b9b17838c15a4ea5514acd5e09e"
     }
   ]
 }

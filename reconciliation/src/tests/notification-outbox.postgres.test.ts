@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Pool } from 'pg';
 import {
+  createServiceNotifications,
   NotificationDeliveryError,
   NotificationDispatcher,
   NotificationOutbox,
@@ -341,6 +342,108 @@ test(
             assert.deepEqual(await rows(pool), []);
           },
         );
+        await scenario(
+          'a paused dispatcher holds only the row it is sending while another drains the rest',
+          async (pool) => {
+            const outbox = new NotificationOutbox(pool);
+            for (let index = 0; index < 5; index += 1) {
+              await outbox.enqueue(event({ dedupKey: `drift:${index}` }), 0);
+            }
+
+            let release!: () => void;
+            const paused = new Promise<void>((resolve) => {
+              release = resolve;
+            });
+            const slowSent: string[] = [];
+            const slow: NotificationTransport = {
+              async deliver(notification) {
+                if (slowSent.length === 0) {
+                  await paused;
+                }
+                slowSent.push(notification.dedupKey);
+              },
+            };
+            const fast = new Transport();
+
+            const slowPass = dispatcher(outbox, slow, { owner: 'slow', batchSize: 50 }).runOnce();
+            // Let the slow pass claim its first row before the fast one starts.
+            while ((await rows(pool)).every((row) => row.attempts === 0)) {
+              await new Promise((resolve) => setTimeout(resolve, 10));
+            }
+            await dispatcher(outbox, fast, { owner: 'fast', batchSize: 50 }).runOnce();
+            release();
+            await slowPass;
+
+            const sent = [
+              ...slowSent,
+              ...fast.delivered.map((notification) => notification.dedupKey),
+            ];
+            assert.equal(slowSent.length, 1, 'the paused pass held exactly one row');
+            assert.equal(fast.delivered.length, 4);
+            assert.equal(new Set(sent).size, 5, 'no alert was sent twice');
+            assert.deepEqual(
+              (await rows(pool)).map((row) => [row.state, row.attempts]),
+              Array(5).fill(['DELIVERED', 1]),
+            );
+          },
+        );
+
+        await scenario(
+          'disabled notifications leave a queued backlog unsent and unspent',
+          async (pool) => {
+            const outbox = new NotificationOutbox(pool);
+            await outbox.enqueue(event(), 0);
+            await outbox.enqueue(event({ dedupKey: 'overdue' }), 0);
+            await pool.query(
+              `UPDATE notification_outbox SET created_at = NOW() - INTERVAL '1 hour'`,
+            );
+
+            const originalFetch = global.fetch;
+            let calls = 0;
+            global.fetch = async () => {
+              calls += 1;
+              return new Response(null, { status: 200 });
+            };
+            try {
+              const { dispatcher: disabled } = createServiceNotifications({
+                enabled: false,
+                webhookUrl: 'https://hooks.example.invalid/primary',
+                escalationWebhookUrl: 'https://hooks.example.invalid/escalation',
+                cooldownMs: 0,
+                requestTimeoutMs: 1000,
+                executor: pool,
+                logger: quietLogger,
+              });
+              await disabled.runOnce();
+            } finally {
+              global.fetch = originalFetch;
+            }
+
+            assert.equal(calls, 0);
+            assert.deepEqual(
+              (await rows(pool)).map((row) => [row.state, row.attempts, row.escalation_attempts]),
+              [
+                ['PENDING', 0, 0],
+                ['PENDING', 0, 0],
+              ],
+            );
+          },
+        );
+
+        await scenario('no role can delete or truncate outbox rows', async (pool) => {
+          const outbox = new NotificationOutbox(pool);
+          await outbox.enqueue(event(), 0);
+
+          await assert.rejects(
+            pool.query('DELETE FROM notification_outbox'),
+            /notification_outbox_rows_are_retained/,
+          );
+          await assert.rejects(
+            pool.query('TRUNCATE notification_outbox'),
+            /notification_outbox_rows_are_retained/,
+          );
+          assert.equal((await rows(pool)).length, 1);
+        });
       } finally {
         await admin.end();
       }

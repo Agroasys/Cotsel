@@ -34,8 +34,8 @@
       "version": "202610220001",
       "name": "notification_outbox",
       "file": "005_notification_outbox.sql",
-      "sha256": "d933e4a3482f96053a713bd36f43ea0daeff8dd77f00398ef58168ffbfc1c99f",
-      "schema_sha256": "f7d70b7e7fcc86cb850759bbe0f840e22a90eabfe0b95df82cd9031a6b9c6077"
+      "sha256": "acea7b49b7705082a21562f3c8618d0ee249c39ec583f3b137295c069d3f0cc0",
+      "schema_sha256": "8de3f344b2b4ab7fc172ca14a5333505096e5f123d33a8e36b3aea0c8ba573cc"
     }
   ]
 }

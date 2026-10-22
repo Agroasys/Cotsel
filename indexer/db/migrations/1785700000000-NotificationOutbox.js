@@ -75,6 +75,35 @@ module.exports = class NotificationOutbox1785700000000 {
       $$`);
     await db.query(`CREATE TRIGGER notification_outbox_evidence_guard BEFORE UPDATE ON notification_outbox
       FOR EACH ROW EXECUTE FUNCTION protect_notification_outbox_evidence()`);
+    // Rows are never deleted: a pending row is a page still owed and a settled
+    // one is evidence. The indexer bootstrap grants DELETE on every new table
+    // through the migrator's default privileges, so revoke it here, and guard
+    // with triggers so a later re-grant cannot reopen deletion.
+    await db.query(`CREATE FUNCTION reject_notification_outbox_delete() RETURNS trigger
+      LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+      BEGIN
+        RAISE EXCEPTION 'notification_outbox_rows_are_retained';
+      END;
+      $$`);
+    await db.query(`CREATE TRIGGER notification_outbox_no_delete BEFORE DELETE ON notification_outbox
+      FOR EACH ROW EXECUTE FUNCTION reject_notification_outbox_delete()`);
+    await db.query(`CREATE TRIGGER notification_outbox_no_truncate BEFORE TRUNCATE ON notification_outbox
+      FOR EACH STATEMENT EXECUTE FUNCTION reject_notification_outbox_delete()`);
+    await db.query(`DO $$
+      DECLARE
+        grantee_name TEXT;
+      BEGIN
+        REVOKE DELETE, TRUNCATE ON notification_outbox FROM PUBLIC;
+        FOR grantee_name IN
+          SELECT DISTINCT grantee FROM information_schema.role_table_grants
+          WHERE table_schema = 'public'
+            AND table_name = 'notification_outbox'
+            AND privilege_type IN ('DELETE', 'TRUNCATE')
+            AND grantee <> current_user
+        LOOP
+          EXECUTE format('REVOKE DELETE, TRUNCATE ON notification_outbox FROM %I', grantee_name);
+        END LOOP;
+      END $$`);
   }
 
   async down(db) {
@@ -96,5 +125,6 @@ module.exports = class NotificationOutbox1785700000000 {
 
     await db.query(`DROP TABLE "notification_outbox"`);
     await db.query(`DROP FUNCTION protect_notification_outbox_evidence()`);
+    await db.query(`DROP FUNCTION reject_notification_outbox_delete()`);
   }
 };

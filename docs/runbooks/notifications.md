@@ -57,7 +57,7 @@ Registered producer event types:
 ## Delivery Lifecycle
 
 1. A producer calls `notify` (or `enqueue`). The alert is written to `notification_outbox` as `PENDING` before any webhook is tried. `enqueue` can join the caller's transaction so an alert commits or rolls back with the state it describes.
-2. The dispatcher leases due rows (`FOR UPDATE SKIP LOCKED`, critical first), so several replicas never send the same row at once. The attempt is counted at claim time, so a worker that dies mid-delivery still spends an attempt.
+2. The dispatcher leases one due row at a time (`FOR UPDATE SKIP LOCKED`, critical first), immediately before sending it, so several replicas never send the same row at once and a slow backlog cannot outlive its leases. The lease is at least 60 s and at least four times the webhook timeout. A pass attempts each row at most once. The attempt is counted at claim time, so a worker that dies mid-delivery still spends an attempt.
 3. Success marks the row `DELIVERED`. Failure records `last_error` and backs off exponentially (5 s base, 5 min cap).
 4. After 8 attempts the row becomes `DEAD_LETTER`. A row whose final attempt never reported back is dead-lettered once its lease expires.
 5. A critical row escalates to the escalation route when it dead-letters, or when it is still undelivered 10 minutes after it was first raised. Primary delivery keeps retrying while an overdue row is escalated.
@@ -75,13 +75,14 @@ Failure modes:
 
 - **Webhook outage or process restart:** the row stays `PENDING` and is delivered when the route recovers, by whichever process drains next.
 - **Outbox write fails (database unavailable):** `notify` logs an error and falls back to one direct best-effort webhook send. Reconciliation run-outbox alerts use `enqueue` instead, which throws, so the `reconcile_alert_outbox` row stays pending and is retried on the next run.
+- **Notifications disabled (`*_NOTIFICATIONS_ENABLED=false`):** nothing new is queued and the dispatcher sends nothing, including existing backlog and escalations. Queued rows keep their attempt counts and are delivered once notifications are re-enabled. The first pass logs `Notifications are disabled; queued notifications are retained unsent` with the counts.
 - **No escalation route configured:** undeliverable critical alerts are still kept, and every dispatch pass logs `Critical notifications need escalation but no escalation route is configured` at error level with the count.
 
 ## Escalation Route
 
 Each service reads `NOTIFICATIONS_ESCALATION_WEBHOOK_URL` (runtime profile: `ORACLE_`, `RECONCILIATION_`, `INDEXER_NOTIFICATIONS_ESCALATION_WEBHOOK_URL`). Point it at the duty owner's paging integration, on a different provider or integration from `NOTIFICATIONS_WEBHOOK_URL`, so an outage of the primary route cannot also take out escalation. Treat it as a secret.
 
-The escalation page (`NOTIFICATION_ESCALATION`) carries the original type, message, correlation, `dedupKey`, attempt count, occurrence count, sanitized last error, the outbox id and first-raised time. Stored and forwarded errors never contain URLs.
+The escalation page (`NOTIFICATION_ESCALATION`) renders the original type, message, correlation, `dedupKey`, attempt count, occurrence count, sanitized last error, the outbox id and first-raised time into the webhook body. Only this allowlist is rendered: other metadata, including the original alert's, never reaches the webhook. Stored and forwarded errors never contain URLs.
 
 ## Inspecting The Outbox
 
@@ -102,7 +103,7 @@ ORDER BY id;
 
 ## Dead-Letter Redrive
 
-`DELIVERED` and `DEAD_LETTER` rows are immutable evidence: a trigger rejects any change to their state, payload or attempt count, and the runtime role has no `DELETE`. To redrive a dead letter after the route is fixed, insert a new row that names it:
+`DELIVERED` and `DEAD_LETTER` rows are immutable evidence: a trigger rejects any change to their state, payload or attempt count. No row of any state can be deleted or truncated: triggers reject it for every role, including the owner, and the runtime role has no `DELETE` grant (the indexer migration revokes the one its default privileges hand out). To redrive a dead letter after the route is fixed, insert a new row that names it:
 
 ```sql
 INSERT INTO notification_outbox (source, event_type, severity, dedup_key, event, redriven_from)

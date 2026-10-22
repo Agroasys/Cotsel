@@ -78,6 +78,20 @@ $$;
 CREATE TRIGGER notification_outbox_evidence_guard BEFORE UPDATE ON notification_outbox
 FOR EACH ROW EXECUTE FUNCTION protect_notification_outbox_evidence();
 
+-- Rows are never deleted, by the runtime role or anyone else: a pending row is
+-- a page still owed and a settled one is evidence. A trigger rather than grants
+-- alone, because a bootstrap that re-grants table privileges must not reopen it.
+CREATE FUNCTION reject_notification_outbox_delete() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+    RAISE EXCEPTION 'notification_outbox_rows_are_retained';
+END;
+$$;
+CREATE TRIGGER notification_outbox_no_delete BEFORE DELETE ON notification_outbox
+FOR EACH ROW EXECUTE FUNCTION reject_notification_outbox_delete();
+CREATE TRIGGER notification_outbox_no_truncate BEFORE TRUNCATE ON notification_outbox
+FOR EACH STATEMENT EXECUTE FUNCTION reject_notification_outbox_delete();
+
 DO $$
 DECLARE
     runtime_user TEXT := NULLIF(current_setting('app.runtime_db_user', true), '');

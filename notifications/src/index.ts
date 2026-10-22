@@ -88,6 +88,28 @@ interface SlackPayload {
   }>;
 }
 
+/**
+ * Metadata keys rendered into the webhook body, per event type.
+ *
+ * Metadata is otherwise kept out of the payload, so a producer cannot leak a
+ * field by adding it. The escalation page is the exception that needs it: it
+ * is the duty owner's only copy of an alert the primary route never delivered.
+ * Long fields render full-width.
+ */
+const RENDERED_METADATA_FIELDS: Record<string, ReadonlyArray<[key: string, long: boolean]>> = {
+  NOTIFICATION_ESCALATION: [
+    ['escalationReason', false],
+    ['originalType', false],
+    ['originalMessage', true],
+    ['originalDedupKey', true],
+    ['outboxId', false],
+    ['deliveryAttempts', false],
+    ['occurrences', false],
+    ['firstRaisedAt', false],
+    ['lastError', true],
+  ],
+};
+
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_RETRY_ATTEMPTS = 0;
 const DEFAULT_RETRY_DELAY_MS = 250;
@@ -211,12 +233,21 @@ export class WebhookNotifier implements Notifier, NotificationTransport {
         short: true,
       }));
 
+    const metadataFields = (RENDERED_METADATA_FIELDS[event.type] ?? [])
+      .map(([key, long]) => ({ key, long, value: event.metadata?.[key] }))
+      .filter(({ value }) => value !== undefined && value !== null && value !== '')
+      .map(({ key, long, value }) => ({ title: key, value: String(value), short: !long }));
+
     return {
       text: `[${event.source}] ${event.type} (${event.severity})`,
       attachments: [
         {
           color: this.colorForSeverity(event.severity),
-          fields: [{ title: 'message', value: event.message, short: false }, ...fields],
+          fields: [
+            { title: 'message', value: event.message, short: false },
+            ...metadataFields,
+            ...fields,
+          ],
         },
       ],
     };
