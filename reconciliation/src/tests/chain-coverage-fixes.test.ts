@@ -171,11 +171,11 @@ test('a later cycle revisits old ids after a caught-up sweep completes', () => {
     cursor = planNextCursor({ window, cursorHeld: false, previousCursor: cursor });
   }
 
-  assert.deepEqual(seenByCycle[0], ['1', '2', '3', '4', '5']);
+  assert.deepEqual(seenByCycle[0], ['0', '1', '2', '3', '4']);
   // Epoch rolled over: the cursor reset to 0 and the next cycle swept the range
   // again rather than stalling on an empty window.
-  assert.deepEqual(seenByCycle[1], ['1', '2', '3', '4', '5']);
-  assert.deepEqual(seenByCycle[2], ['1', '2', '3', '4', '5']);
+  assert.deepEqual(seenByCycle[1], ['0', '1', '2', '3', '4']);
+  assert.deepEqual(seenByCycle[2], ['0', '1', '2', '3', '4']);
 });
 
 // ---------------------------------------------------------------------------
@@ -184,7 +184,7 @@ test('a later cycle revisits old ids after a caught-up sweep completes', () => {
 
 test('an indexer id beyond the chain counter is detected by enumeration', () => {
   const findings = detectIndexerOnlyTradeIds({
-    indexerTradeIds: ['1', '2', '3', '9999'],
+    indexerTradeIds: ['0', '1', '2', '9999'],
     boundary: boundary(3n),
   });
 
@@ -209,18 +209,18 @@ test('enumeration catches a surplus id even when a missing id cancels the raw co
   );
 });
 
-test('enumeration flags non-positive and non-numeric indexer ids', () => {
+test('enumeration flags negative and non-numeric indexer ids', () => {
   const findings = detectIndexerOnlyTradeIds({
-    indexerTradeIds: ['0', 'not-a-number', '2'],
+    indexerTradeIds: ['-1', 'not-a-number', '2'],
     boundary: boundary(3n),
   });
 
-  assert.deepEqual(findings.map((finding) => finding.tradeId).sort(), ['0', 'not-a-number']);
+  assert.deepEqual(findings.map((finding) => finding.tradeId).sort(), ['-1', 'not-a-number']);
 });
 
 test('enumeration reports nothing when every indexer id is chain-allocated', () => {
   const findings = detectIndexerOnlyTradeIds({
-    indexerTradeIds: ['1', '2', '3'],
+    indexerTradeIds: ['0', '1', '2'],
     boundary: boundary(3n),
   });
 
@@ -251,4 +251,25 @@ test('a trade beyond the anchored counter is outside the window, not a false onc
 
   assert.deepEqual(comparison.missingFromIndexer, []);
   assert.equal(comparison.paired.length, 2);
+});
+
+test('the unchanged escrow allocates zero and excludes tradeCounter itself', () => {
+  assert.deepEqual(
+    tradeIdsInWindow(planCoverageWindow({ cursor: 0n, chainTradeCounter: 1n, budget: 10 })),
+    ['0'],
+  );
+  assert.deepEqual(
+    detectIndexerOnlyTradeIds({ indexerTradeIds: ['0', '1'], boundary: boundary(1n) }).map(
+      (finding) => finding.tradeId,
+    ),
+    ['1'],
+  );
+});
+
+test('zero allocated trades produce an empty nonnegative report range', () => {
+  const window = planCoverageWindow({ cursor: 0n, chainTradeCounter: 0n, budget: 10 });
+  assert.deepEqual(tradeIdsInWindow(window), []);
+  assert.equal(window.complete, true);
+  assert.equal(window.nextCursor, 0n);
+  assert.ok(window.fromTradeId >= 0n && window.toTradeId >= 0n);
 });

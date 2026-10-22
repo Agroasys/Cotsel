@@ -1,8 +1,11 @@
+import './helpers/reconciliationEnv';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { readFinancialCoverage } from '../core/financialCoverage';
+import { completeRun, failRun } from '../database/queries';
+import { BOUNDARY, stats } from './helpers/reconciliationPostgres';
 import { assertMigrationHistory, runVersionedMigrations } from '@agroasys/shared-db/migrate';
 
 // postgres-test-support is untyped CommonJS test tooling, not part of the
@@ -20,6 +23,7 @@ const RUNTIME_ROLE = 'cotsel_reconciliation_runtime';
 
 interface QueryablePool {
   query(text: string, values?: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }>;
+  connect(): Promise<PoolClient>;
   end(): Promise<void>;
 }
 
@@ -259,7 +263,7 @@ test(
 );
 
 test(
-  'financial coverage uses a retained finalized anchor and cannot bypass newer drift',
+  'financial coverage uses UTC completion independently of Node timezone and cannot bypass newer drift',
   { skip: !dockerAvailable },
   async () => {
     await withMigratedDatabase(async (pool) => {
@@ -267,7 +271,7 @@ test(
         const result = await pool.query(
           `INSERT INTO reconcile_runs(run_key,mode,status,completed_at,drift_count,
         coverage_complete,indexer_enumeration_truncated,coverage_to_block,chain_evidence)
-        VALUES ($1,'DAEMON','COMPLETED',NOW(),$2,true,false,$3,$4::jsonb) RETURNING id`,
+        VALUES ($1,'DAEMON','COMPLETED',($5::timestamptz AT TIME ZONE 'UTC'),$2,true,false,$3,$4::jsonb) RETURNING id`,
           [
             key,
             drift,
@@ -276,6 +280,7 @@ test(
               version: 'cotsel.reconciliation-coverage.v1',
               blockNumber: String(height),
             }),
+            new Date(Date.now() - 1000),
           ],
         );
         await pool.query(
@@ -289,6 +294,12 @@ test(
         (await readFinancialCoverage(pool as never, '7', '150', 60_000))?.runKey,
         'retained-clean',
       );
+      await pool.query("SET TIME ZONE 'Africa/Dar_es_Salaam'");
+      assert.equal(
+        (await readFinancialCoverage(pool as never, '7', '150', 60_000))?.runKey,
+        'retained-clean',
+      );
+      await pool.query("SET TIME ZONE 'UTC'");
       assert.equal(await readFinancialCoverage(pool as never, '7', '99', 60_000), null);
       assert.equal(await readFinancialCoverage(pool as never, '8', '150', 60_000), null);
       await pool.query(
@@ -298,6 +309,130 @@ test(
       await pool.query("DELETE FROM reconcile_trade_containments WHERE trade_id='7'");
       await recordedRun('newer-drift', 300, 1);
       assert.equal(await readFinancialCoverage(pool as never, '7', '150', 60_000), null);
+    });
+  },
+);
+
+test(
+  'completion writers store UTC and coverage remains fresh across different reader timezones',
+  { timeout: 180000, skip: !dockerAvailable },
+  async () => {
+    await withMigratedDatabase(async (pool) => {
+      const writer = await pool.connect();
+      const reader = await pool.connect();
+      try {
+        for (const [index, [writerZone, readerZone]] of [
+          ['Africa/Dar_es_Salaam', 'UTC'],
+          ['America/New_York', 'Etc/UCT'],
+          ['Asia/Kathmandu', 'GMT'],
+          ['UTC', 'Africa/Dar_es_Salaam'],
+        ].entries()) {
+          await writer.query("SELECT set_config('TimeZone', $1, false)", [writerZone]);
+          await reader.query("SELECT set_config('TimeZone', $1, false)", [readerZone]);
+          const runKey = `timezone-clean-${index}`;
+          const tradeId = String(index + 7);
+          const run = await writer.query(
+            "INSERT INTO reconcile_runs(run_key,mode,status) VALUES ($1,'DAEMON','RUNNING') RETURNING id",
+            [runKey],
+          );
+          await writer.query(
+            'INSERT INTO reconcile_run_trades(run_id,run_key,trade_id) VALUES ($1,$2,$3)',
+            [run.rows[0].id, runKey, tradeId],
+          );
+          await writer.query('BEGIN');
+          await completeRun(
+            {
+              ...stats(runKey),
+              coverage: {
+                boundary: BOUNDARY,
+                window: {
+                  fromTradeId: 7n,
+                  toTradeId: 7n,
+                  nextCursor: 0n,
+                  uncoveredTail: 0n,
+                  complete: true,
+                },
+                fromBlock: 4000,
+                indexerTradeCount: 1,
+                sla: {
+                  breached: false,
+                  uncoveredTail: 0n,
+                  oldestUncoveredAgeMs: null,
+                  reason: null,
+                },
+                cursorAdvanced: true,
+                nextCursor: 0n,
+                sweepReset: true,
+                indexerEnumerationTruncated: false,
+                indexerEnumerationWalked: 1,
+                complete: true,
+                indexerProcessedBlock: BOUNDARY.blockNumber,
+              },
+            },
+            writer,
+          );
+          const completed = await writer.query(
+            "SELECT completed_at = (NOW() AT TIME ZONE 'UTC') AS utc, completed_at AT TIME ZONE 'UTC' AS instant FROM reconcile_runs WHERE run_key=$1",
+            [runKey],
+          );
+          assert.equal(completed.rows[0].utc, true, `writer ${writerZone}`);
+          const completedAt = (completed.rows[0].instant as Date).getTime();
+          await writer.query('COMMIT');
+          // Explicit evaluation time isolates timezone behavior from host/container clock skew.
+          const proof = await readFinancialCoverage(
+            reader,
+            tradeId,
+            '4242',
+            60_000,
+            new Date(completedAt + 1000),
+          );
+          assert.equal(proof?.runKey, runKey, `writer ${writerZone}, reader ${readerZone}`);
+          assert.equal(
+            await readFinancialCoverage(
+              reader,
+              tradeId,
+              '4242',
+              60_000,
+              new Date(completedAt + 60_001),
+            ),
+            null,
+          );
+          assert.equal(
+            await readFinancialCoverage(reader, tradeId, '4242', 60_000, new Date(completedAt - 1)),
+            null,
+          );
+
+          const failedKey = `timezone-failed-${index}`;
+          await writer.query(
+            "INSERT INTO reconcile_runs(run_key,mode,status,lease_owner,lease_epoch,lease_expires_at) VALUES ($1,'DAEMON','RUNNING','writer',1,NOW()+INTERVAL '1 minute')",
+            [failedKey],
+          );
+          await writer.query('BEGIN');
+          assert.equal(
+            await failRun(
+              { runKey: failedKey, owner: 'writer', epoch: 1 },
+              'controlled failure',
+              writer,
+            ),
+            true,
+          );
+          assert.equal(
+            (
+              await writer.query(
+                "SELECT completed_at = (NOW() AT TIME ZONE 'UTC') AS utc FROM reconcile_runs WHERE run_key=$1",
+                [failedKey],
+              )
+            ).rows[0].utc,
+            true,
+            `failed writer ${writerZone}`,
+          );
+          await writer.query('COMMIT');
+        }
+      } finally {
+        await writer.query('ROLLBACK');
+        writer.release();
+        reader.release();
+      }
     });
   },
 );

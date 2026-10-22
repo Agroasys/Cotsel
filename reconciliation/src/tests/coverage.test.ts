@@ -74,11 +74,11 @@ function indexedTrade(tradeId: string): IndexedTradeRecord {
   };
 }
 
-test('a window covers the ids after the cursor up to the chain counter', () => {
+test('a window covers the zero-based ids from the cursor below the exclusive chain counter', () => {
   const window = planCoverageWindow({ cursor: 0n, chainTradeCounter: 5n, budget: 100 });
 
-  assert.equal(window.fromTradeId, 1n);
-  assert.equal(window.toTradeId, 5n);
+  assert.equal(window.fromTradeId, 0n);
+  assert.equal(window.toTradeId, 4n);
   assert.equal(window.nextCursor, 5n);
   assert.equal(window.uncoveredTail, 0n);
   assert.equal(window.complete, true);
@@ -87,15 +87,15 @@ test('a window covers the ids after the cursor up to the chain counter', () => {
 test('a run resumes from the persisted cursor rather than re-sweeping', () => {
   const window = planCoverageWindow({ cursor: 1200n, chainTradeCounter: 1500n, budget: 1000 });
 
-  assert.equal(window.fromTradeId, 1201n);
-  assert.equal(window.toTradeId, 1500n);
+  assert.equal(window.fromTradeId, 1200n);
+  assert.equal(window.toTradeId, 1499n);
   assert.equal(window.complete, true);
 });
 
 test('the budget bounds the window but reports the tail instead of hiding it', () => {
   const window = planCoverageWindow({ cursor: 0n, chainTradeCounter: 2500n, budget: 1000 });
 
-  assert.equal(window.toTradeId, 1000n);
+  assert.equal(window.toTradeId, 999n);
   assert.equal(window.nextCursor, 1000n);
   // The exposure a fixed cap used to leave silently unreconciled.
   assert.equal(window.uncoveredTail, 1500n);
@@ -128,10 +128,10 @@ test('a non-positive budget is rejected rather than silently covering nothing', 
 test('window ids are enumerated inclusively and batched for request limits', () => {
   const window = planCoverageWindow({ cursor: 3n, chainTradeCounter: 9n, budget: 1000 });
 
-  assert.deepEqual(tradeIdsInWindow(window), ['4', '5', '6', '7', '8', '9']);
+  assert.deepEqual(tradeIdsInWindow(window), ['3', '4', '5', '6', '7', '8']);
   assert.deepEqual(batchTradeIds(tradeIdsInWindow(window), 4), [
-    ['4', '5', '6', '7'],
-    ['8', '9'],
+    ['3', '4', '5', '6'],
+    ['7', '8'],
   ]);
 });
 

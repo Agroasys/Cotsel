@@ -915,7 +915,9 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
 let selectedRpcUrl: string | null = null;
 let startupComplete = false;
 
-async function bootstrap(): Promise<void> {
+export async function bootstrap(
+  database = new TypeormDatabase({ initializeStateSchema: false }),
+): Promise<void> {
   await startProbeServer(
     createIndexerProbeOptions(config, {
       startupComplete: () => startupComplete,
@@ -929,16 +931,17 @@ async function bootstrap(): Promise<void> {
   await runStartupGates({ config, rpcUrl: selectedRpcUrl, quarantine, alerts, readCheckpoint });
   startupComplete = true;
 
-  await processor.run(new TypeormDatabase({ initializeStateSchema: false }), processBatch);
+  await processor.run(database, processBatch);
 }
 
-void bootstrap().catch(async (error: unknown) => {
-  logBootstrapEvent('error', 'indexer.bootstrap_failed', 'Indexer bootstrap failed', {
-    error: error instanceof Error ? error.message : String(error),
+if (require.main === module)
+  void bootstrap().catch(async (error: unknown) => {
+    logBootstrapEvent('error', 'indexer.bootstrap_failed', 'Indexer bootstrap failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await quarantinePool.end().catch(() => undefined);
+    process.exit(1);
   });
-  await quarantinePool.end().catch(() => undefined);
-  process.exit(1);
-});
 
 async function getOrLoadOverviewSnapshot(ctx: IndexerContext): Promise<OverviewSnapshot> {
   const snapshot = await ctx.store.get(OverviewSnapshot, OVERVIEW_SNAPSHOT_ID);

@@ -215,18 +215,19 @@ export function planCoverageWindow(input: {
     };
   }
 
-  const fromTradeId = cursor + 1n;
+  // Cursor is the next zero-based trade ID; tradeCounter is an exclusive bound.
+  const fromTradeId = cursor;
   const budget = BigInt(input.budget);
   const remaining = counter - cursor;
   const covered = remaining < budget ? remaining : budget;
-  const toTradeId = cursor + covered;
+  const toTradeId = cursor + covered - 1n;
 
   return {
     fromTradeId,
     toTradeId,
-    nextCursor: toTradeId,
-    uncoveredTail: counter - toTradeId,
-    complete: toTradeId === counter,
+    nextCursor: cursor + covered,
+    uncoveredTail: counter - cursor - covered,
+    complete: cursor + covered === counter,
   };
 }
 
@@ -388,7 +389,7 @@ export function checkIndexerSurplus(input: {
  * it can never surface a record the chain never allocated, and a raw count can
  * hide a surplus id when a separately-missing expected id cancels it out. This
  * walks the indexer's own id set and reports every id that is not a
- * chain-allocated trade (`> tradeCounter`, or non-positive), proving the
+ * chain-allocated trade (`>= tradeCounter`, or negative), proving the
  * indexer-only direction directly rather than by counting.
  */
 export function detectIndexerOnlyTradeIds(input: {
@@ -408,7 +409,7 @@ export function detectIndexerOnlyTradeIds(input: {
       continue;
     }
 
-    if (numericId <= 0n || numericId > counter) {
+    if (numericId < 0n || numericId >= counter) {
       findings.push(
         indexerOnlyFinding(
           rawId,

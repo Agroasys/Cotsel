@@ -7,7 +7,7 @@ import type { CoverageBoundary } from '../types';
  * Chain-side read surface for reconciliation.
  *
  * The chain is the independent enumeration authority: trade ids are allocated
- * sequentially from 1 up to `tradeCounter`, so the contract alone defines the
+ * sequentially from 0 up to, but excluding, `tradeCounter`, so the contract alone defines the
  * complete id space a run must cover. Nothing here consults the indexer.
  */
 export class OnchainClient {

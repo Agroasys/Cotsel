@@ -10,7 +10,7 @@ export async function readFinancialCoverage(
   now = new Date(),
 ): Promise<{ runKey: string; tradeId: string; verifiedAt: string; evidence: unknown } | null> {
   if (
-    !/^[1-9][0-9]{0,77}$/.test(tradeId) ||
+    !/^(0|[1-9][0-9]{0,77})$/.test(tradeId) ||
     BigInt(tradeId) > (1n << 256n) - 1n ||
     !/^(0|[1-9][0-9]{0,15})$/.test(finalizedBlockNumber) ||
     BigInt(finalizedBlockNumber) > BigInt(Number.MAX_SAFE_INTEGER) ||
@@ -18,18 +18,21 @@ export async function readFinancialCoverage(
     maxAgeMs <= 0
   )
     return null;
+  // Completion writers store UTC in the legacy timestamp column. Decode it
+  // explicitly so neither the reader session nor Node timezone shifts freshness.
   const result = await executor.query<{
     run_key: string;
     completed_at: Date;
     chain_evidence: unknown;
   }>(
-    `SELECT r.run_key, r.completed_at, r.chain_evidence
+    `SELECT r.run_key, r.completed_at AT TIME ZONE 'UTC' AS completed_at, r.chain_evidence
     FROM reconcile_runs r
     JOIN reconcile_run_trades t ON t.run_id = r.id AND t.run_key = r.run_key
     WHERE t.trade_id = $1 AND r.status = 'COMPLETED' AND r.drift_count = 0 AND r.error_message IS NULL
       AND r.coverage_complete IS TRUE AND r.indexer_enumeration_truncated IS FALSE
       AND r.chain_evidence IS NOT NULL AND r.coverage_to_block <= $2::numeric
-      AND r.completed_at >= $3 AND r.completed_at <= $4
+      AND r.completed_at AT TIME ZONE 'UTC' >= $3::timestamptz
+      AND r.completed_at AT TIME ZONE 'UTC' <= $4::timestamptz
       AND NOT EXISTS (
         SELECT 1 FROM reconcile_runs newer JOIN reconcile_run_trades scope ON scope.run_id = newer.id AND scope.run_key = newer.run_key
         WHERE scope.trade_id = $1 AND newer.id > r.id AND

@@ -52,6 +52,7 @@ export interface PairedStart extends Envelope {
   executionBinding: SettlementUserActionBinding;
   fundingWitnesses: [PairedFundingWitness, PairedFundingWitness];
   barrier: 'claimed' | 'signing' | null;
+  localRpcUrls?: [string, string];
 }
 export type PairedCommand =
   | PairedStart
@@ -187,7 +188,25 @@ export function parsePairedCommand(value: unknown): PairedCommand {
       'executionBinding',
       'fundingWitnesses',
       'barrier',
+      ...(raw.localRpcUrls === undefined ? [] : ['localRpcUrls']),
     ]);
+    if (v.localRpcUrls !== undefined) {
+      if (!Array.isArray(v.localRpcUrls) || v.localRpcUrls.length !== 2) invalid();
+      for (const rawUrl of v.localRpcUrls) {
+        if (typeof rawUrl !== 'string') invalid();
+        const url = new URL(rawUrl);
+        if (
+          url.protocol !== 'http:' ||
+          !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
+          url.username ||
+          url.password ||
+          url.search ||
+          url.hash ||
+          url.pathname !== '/'
+        )
+          invalid();
+      }
+    }
     const auth = object(v.serviceAuth, ['apiKeyId', 'secret']);
     const tls = object(v.tls, ['keyPath', 'certificatePath']);
     if (

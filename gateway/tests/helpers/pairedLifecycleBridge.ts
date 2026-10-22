@@ -42,6 +42,7 @@ if (!enabled) process.exit(2);
 let db: Awaited<ReturnType<typeof createUserActionEnginePostgres>> | undefined;
 let server: Server | undefined;
 let rateLimiter: Awaited<ReturnType<typeof createHttpRateLimiter>> | undefined;
+let closePorts: (() => void) | undefined;
 let unblock: (() => void) | undefined;
 const executions = new Set<Promise<void>>();
 let commandQueue = Promise.resolve();
@@ -66,6 +67,8 @@ async function close() {
   }
   await rateLimiter?.close();
   rateLimiter = undefined;
+  closePorts?.();
+  closePorts = undefined;
   await db?.close();
   db = undefined;
 }
@@ -158,6 +161,7 @@ async function start(seed: PairedStart) {
     unblock = undefined;
   };
   const ports = pairedLifecyclePorts(seed, pool, () => pause('signing'));
+  closePorts = ports.close;
   const c = {
     ...config,
     chainId: Number(binding.chainId),
