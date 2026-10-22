@@ -50,8 +50,9 @@ minimumReleaseAgeExclude:
   # block below pins the resolved version.
   - js-yaml
 overrides:
-  # GHSA-7mx3-vvmw-hjmv affects every earlier GraphQL Tools utils major (PR #865).
-  '@graphql-tools/utils@<=12.0.0': 12.0.1
+  # GHSA-7mx3-vvmw-hjmv affects every earlier GraphQL Tools utils major (PR #865);
+  # GHSA-c4qx-w738-7hr3 affects 10.10.1 through 12.0.1.
+  '@graphql-tools/utils@<12.0.4': 12.0.4
   '@babel/core@<=7.29.0': 7.29.6
   '@humanfs/node': 0.16.8
   '@protobufjs/utf8': 1.1.1
