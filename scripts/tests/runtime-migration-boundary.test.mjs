@@ -232,7 +232,7 @@ test('indexer migration job validates history and serializes TypeORM execution',
     .map((file) => `migrations/${file}`)
     .sort();
   assert.deepEqual(manifest.migrations.map((migration) => migration.file).sort(), migrationFiles);
-  assert.equal(manifest.migrations.length, 19);
+  assert.equal(manifest.migrations.length, 20);
 });
 
 test('runtime readiness requires the exact applied migration history', async () => {

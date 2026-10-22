@@ -59,6 +59,7 @@ test(
               ['202609090001', 'chain_coverage'],
               ['202609120001', 'run_leases'],
               ['202610150004', 'financial_coverage_evidence'],
+              ['202610220001', 'notification_outbox'],
             ],
           );
         });

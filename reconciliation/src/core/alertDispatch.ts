@@ -5,6 +5,7 @@ import {
   recordRunAlertFailure,
 } from '../database/alertOutbox';
 import { getErrorMessage } from './runHelpers';
+import { serviceNotifications } from './notifications';
 import type { CoverageAlerts } from './coverageAlerts';
 import type { RunAlerts } from './runAlerts';
 import type {
@@ -25,31 +26,34 @@ import type {
 const DISPATCH_BATCH = 200;
 
 /**
- * Deliver the alerts a committed run left in the outbox.
+ * Hand the alerts a committed run left in the run outbox to the notification
+ * outbox, then attempt delivery.
  *
  * Every alert here describes state that is already durable, which is the point:
  * the run has passed its lease fence and its findings, containments and cursor
- * move have landed together. A failure to deliver leaves the row pending rather
- * than consuming it, so the alert arrives late instead of never — and dispatch
- * never fails the run, because a webhook outage is not a reconciliation error.
+ * move have landed together. A run outbox row is consumed only once its alert
+ * is committed to `notification_outbox`; from there retry, dead-lettering and
+ * escalation are the notification outbox's job. A failure to record leaves the
+ * row pending, so the alert arrives late instead of never — and dispatch never
+ * fails the run, because a webhook outage is not a reconciliation error.
  */
 export async function dispatchPendingAlerts(input: {
   coverageAlerts: CoverageAlerts;
   runAlerts: RunAlerts;
   limit?: number;
 }): Promise<number> {
-  let delivered = 0;
+  let recorded = 0;
 
   try {
     for (const row of await readPendingRunAlerts(input.limit ?? DISPATCH_BATCH)) {
       try {
         await deliver(row, input);
         await markRunAlertDispatched(row.id);
-        delivered += 1;
+        recorded += 1;
       } catch (error: unknown) {
         const message = getErrorMessage(error);
         await recordRunAlertFailure(row.id, message);
-        Logger.error('Could not deliver a committed reconciliation alert; it stays pending', {
+        Logger.error('Could not record a committed reconciliation alert; it stays pending', {
           alertId: row.id,
           runKey: row.run_key,
           kind: row.kind,
@@ -64,7 +68,8 @@ export async function dispatchPendingAlerts(input: {
     });
   }
 
-  return delivered;
+  await serviceNotifications.notifier.kick();
+  return recorded;
 }
 
 /**

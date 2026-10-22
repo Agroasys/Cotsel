@@ -53,6 +53,7 @@ export interface ReconciliationConfig {
   indexerGraphqlRequestTimeoutMs: number;
   notificationsEnabled: boolean;
   notificationsWebhookUrl?: string;
+  notificationsEscalationWebhookUrl?: string;
   notificationsCooldownMs: number;
   notificationsRequestTimeoutMs: number;
 }
@@ -225,6 +226,7 @@ export function loadConfig(): ReconciliationConfig {
     indexerGraphqlRequestTimeoutMs,
     notificationsEnabled,
     notificationsWebhookUrl,
+    notificationsEscalationWebhookUrl: optionalEnv('NOTIFICATIONS_ESCALATION_WEBHOOK_URL'),
     notificationsCooldownMs: envNumber('NOTIFICATIONS_COOLDOWN_MS', 300000),
     notificationsRequestTimeoutMs: envNumber('NOTIFICATIONS_REQUEST_TIMEOUT_MS', 5000),
   };

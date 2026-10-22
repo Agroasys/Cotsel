@@ -29,6 +29,13 @@
       "file": "004_financial_coverage_evidence.sql",
       "sha256": "320f034458d47d60fc90fee944b88e86b0bc0494854918fcc0386e20b3526d67",
       "schema_sha256": "eb94aa25cddd09f97484862b074bd2f7751f5f1083b23b514be397305ecc844c"
+    },
+    {
+      "version": "202610220001",
+      "name": "notification_outbox",
+      "file": "005_notification_outbox.sql",
+      "sha256": "d933e4a3482f96053a713bd36f43ea0daeff8dd77f00398ef58168ffbfc1c99f",
+      "schema_sha256": "f7d70b7e7fcc86cb850759bbe0f840e22a90eabfe0b95df82cd9031a6b9c6077"
     }
   ]
 }

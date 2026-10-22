@@ -9,6 +9,7 @@ import { failRun, finalizeRun, readCoverageCursor } from '../database/queries';
 import { LeaseLostError, claimRun } from '../database/leases';
 import { RunLease, createLeaseOwner } from './runLease';
 import { RunAlerts } from './runAlerts';
+import { serviceNotifications } from './notifications';
 import { dispatchPendingAlerts } from './alertDispatch';
 import { publishRunOutcome, resolveContainmentDecisions, sweepAbandonedRuns } from './runControls';
 import { generateRunKey, getErrorMessage, mapWithConcurrency, sleep } from './runHelpers';
@@ -478,6 +479,7 @@ export class ReconciliationService {
       return;
     }
 
+    serviceNotifications.dispatcher.start();
     Logger.info('Reconciliation daemon started', {
       intervalMs: config.daemonIntervalMs,
       batchSize: config.batchSize,

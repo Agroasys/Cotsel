@@ -1,18 +1,11 @@
-import { WebhookNotifier } from '@agroasys/notifications';
+import {
+  createServiceNotifications,
+  type NotificationDispatcher,
+  type Notifier,
+  type OutboxQueryExecutor,
+} from '@agroasys/notifications';
+import type { IndexerConfig } from './config';
 import type { QuarantinedLogEntry } from './quarantine';
-
-export interface IndexerAlertConfig {
-  enabled: boolean;
-  webhookUrl?: string;
-  cooldownMs: number;
-  requestTimeoutMs?: number;
-}
-
-export interface IndexerAlertLogger {
-  info(message: string, meta?: Record<string, unknown>): void;
-  warn(message: string, meta?: Record<string, unknown>): void;
-  error(message: string, meta?: Record<string, unknown>): void;
-}
 
 export interface IndexerAlerts {
   poisonLogDetected(entry: QuarantinedLogEntry): Promise<void>;
@@ -23,19 +16,13 @@ export interface IndexerAlerts {
  * Critical routing for the poison-log control. The payload carries the log
  * coordinates an operator needs to find the quarantined row, and never the raw
  * `data` payload or RPC credentials.
+ *
+ * The notifier is the durable outbox: the pipeline halts straight after raising
+ * a poison-log alert, so the alert is committed before delivery is tried and is
+ * still owed after the process exits.
  */
 export class WebhookIndexerAlerts implements IndexerAlerts {
-  private readonly notifier: WebhookNotifier;
-
-  constructor(config: IndexerAlertConfig, logger?: IndexerAlertLogger) {
-    this.notifier = new WebhookNotifier({
-      enabled: config.enabled,
-      webhookUrl: config.webhookUrl,
-      cooldownMs: config.cooldownMs,
-      requestTimeoutMs: config.requestTimeoutMs,
-      logger,
-    });
-  }
+  constructor(private readonly notifier: Notifier) {}
 
   async poisonLogDetected(entry: QuarantinedLogEntry): Promise<void> {
     await this.notifier.notify({
@@ -74,4 +61,24 @@ export class WebhookIndexerAlerts implements IndexerAlerts {
       },
     });
   }
+}
+
+/**
+ * The indexer's alerts and the dispatcher that drains its outbox. The outbox
+ * commits on the quarantine pool for the same reason the quarantine row does:
+ * the alert must survive the processor transaction rolling back.
+ */
+export function createIndexerAlerts(
+  config: IndexerConfig,
+  executor: OutboxQueryExecutor,
+): { alerts: IndexerAlerts; dispatcher: NotificationDispatcher } {
+  const { notifier, dispatcher } = createServiceNotifications({
+    enabled: config.notificationsEnabled,
+    webhookUrl: config.notificationsWebhookUrl,
+    escalationWebhookUrl: config.notificationsEscalationWebhookUrl,
+    cooldownMs: config.notificationsCooldownMs,
+    requestTimeoutMs: config.notificationsRequestTimeoutMs,
+    executor,
+  });
+  return { alerts: new WebhookIndexerAlerts(notifier), dispatcher };
 }

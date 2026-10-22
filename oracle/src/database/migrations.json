@@ -29,6 +29,13 @@
       "file": "schema/004_signer_dispatch_exclusion.sql",
       "sha256": "a8feca4d02e2181326a5d71f662540dbb277dbc9e1f5ac8770d87bc78ae388b5",
       "schema_sha256": "8b38500b0851d50b5a9f70deef8cd2549508f8870d0c8d49b51891d0e9945469"
+    },
+    {
+      "version": "202610220001",
+      "name": "notification_outbox",
+      "file": "schema/005_notification_outbox.sql",
+      "sha256": "d2037f108f68876aa06964cd61cbbc9adaf488b88e6dddc46e3c073a56b35e1b",
+      "schema_sha256": "50080b442a5b0d10b14b009bcc0c84e40d463e3819751abfbd3056828f52b507"
     }
   ]
 }

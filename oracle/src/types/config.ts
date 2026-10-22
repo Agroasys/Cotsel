@@ -66,6 +66,7 @@ export interface OracleConfig {
   // notifications
   notificationsEnabled: boolean;
   notificationsWebhookUrl?: string;
+  notificationsEscalationWebhookUrl?: string;
   notificationsCooldownMs: number;
   notificationsRequestTimeoutMs: number;
 

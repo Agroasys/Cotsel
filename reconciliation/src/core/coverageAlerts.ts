@@ -1,6 +1,5 @@
-import { WebhookNotifier } from '@agroasys/notifications';
-import { config } from '../config';
-import { Logger } from '../utils/logger';
+import type { NotificationEvent } from '@agroasys/notifications';
+import { serviceNotifications } from './notifications';
 import type { CoverageBacklogAlertPayload, DriftFinding } from '../types';
 
 /**
@@ -8,15 +7,15 @@ import type { CoverageBacklogAlertPayload, DriftFinding } from '../types';
  *
  * Kept apart from the run loop so the reconciler reads as the comparison it is,
  * and so alert wording and dedup keys live in one place.
+ *
+ * These are dispatched from the run outbox, so they record into the
+ * notification outbox and throw when they cannot: the run outbox row then stays
+ * pending instead of being consumed by an alert that went nowhere.
  */
 export class CoverageAlerts {
-  private readonly notifier = new WebhookNotifier({
-    enabled: config.notificationsEnabled,
-    webhookUrl: config.notificationsWebhookUrl,
-    cooldownMs: config.notificationsCooldownMs,
-    requestTimeoutMs: config.notificationsRequestTimeoutMs,
-    logger: Logger,
-  });
+  private async raise(event: NotificationEvent): Promise<void> {
+    await serviceNotifications.notifier.enqueue(event);
+  }
 
   async criticalDrift(runKey: string, finding: DriftFinding): Promise<void> {
     if (finding.severity !== 'CRITICAL') {
@@ -27,7 +26,7 @@ export class CoverageAlerts {
       finding.mismatchCode === 'INDEXER_TRADE_MISSING' ||
       finding.mismatchCode === 'INDEXER_SURPLUS_RECORDS';
 
-    await this.notifier.notify({
+    await this.raise({
       source: 'reconciliation',
       type: isCoverageGap ? 'RECONCILIATION_COVERAGE_GAP' : 'RECONCILIATION_CRITICAL_DRIFT',
       severity: 'critical',
@@ -57,7 +56,7 @@ export class CoverageAlerts {
    * rather than bigints.
    */
   async coverageBacklog(payload: CoverageBacklogAlertPayload): Promise<void> {
-    await this.notifier.notify({
+    await this.raise({
       source: 'reconciliation',
       type: 'RECONCILIATION_COVERAGE_BACKLOG',
       severity: 'critical',

@@ -256,6 +256,7 @@ export function loadConfig(): OracleConfig {
       // notifications
       notificationsEnabled,
       notificationsWebhookUrl,
+      notificationsEscalationWebhookUrl: optionalEnv('NOTIFICATIONS_ESCALATION_WEBHOOK_URL'),
       notificationsCooldownMs: validateEnvNumber('NOTIFICATIONS_COOLDOWN_MS', 300000),
       notificationsRequestTimeoutMs: validateEnvNumber('NOTIFICATIONS_REQUEST_TIMEOUT_MS', 5000),
       manualApprovalEnabled,

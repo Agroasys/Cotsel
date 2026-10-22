@@ -113,6 +113,12 @@
       "name": "indexer_quarantine",
       "file": "migrations/1785600000000-IndexerQuarantine.js",
       "sha256": "12b742a6487ccaa2a7095cc01061838c01206e4b21aef11e1c8cb4d96b04bdcd"
+    },
+    {
+      "version": "1785700000000",
+      "name": "notification_outbox",
+      "file": "migrations/1785700000000-NotificationOutbox.js",
+      "sha256": "1b8e5f21723c9fc083930b0bce9974b9971e008bf0b647899e5109c0142e19ea"
     }
   ]
 }

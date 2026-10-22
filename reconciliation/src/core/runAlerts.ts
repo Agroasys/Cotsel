@@ -1,6 +1,5 @@
-import { WebhookNotifier } from '@agroasys/notifications';
-import { config } from '../config';
-import { Logger } from '../utils/logger';
+import type { NotificationEvent } from '@agroasys/notifications';
+import { serviceNotifications } from './notifications';
 import type {
   AbandonedRunRecord,
   TradeContainedAlertPayload,
@@ -13,15 +12,14 @@ import type {
  * Kept apart from the coverage alerts because these reach a different owner:
  * an abandoned run is a platform-liveness page, and a contained trade is a
  * request for an admin scoped-pause decision.
+ *
+ * Alerts dispatched from the run outbox record into the notification outbox
+ * and throw when they cannot, so the run outbox row stays pending.
  */
 export class RunAlerts {
-  private readonly notifier = new WebhookNotifier({
-    enabled: config.notificationsEnabled,
-    webhookUrl: config.notificationsWebhookUrl,
-    cooldownMs: config.notificationsCooldownMs,
-    requestTimeoutMs: config.notificationsRequestTimeoutMs,
-    logger: Logger,
-  });
+  private async raise(event: NotificationEvent): Promise<void> {
+    await serviceNotifications.notifier.enqueue(event);
+  }
 
   /**
    * A run's lease expired while it was RUNNING.
@@ -29,9 +27,13 @@ export class RunAlerts {
    * Deduplicated per run key rather than globally: one crashed worker holding
    * several keys is several distinct pieces of stuck work, and collapsing them
    * would hide all but the first.
+   *
+   * Raised by the sweep, which has no outbox row of its own to leave pending,
+   * so it uses `notify`: durable when the outbox is writable, and a direct
+   * best-effort send when it is not.
    */
   async runAbandoned(record: AbandonedRunRecord): Promise<void> {
-    await this.notifier.notify({
+    await serviceNotifications.notifier.notify({
       source: 'reconciliation',
       type: 'RECONCILIATION_RUN_ABANDONED',
       severity: 'critical',
@@ -61,7 +63,7 @@ export class RunAlerts {
    * applied to and nothing wider.
    */
   async tradeContained(payload: TradeContainedAlertPayload): Promise<void> {
-    await this.notifier.notify({
+    await this.raise({
       source: 'reconciliation',
       type: 'RECONCILIATION_TRADE_CONTAINED',
       severity: 'critical',
@@ -91,11 +93,11 @@ export class RunAlerts {
    * containment that never becomes an on-chain pause leaves a path open that
    * this service does not sit in front of. Deliberately re-raised on every run
    * that finds the pause missing, and keyed per incident rather than per run, so
-   * the notifier's cooldown collapses the repeats while the condition lasts and
+   * the outbox's durable cooldown collapses the repeats while the condition lasts and
    * it fires again if it is still unpaused later.
    */
   async tradePauseUnconfirmed(payload: TradePauseUnconfirmedAlertPayload): Promise<void> {
-    await this.notifier.notify({
+    await this.raise({
       source: 'reconciliation',
       type: 'RECONCILIATION_TRADE_PAUSE_UNCONFIRMED',
       severity: 'critical',

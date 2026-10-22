@@ -340,18 +340,18 @@
     },
     {
       "component": "indexer",
-      "headIdentity": "1785600000000_indexer_quarantine",
-      "checksumSha256": "c153d044cf8adbd0fa6a22fe25d0ec5ccd4e1b399024f8406106b32eeb5b7680"
+      "headIdentity": "1785700000000_notification_outbox",
+      "checksumSha256": "9e55199f53d526fc5f167f9ab8325985514f77f0649b8029b7ce96602d3c1e68"
     },
     {
       "component": "oracle",
-      "headIdentity": "202610160004_signer_dispatch_exclusion",
-      "checksumSha256": "12234824fa98a9cef3828620cdb8a455abf66eb684b6f5cc5aeb754f60fb13c2"
+      "headIdentity": "202610220001_notification_outbox",
+      "checksumSha256": "89b91c4ef87c68097f8e97694f6f7cf8a19ef636118a711b043ed31747069ebf"
     },
     {
       "component": "reconciliation",
-      "headIdentity": "202610150004_financial_coverage_evidence",
-      "checksumSha256": "666d3557793cbe1036218e422f9dfabf80fea047a40635bd89252ee7cc432215"
+      "headIdentity": "202610220001_notification_outbox",
+      "checksumSha256": "a9b6d3c75ccabde4fdc188cb1017e7f19527adc78de5d6a9f8e488d0a18032e1"
     },
     {
       "component": "ricardian",

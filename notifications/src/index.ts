@@ -15,6 +15,7 @@ export const NOTIFICATION_TEMPLATE_VERSIONS: Record<string, string> = {
   RECONCILIATION_RUN_ABANDONED: 'reconciliation-run-abandoned-v1',
   RECONCILIATION_TRADE_CONTAINED: 'reconciliation-trade-contained-v1',
   RECONCILIATION_TRADE_PAUSE_UNCONFIRMED: 'reconciliation-trade-pause-unconfirmed-v1',
+  NOTIFICATION_ESCALATION: 'notification-escalation-v1',
 };
 
 export interface NotificationEvent {
@@ -34,6 +35,22 @@ export interface NotificationEvent {
   metadata?: Record<string, string | number | boolean | null>;
 }
 
+export interface NotificationLogger {
+  info(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
+  error(message: string, meta?: Record<string, unknown>): void;
+}
+
+/** What a producer needs: raise an event and learn whether it was accepted. */
+export interface Notifier {
+  notify(event: NotificationEvent): Promise<boolean>;
+}
+
+/** One delivery attempt to one route, throwing when the route did not accept it. */
+export interface NotificationTransport {
+  deliver(event: NotificationEvent): Promise<void>;
+}
+
 export interface WebhookNotifierConfig {
   enabled: boolean;
   webhookUrl?: string;
@@ -42,11 +59,21 @@ export interface WebhookNotifierConfig {
   retryAttempts?: number;
   retryDelayMs?: number;
   maxRetryDelayMs?: number;
-  logger?: {
-    info(message: string, meta?: Record<string, unknown>): void;
-    warn(message: string, meta?: Record<string, unknown>): void;
-    error(message: string, meta?: Record<string, unknown>): void;
-  };
+  logger?: NotificationLogger;
+}
+
+/**
+ * A route that did not accept a notification.
+ *
+ * The message names the HTTP status or the transport failure and never the
+ * webhook URL, because it is persisted as outbox evidence and the URL is a
+ * credential.
+ */
+export class NotificationDeliveryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NotificationDeliveryError';
+  }
 }
 
 interface SlackPayload {
@@ -67,7 +94,7 @@ const DEFAULT_RETRY_DELAY_MS = 250;
 const DEFAULT_MAX_RETRY_DELAY_MS = 2000;
 const MAX_RETRY_ATTEMPTS_CAP = 5;
 
-export class WebhookNotifier {
+export class WebhookNotifier implements Notifier, NotificationTransport {
   private readonly dedupCache = new Map<string, number>();
 
   constructor(private readonly config: WebhookNotifierConfig) {}
@@ -195,6 +222,60 @@ export class WebhookNotifier {
     };
   }
 
+  private async post(url: string, payload: SlackPayload, timeoutMs: number): Promise<void> {
+    const timeoutController = new AbortController();
+    const timeoutHandle = setTimeout(() => {
+      timeoutController.abort();
+    }, timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: timeoutController.signal,
+      });
+
+      if (!response.ok) {
+        throw new NotificationDeliveryError(
+          `Webhook responded ${response.status} ${response.statusText}`.trim(),
+        );
+      }
+    } catch (error: unknown) {
+      if (error instanceof NotificationDeliveryError) {
+        throw error;
+      }
+      throw new NotificationDeliveryError(
+        timeoutController.signal.aborted
+          ? `Webhook request timed out after ${timeoutMs}ms`
+          : `Webhook request errored: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  }
+
+  /**
+   * One attempt, no cooldown, and a thrown error instead of `false`.
+   *
+   * This is the outbox dispatcher's transport: the outbox owns retry, backoff
+   * and deduplication durably, so repeating them here in process memory would
+   * only hide a failure from the row that has to record it.
+   */
+  async deliver(event: NotificationEvent): Promise<void> {
+    if (!this.config.webhookUrl) {
+      throw new NotificationDeliveryError('Webhook URL is not configured');
+    }
+
+    await this.post(
+      this.config.webhookUrl,
+      this.toSlackPayload(event),
+      this.config.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS,
+    );
+  }
+
   async notify(event: NotificationEvent): Promise<boolean> {
     if (!this.config.enabled) {
       return false;
@@ -224,53 +305,27 @@ export class WebhookNotifier {
     const totalAttempts = retryAttempts + 1;
 
     for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
-      const timeoutController = new AbortController();
-      const timeoutHandle = setTimeout(() => {
-        timeoutController.abort();
-      }, timeoutMs);
-
       try {
-        const response = await fetch(this.config.webhookUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-          signal: timeoutController.signal,
-        });
+        await this.post(this.config.webhookUrl, payload, timeoutMs);
+        this.markSent(event.dedupKey);
 
-        if (response.ok) {
-          this.markSent(event.dedupKey);
-
-          this.logInfo('Notification sent', {
-            source: event.source,
-            type: event.type,
-            severity: event.severity,
-            attempt,
-            totalAttempts,
-          });
-
-          return true;
-        }
-
-        this.logError('Notification webhook request failed', {
-          status: response.status,
-          statusText: response.statusText,
+        this.logInfo('Notification sent', {
           source: event.source,
           type: event.type,
+          severity: event.severity,
           attempt,
           totalAttempts,
         });
+
+        return true;
       } catch (error: unknown) {
-        this.logError('Notification webhook request errored', {
+        this.logError('Notification webhook request failed', {
           error: error instanceof Error ? error.message : error,
           source: event.source,
           type: event.type,
           attempt,
           totalAttempts,
         });
-      } finally {
-        clearTimeout(timeoutHandle);
       }
 
       if (attempt < totalAttempts) {
@@ -290,3 +345,7 @@ export class WebhookNotifier {
     return false;
   }
 }
+
+export * from './outbox';
+export * from './dispatcher';
+export * from './durableNotifier';
