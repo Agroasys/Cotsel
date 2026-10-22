@@ -170,7 +170,7 @@ export async function completeRun(stats: RunStats, executor: Executor = pool): P
   await executor.query(
     `UPDATE reconcile_runs
      SET status = $2,
-         completed_at = NOW(),
+         completed_at = (NOW() AT TIME ZONE 'UTC'),
          total_trades = $3,
          drift_count = $4,
          critical_count = $5,
@@ -323,7 +323,7 @@ export async function failRun(
   const result = await executor.query(
     `UPDATE reconcile_runs
      SET status = 'FAILED',
-         completed_at = NOW(),
+         completed_at = (NOW() AT TIME ZONE 'UTC'),
          error_message = $4,
          lease_owner = NULL,
          lease_expires_at = NULL

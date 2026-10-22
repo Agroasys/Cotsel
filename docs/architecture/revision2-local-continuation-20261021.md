@@ -17,6 +17,12 @@ This aligns GraphQL projection and processor checkpoints at a finalized anchor.
 Actual migration runners, non-superuser runtime roles, GraphQL reads, reconciliation runs, and UTC sessions
 produce the financial-coverage evidence. The test adapter inserts no checkpoint, trade projection, or reconciliation run.
 
+Completion writers store UTC explicitly in the existing timestamp column; readers do not require a particular session timezone.
+PostgreSQL regressions use separate writer and reader sessions with regional zones, UTC aliases, and a different Node timezone.
+Stale, future, contained, and newer-drift coverage remains unavailable.
+Deploy the corrected writers before exposing financial coverage, and obtain a fresh clean run afterward.
+Existing completion timestamps are not rewritten or backfilled.
+
 No new execution endpoint, contract, financial policy, signature format, recipient, or public activation switch is added.
 Mirrored local nodes and controlled managed signing do not prove independent providers or deployed custody.
 The backend completion record describes financial assertions, process-death restrictions, and remaining acceptance gates.

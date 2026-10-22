@@ -18,8 +18,8 @@ export async function readFinancialCoverage(
     maxAgeMs <= 0
   )
     return null;
-  // Legacy completed_at is a UTC timestamp without a zone. Decode and compare it
-  // explicitly so the Node process timezone cannot shift the freshness window.
+  // Completion writers store UTC in the legacy timestamp column. Decode it
+  // explicitly so neither the reader session nor Node timezone shifts freshness.
   const result = await executor.query<{
     run_key: string;
     completed_at: Date;
@@ -28,8 +28,7 @@ export async function readFinancialCoverage(
     `SELECT r.run_key, r.completed_at AT TIME ZONE 'UTC' AS completed_at, r.chain_evidence
     FROM reconcile_runs r
     JOIN reconcile_run_trades t ON t.run_id = r.id AND t.run_key = r.run_key
-    WHERE current_setting('TimeZone') IN ('UTC', 'Etc/UTC')
-      AND t.trade_id = $1 AND r.status = 'COMPLETED' AND r.drift_count = 0 AND r.error_message IS NULL
+    WHERE t.trade_id = $1 AND r.status = 'COMPLETED' AND r.drift_count = 0 AND r.error_message IS NULL
       AND r.coverage_complete IS TRUE AND r.indexer_enumeration_truncated IS FALSE
       AND r.chain_evidence IS NOT NULL AND r.coverage_to_block <= $2::numeric
       AND r.completed_at AT TIME ZONE 'UTC' >= $3::timestamptz
