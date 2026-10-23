@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomUUID } from 'crypto';
+import { canTransitionTransactionFinality } from '@agroasys/sdk';
 import {
   GovernanceActionRecord,
   GovernanceMonitoringState,
@@ -16,12 +17,12 @@ import {
   GovernanceTransactionVerifier,
 } from './governanceMutationTypes';
 import {
+  assessGovernanceFinality,
   buildGovernanceMonitoringAuditEntry,
-  confirmationsFromHead,
   governanceActionAgeMs,
+  governanceActionFinality,
+  projectGovernanceFinality,
   resolveGovernanceConfirmationOutcome,
-  safeGetGovernanceBlockNumber,
-  safeGetGovernanceReceipt,
   verifyObservedGovernanceTransaction,
   type GovernanceObservedMatch,
 } from './governanceDirectSignMonitoring';
@@ -29,8 +30,6 @@ import {
 const DEFAULT_POLL_INTERVAL_MS = 15_000;
 const DEFAULT_PENDING_VERIFICATION_STALE_AFTER_MS = 10 * 60_000;
 const DEFAULT_PENDING_CONFIRMATION_STALE_AFTER_MS = 30 * 60_000;
-const DEFAULT_CONFIRMATION_DEPTH = 1;
-const DEFAULT_FINALIZATION_DEPTH = 5;
 const DEFAULT_MONITOR_LEASE_MS = 2 * 60_000;
 
 export interface GovernanceDirectSignMonitorOptions {
@@ -39,8 +38,6 @@ export interface GovernanceDirectSignMonitorOptions {
   pollIntervalMs?: number;
   pendingVerificationStaleAfterMs?: number;
   pendingConfirmationStaleAfterMs?: number;
-  confirmationDepth?: number;
-  finalizationDepth?: number;
   monitorLeaseMs?: number;
   workerId?: string;
 }
@@ -58,8 +55,6 @@ export class GovernanceDirectSignMonitor {
   private readonly pollIntervalMs: number;
   private readonly pendingVerificationStaleAfterMs: number;
   private readonly pendingConfirmationStaleAfterMs: number;
-  private readonly confirmationDepth: number;
-  private readonly finalizationDepth: number;
   private readonly monitorLeaseMs: number;
   private readonly workerId: string;
   private running = false;
@@ -76,11 +71,6 @@ export class GovernanceDirectSignMonitor {
       options.pendingVerificationStaleAfterMs ?? DEFAULT_PENDING_VERIFICATION_STALE_AFTER_MS;
     this.pendingConfirmationStaleAfterMs =
       options.pendingConfirmationStaleAfterMs ?? DEFAULT_PENDING_CONFIRMATION_STALE_AFTER_MS;
-    this.confirmationDepth = Math.max(1, options.confirmationDepth ?? DEFAULT_CONFIRMATION_DEPTH);
-    this.finalizationDepth = Math.max(
-      this.confirmationDepth,
-      options.finalizationDepth ?? DEFAULT_FINALIZATION_DEPTH,
-    );
     this.monitorLeaseMs = Math.max(1_000, options.monitorLeaseMs ?? DEFAULT_MONITOR_LEASE_MS);
     this.workerId = options.workerId ?? `governance-monitor-${randomUUID()}`;
   }
@@ -236,8 +226,6 @@ export class GovernanceDirectSignMonitor {
       finalSignerWallet: match.finalSignerWallet,
       observedBlockNumber: match.blockNumber,
       verifier: this.verifier,
-      confirmationDepth: this.confirmationDepth,
-      finalizationDepth: this.finalizationDepth,
     });
 
     const transitioned: GovernanceActionRecord = {
@@ -302,8 +290,9 @@ export class GovernanceDirectSignMonitor {
       );
     }
 
-    const receipt = await safeGetGovernanceReceipt(this.verifier, action.txHash);
-    if (!receipt) {
+    const assessment = await assessGovernanceFinality(this.verifier, action);
+    const projection = assessment ? projectGovernanceFinality(assessment) : null;
+    if (!assessment || !projection) {
       if (governanceActionAgeMs(action, inspectedAt) < this.pendingConfirmationStaleAfterMs) {
         return null;
       }
@@ -313,59 +302,22 @@ export class GovernanceDirectSignMonitor {
         requestId,
         inspectedAt,
         'TX_CONFIRMATION_STALE',
-        'Verified governance transaction did not reach a confirmed receipt before the monitoring window expired',
+        `Verified governance transaction did not reach a canonical receipt before the monitoring window expired (finality: ${assessment ? `${assessment.state}/${assessment.reason}` : 'unavailable'})`,
         action.verificationState ?? 'verified',
       );
     }
 
-    if (receipt.status === 'reverted') {
-      const revertedAction: GovernanceActionRecord = {
-        ...action,
-        status: 'failed',
-        blockNumber: receipt.blockNumber ?? action.blockNumber,
-        monitoringState: 'reverted',
-        verificationState: action.verificationState ?? 'verified',
-        errorCode: 'TX_REVERTED',
-        errorMessage: 'Observed governance transaction reverted on-chain',
-        executedAt: action.executedAt,
-      };
-
-      const auditEntry = buildGovernanceMonitoringAuditEntry(
-        action,
-        requestId,
-        'governance.action.monitoring.reverted',
-        'failed',
-        {
-          newStatus: 'failed',
-          newMonitoringState: 'reverted',
-          blockNumber: revertedAction.blockNumber,
-        },
-      );
-
-      return this.completeTransition(claim, revertedAction, auditEntry);
-    }
-
-    if (receipt.status !== 'success') {
+    const next = { state: assessment.state, final: assessment.final };
+    if (!canTransitionTransactionFinality(governanceActionFinality(action), next)) {
       return null;
     }
 
-    const headBlockNumber = await safeGetGovernanceBlockNumber(this.verifier);
-    const confirmations = confirmationsFromHead(receipt, headBlockNumber);
-    const nextMonitoringState =
-      confirmations !== null && confirmations >= this.finalizationDepth
-        ? 'finalized'
-        : confirmations !== null && confirmations >= this.confirmationDepth
-          ? 'confirmed'
-          : 'pending_confirmation';
-
-    const nextStatus = nextMonitoringState === 'finalized' ? 'executed' : 'broadcast';
-    const shouldSetExecutedAt = nextMonitoringState === 'finalized';
-
+    const blockNumber = assessment.blockNumber ?? action.blockNumber;
     const hasChanged =
-      action.status !== nextStatus ||
-      action.monitoringState !== nextMonitoringState ||
-      action.blockNumber !== (receipt.blockNumber ?? action.blockNumber) ||
-      (shouldSetExecutedAt && !action.executedAt);
+      action.status !== projection.status ||
+      action.monitoringState !== projection.monitoringState ||
+      action.blockNumber !== blockNumber ||
+      (projection.executed && !action.executedAt);
 
     if (!hasChanged) {
       return null;
@@ -373,26 +325,34 @@ export class GovernanceDirectSignMonitor {
 
     const updatedAction: GovernanceActionRecord = {
       ...action,
-      status: nextStatus,
-      blockNumber: receipt.blockNumber ?? action.blockNumber,
-      monitoringState: nextMonitoringState,
-      executedAt: shouldSetExecutedAt ? (action.executedAt ?? inspectedAt) : action.executedAt,
-      errorCode: action.errorCode?.startsWith('LATE_BROADCAST_') ? action.errorCode : null,
-      errorMessage: action.errorCode?.startsWith('LATE_BROADCAST_') ? action.errorMessage : null,
+      status: projection.status,
+      blockNumber,
+      monitoringState: projection.monitoringState,
+      verificationState: action.verificationState ?? 'verified',
+      executedAt: projection.executed ? (action.executedAt ?? inspectedAt) : action.executedAt,
+      errorCode: action.errorCode?.startsWith('LATE_BROADCAST_')
+        ? action.errorCode
+        : projection.errorCode,
+      errorMessage: action.errorCode?.startsWith('LATE_BROADCAST_')
+        ? action.errorMessage
+        : projection.errorMessage,
     };
 
     const auditEntry = buildGovernanceMonitoringAuditEntry(
       action,
       requestId,
-      nextMonitoringState === 'finalized'
-        ? 'governance.action.monitoring.finalized'
-        : 'governance.action.monitoring.confirmed',
+      projection.eventType,
       updatedAction.status,
       {
         newStatus: updatedAction.status,
         newMonitoringState: updatedAction.monitoringState,
         blockNumber: updatedAction.blockNumber,
-        confirmations,
+        finalityModelVersion: assessment.modelVersion,
+        finalityState: assessment.state,
+        finalityReason: assessment.reason,
+        ...(projection.errorCode
+          ? { errorCode: projection.errorCode, errorMessage: projection.errorMessage }
+          : {}),
       },
     );
 

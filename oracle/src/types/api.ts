@@ -1,3 +1,5 @@
+import type { OracleTriggerFinality } from '../core/trigger-finality';
+
 export interface OracleResponse {
   success: boolean;
   idempotencyKey: string;
@@ -7,6 +9,8 @@ export interface OracleResponse {
   blockNumber?: number;
   idempotent: boolean;
   message: string;
+  /** Shared WP-2 finality position; `null` when the trigger owns no transaction. */
+  finality?: OracleTriggerFinality | null;
   timestamp: string;
 }
 

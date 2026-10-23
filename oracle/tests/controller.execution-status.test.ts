@@ -106,4 +106,40 @@ describe('OracleController execution truth', () => {
       );
     },
   );
+
+  it('publishes the shared finality position, or null when the trigger owns no transaction', async () => {
+    const finality = {
+      modelVersion: 'cotsel.transaction-finality.v1',
+      state: 'finalized',
+      final: true,
+    };
+    const triggerManager = {
+      executeTrigger: jest
+        .fn()
+        .mockResolvedValueOnce({ ...triggerResult(TriggerStatus.CONFIRMED), finality })
+        .mockResolvedValueOnce(triggerResult(TriggerStatus.TERMINAL_FAILURE)),
+    };
+    const controller = new OracleController(triggerManager as never);
+    const request = {
+      body: {
+        tradeId: '42',
+        requestId: 'request-42',
+        fundedBinding: fundedBindingFixture(TriggerType.FINALIZE_TRADE, '42'),
+      },
+    } as Request;
+
+    const confirmed = responseRecorder();
+    await controller.finalizeTrade(
+      request,
+      confirmed as unknown as Response<OracleResponse | ErrorResponse>,
+    );
+    expect(confirmed.json).toHaveBeenCalledWith(expect.objectContaining({ finality }));
+
+    const failed = responseRecorder();
+    await controller.finalizeTrade(
+      request,
+      failed as unknown as Response<OracleResponse | ErrorResponse>,
+    );
+    expect(failed.json).toHaveBeenCalledWith(expect.objectContaining({ finality: null }));
+  });
 });

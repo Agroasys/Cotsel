@@ -1,6 +1,6 @@
 import type { GatewayConfig } from '../config/gatewayConfig';
 import type { DownstreamServiceKey } from './serviceRegistry';
-import { parseSettlementFundedBinding } from '@agroasys/sdk';
+import { parseSettlementFundedBinding, TRANSACTION_FINALITY_MODEL_VERSION } from '@agroasys/sdk';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -19,6 +19,20 @@ const ORACLE_PATH_BY_PHASE = {
 type ExecutableSettlementPhase = keyof typeof ORACLE_PATH_BY_PHASE;
 
 const ACCEPTED_ORACLE_STATUSES = new Set(['SUBMITTED', 'CONFIRMED']);
+
+/**
+ * WP-2 H-02. The Oracle status string alone never makes an execution final;
+ * it must carry a finalized position in the same shared model version.
+ */
+function isOracleFinalized(finality: unknown): boolean {
+  if (!finality || typeof finality !== 'object') return false;
+  const position = finality as Record<string, unknown>;
+  return (
+    position.modelVersion === TRANSACTION_FINALITY_MODEL_VERSION &&
+    position.state === 'finalized' &&
+    position.final === true
+  );
+}
 
 export interface OracleSettlementProgressionResult {
   handoffId: string;
@@ -128,7 +142,8 @@ export class OracleSettlementProgressionService {
       );
     }
 
-    const executionStatus = oracleStatus === 'CONFIRMED' ? 'confirmed' : 'submitted';
+    const executionStatus =
+      oracleStatus === 'CONFIRMED' && isOracleFinalized(body.finality) ? 'confirmed' : 'submitted';
     const txHash =
       typeof body.txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(body.txHash)
         ? body.txHash
@@ -161,6 +176,8 @@ export class OracleSettlementProgressionService {
         oracleIdempotencyKey: body.idempotencyKey,
         oracleBlockNumber: body.blockNumber,
         oracleIdempotent: body.idempotent === true,
+        oracleStatus,
+        oracleFinality: body.finality ?? null,
       },
       observedAt: this.now().toISOString(),
       requestId,

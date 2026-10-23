@@ -1,4 +1,5 @@
 import { StateValidator } from './state-validator';
+import { triggerFinality } from './trigger-finality';
 import type { SDKClient } from '../blockchain/sdk-client';
 import type { ContainmentGuard } from './containment-guard';
 import type { TriggerResponse } from './trigger-manager';
@@ -141,6 +142,11 @@ export async function executeTriggerWithRetry(
         blockNumber: result.blockNumber,
         idempotent: false,
         message: 'Transaction submitted, awaiting confirmation',
+        finality: triggerFinality({
+          status: TriggerStatus.SUBMITTED,
+          tx_hash: result.txHash,
+          confirmation_stage: null,
+        }),
       };
     } catch (error: unknown) {
       if (dispatchClaimed) {
@@ -158,6 +164,12 @@ export async function executeTriggerWithRetry(
           status,
           txHash: observedHash,
           idempotent: false,
+          finality: triggerFinality({
+            status,
+            tx_hash: observedHash ?? null,
+            confirmation_stage: null,
+            dispatch_started_at: new Date(),
+          }),
           message:
             'Original dispatch outcome is unresolved; observation continues without another submission.',
         };
