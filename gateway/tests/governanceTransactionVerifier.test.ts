@@ -57,3 +57,74 @@ describe('RPC governance transaction simulation', () => {
     await expect(verifier.simulateTransaction(transaction)).rejects.toThrow('reverted');
   });
 });
+
+describe('RPC governance finality observation', () => {
+  const blockHash = `0x${'a'.repeat(64)}`;
+  const txHash = `0x${'c'.repeat(64)}`;
+
+  function finalityProvider(overrides: Record<string, unknown> = {}) {
+    return provider({
+      getBlockNumber: jest.fn(async () => 130),
+      getTransactionReceipt: jest.fn(async () => ({ blockNumber: 100, blockHash, status: 1 })),
+      getBlock: jest.fn(async (tag: string | number) =>
+        tag === 'safe'
+          ? { number: 120, hash: blockHash }
+          : tag === 'finalized'
+            ? { number: 110, hash: blockHash }
+            : { number: tag, hash: blockHash },
+      ),
+      ...overrides,
+    });
+  }
+
+  test('reports tags, receipt and canonical block from one provider identity', async () => {
+    const verifier = new RpcGovernanceTransactionVerifier(
+      finalityProvider(),
+      `sha256:${'1'.repeat(64)}`,
+    );
+
+    await expect(verifier.observeTransactionFinality(txHash)).resolves.toEqual({
+      providerId: `sha256:${'1'.repeat(64)}`,
+      chainId: 84532,
+      latestBlockNumber: 130,
+      safeBlockNumber: 120,
+      finalizedBlockNumber: 110,
+      receipt: { blockNumber: 100, blockHash, status: 1 },
+      canonicalBlockHash: blockHash,
+    });
+  });
+
+  test('records an explicitly rejected block tag as unsupported', async () => {
+    const rpc = finalityProvider({
+      getBlock: jest.fn(async (tag: string | number) => {
+        if (tag === 'safe' || tag === 'finalized') throw new Error('invalid block tag safe');
+        return { number: tag, hash: blockHash };
+      }),
+    });
+    const verifier = new RpcGovernanceTransactionVerifier(rpc, `sha256:${'1'.repeat(64)}`);
+
+    await expect(verifier.observeTransactionFinality(txHash)).resolves.toMatchObject({
+      safeBlockNumber: 'unsupported',
+      finalizedBlockNumber: 'unsupported',
+    });
+  });
+
+  test('propagates other tag read failures instead of weakening silently', async () => {
+    const rpc = finalityProvider({
+      getBlock: jest.fn(async () => Promise.reject(new Error('socket hang up'))),
+    });
+    const verifier = new RpcGovernanceTransactionVerifier(rpc, `sha256:${'1'.repeat(64)}`);
+
+    await expect(verifier.observeTransactionFinality(txHash)).rejects.toThrow('socket hang up');
+  });
+
+  test('omits the canonical block when there is no receipt', async () => {
+    const rpc = finalityProvider({ getTransactionReceipt: jest.fn(async () => null) });
+    const verifier = new RpcGovernanceTransactionVerifier(rpc, `sha256:${'1'.repeat(64)}`);
+
+    await expect(verifier.observeTransactionFinality(txHash)).resolves.toMatchObject({
+      receipt: null,
+      canonicalBlockHash: null,
+    });
+  });
+});

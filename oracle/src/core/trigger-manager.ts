@@ -1,4 +1,5 @@
 import { type SettlementFundedBinding } from '@agroasys/sdk';
+import { type OracleTriggerFinality, triggerFinality } from './trigger-finality';
 import { SDKClient } from '../blockchain/sdk-client';
 import { StateValidator } from './state-validator';
 import { Trigger, TriggerType, TriggerStatus, CreateTriggerData } from '../types/trigger';
@@ -42,6 +43,8 @@ export interface TriggerResponse {
   blockNumber?: number;
   idempotent: boolean;
   message: string;
+  /** Shared WP-2 finality position; absent when the trigger owns no transaction. */
+  finality?: OracleTriggerFinality | null;
 }
 
 export class TriggerManager {
@@ -110,6 +113,7 @@ export class TriggerManager {
         blockNumber: latestTrigger.block_number ? Number(latestTrigger.block_number) : undefined,
         idempotent: true,
         message: 'Action already completed (idempotent)',
+        finality: triggerFinality(latestTrigger),
       };
     }
 
@@ -316,6 +320,7 @@ export class TriggerManager {
         blockNumber: trigger.block_number ? Number(trigger.block_number) : undefined,
         idempotent: true,
         message: 'Trigger already executed for this request (idempotent)',
+        finality: triggerFinality(trigger),
       };
     }
 
@@ -349,6 +354,7 @@ export class TriggerManager {
       status: trigger.status,
       idempotent: false,
       message: 'Trigger in progress',
+      finality: triggerFinality(trigger),
     };
   }
 
@@ -424,6 +430,7 @@ export class TriggerManager {
       blockNumber: trigger.block_number ? Number(trigger.block_number) : undefined,
       idempotent: this.isActionAlreadyCompleted(trigger),
       message,
+      finality: triggerFinality(trigger),
     };
   }
 

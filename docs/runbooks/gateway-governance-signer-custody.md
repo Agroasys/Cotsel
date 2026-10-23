@@ -141,8 +141,12 @@ new approval and binding.
 8. If the action is `broadcast_pending_verification`, do not resubmit with a new
    hash. Allow the gateway monitor to resolve the existing hash.
 9. Close the action only after the status and monitoring state show `executed`
-   and `finalized`, or record the explicit `stale`, `reverted`, or `failed`
-   outcome.
+   and `finalized`, or record the explicit `stale` outcome or a `failed` status
+   with monitoring state `reverted`. Status `broadcast` with monitoring state
+   `reverted` is a revert that is not yet finalized: keep monitoring, it can
+   still change after a reorganization. `finalized` requires the chain's
+   `finalized` block tag to cover the receipt block; block depth alone never
+   finalizes an action.
 
 For quorum actions, a different registered administrator repeats the applicable
 prepare, device review, broadcast, and confirm steps. Do not reuse a wallet,
@@ -194,8 +198,8 @@ For loss, compromise, offboarding, or address mismatch:
 Retain the signer binding and approval ticket, `actionId`, `intentKey`, request
 and correlation IDs, prepared-payload hash, exact unsigned transaction, signer
 address, initial and handoff simulation block/hash/provider/time/result evidence,
-transaction hash, block number, receipt status, confirmation depth, final
-monitoring state, late-broadcast incident flag where applicable, and reviewer
+transaction hash, block number, receipt status, finality model version, state
+and reason from the monitoring audit entry, final monitoring state, late-broadcast incident flag where applicable, and reviewer
 identities.
 
 Store the packet using

@@ -153,6 +153,9 @@ async function startServer(
     getTransaction: jest.fn(async () => null),
     getTransactionReceipt: jest.fn(async () => null),
     getBlockNumber: jest.fn(async () => null),
+    observeTransactionFinality: jest.fn(async () => {
+      throw new Error('Finality is not observed in this test');
+    }),
   };
 
   const router = Router();

@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import type { TransactionFinalityObservation } from '@agroasys/sdk';
 import type {
   EvidenceLink,
   GovernanceActionCategory,
@@ -91,6 +92,8 @@ export interface GovernanceTransactionVerifier {
   getTransaction(txHash: string): Promise<GovernanceObservedTransaction | null>;
   getTransactionReceipt(txHash: string): Promise<GovernanceObservedTransactionReceipt | null>;
   getBlockNumber(): Promise<number | null>;
+  /** One provider's view of the receipt, its canonical block and the safe and finalized tags. */
+  observeTransactionFinality(txHash: string): Promise<TransactionFinalityObservation>;
 }
 
 export interface GovernanceVerificationOutcome {
