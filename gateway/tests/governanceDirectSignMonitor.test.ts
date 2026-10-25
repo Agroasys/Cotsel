@@ -306,9 +306,9 @@ describe('GovernanceDirectSignMonitor', () => {
     expect(auditLogStore.entries[0]?.eventType).toBe('governance.action.monitoring.finalized');
   });
 
-  test('leaves the action unchanged when its receipt block was reorganized away', async () => {
-    const { updated, result } = await monitorWith(
-      confirmingAction({ monitoringState: 'confirmed' }),
+  test('returns a confirmed action to unresolved when its receipt block is reorganized away', async () => {
+    const { updated, result, auditLogStore } = await monitorWith(
+      confirmingAction({ monitoringState: 'confirmed', blockNumber: 88 }),
       buildFinalityObservation({
         latestBlockNumber: 120,
         finalizedBlockNumber: 100,
@@ -317,9 +317,65 @@ describe('GovernanceDirectSignMonitor', () => {
       }),
     );
 
-    expect(result.updatedCount).toBe(0);
-    expect(updated?.status).toBe('broadcast');
-    expect(updated?.monitoringState).toBe('confirmed');
+    expect(result.updatedCount).toBe(1);
+    expect(updated).toMatchObject({
+      status: 'broadcast',
+      monitoringState: 'pending_confirmation',
+      blockNumber: null,
+      executedAt: null,
+      errorCode: 'TX_RECEIPT_NOT_CANONICAL',
+    });
+    expect(auditLogStore.entries[0]?.eventType).toBe(
+      'governance.action.monitoring.canonicality_lost',
+    );
+    expect(auditLogStore.entries[0]?.metadata).toMatchObject({
+      previousMonitoringState: 'confirmed',
+      previousBlockNumber: 88,
+      finalityState: 'unknown',
+      finalityReason: 'receipt_not_canonical',
+    });
+  });
+
+  test('keeps polling a reorganized action past the stale window and re-confirms it', async () => {
+    const store = createInMemoryGovernanceActionStore([
+      confirmingAction({
+        monitoringState: 'confirmed',
+        blockNumber: 88,
+        broadcastAt: '2026-04-07T10:00:00.000Z',
+      }),
+    ]);
+    const auditLogStore = createInMemoryAuditLogStore();
+    const observe = jest.fn(async () =>
+      buildFinalityObservation({ canonicalBlockHash: `0x${'b'.repeat(64)}` }),
+    );
+    const monitor = createMonitor(
+      store,
+      auditLogStore,
+      createVerifier({ observeTransactionFinality: observe }),
+      { now: () => new Date('2026-04-07T11:00:00.000Z') },
+    );
+
+    await monitor.processPendingActions();
+    await monitor.processPendingActions();
+    await expect(store.get('action-1')).resolves.toMatchObject({
+      status: 'broadcast',
+      monitoringState: 'pending_confirmation',
+    });
+    expect(auditLogStore.entries).toHaveLength(1);
+
+    observe.mockResolvedValue(
+      buildFinalityObservation({
+        receipt: { blockNumber: 89, blockHash: RECEIPT_BLOCK_HASH, status: 1 },
+        latestBlockNumber: 89,
+      }),
+    );
+    await monitor.processPendingActions();
+    await expect(store.get('action-1')).resolves.toMatchObject({
+      status: 'broadcast',
+      monitoringState: 'confirmed',
+      blockNumber: 89,
+      errorCode: null,
+    });
   });
 
   test('ignores finality observed on a different chain', async () => {

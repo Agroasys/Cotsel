@@ -44,9 +44,12 @@ receipt height, and the latest, `safe` and `finalized` heads.
 - **Invalid observation.** A tag ahead of the head, `finalized` ahead of
   `safe`, a receipt ahead of the head or a malformed hash gives
   `unknown/invalid_observation`.
-- **Reorganization.** If the receipt's block hash differs from the provider's
-  canonical block at that height, or that block cannot be read, the result is
-  `unknown/receipt_not_canonical`.
+- **Reorganization.** Each observation carries the provider's canonical block
+  hash at the height of the receipt, or of the replacement when there is no
+  receipt. If that hash differs from the receipt's or replacement's block
+  hash, or the block cannot be read, the result is
+  `unknown/receipt_not_canonical` or `unknown/replacement_not_canonical`. A
+  replacement is never reported as final unless its block is still canonical.
 - **Provider disagreement.** Providers must agree on whether a receipt exists
   and on its block number, block hash and status. Any difference gives
   `unknown/provider_disagreement`.
@@ -103,7 +106,13 @@ already use the model's evidence rule, so neither needed a mapping change.
    is gone. The monitor also checks that the receipt block is still canonical,
    and ignores evidence from the wrong chain. A revert becomes the terminal
    `failed` status only once it is finalized. Before that the action stays
-   `broadcast` with monitoring state `reverted` and is still monitored. Each
+   `broadcast` with monitoring state `reverted` and is still monitored. If the
+   receipt block of a monitored action is reorganized away, the action returns
+   to `broadcast`/`pending_confirmation` with no block number and error code
+   `TX_RECEIPT_NOT_CANONICAL`. The monitor records a
+   `governance.action.monitoring.canonicality_lost` audit entry and keeps
+   polling; an observed reorganization never turns the action `stale`. The
+   error code clears when a canonical receipt is observed again. Each
    monitoring audit entry records `finalityModelVersion`, `finalityState` and
    `finalityReason`.
 2. **Oracle API.** Trigger execution responses and trigger listings carry
@@ -115,6 +124,15 @@ already use the model's evidence rule, so neither needed a mapping change.
 4. **Settlement state machine.** `broadcast_unknown` and `submitted` can no
    longer move to `failed` or `rejected`. A conformance test checks every edge
    of the table against the shared transition rules.
+5. **Settlement execution-event ingress.**
+   `POST /settlement/handoffs/{handoffId}/execution-events` refuses, with 409,
+   any event that moves a handoff to `confirmed`, `reverted` or `replaced`. A
+   service caller cannot attach finality evidence, so only the gateway's own
+   verified paths record those chain outcomes. `reconciled` and
+   `drift_detected` events may still restate an existing `confirmed` status.
+   Callers can still report `submitted`, `broadcast_unknown`,
+   `confirmation_pending`, pre-broadcast `failed`/`rejected` and
+   `chain_evidence_orphaned`.
 
 ## Rollout and rollback
 
@@ -126,8 +144,11 @@ already use the model's evidence rule, so neither needed a mapping change.
 - **No schema migration.** Every persisted value already exists. Governance
   rows are not rewritten.
 - **Legacy rows.** Governance actions marked `executed` under the old depth
-  rule before this change are not re-evaluated. Before relying on such an
-  action, check its receipt block against the `finalized` tag.
+  rule before this change are not re-evaluated, and neither are settlement
+  handoffs that a service caller set to `confirmed` through the ingress
+  before this change. Before relying on such a row, verify its transaction
+  through `GET /settlement/transactions/{transactionHash}/finality` or check
+  its receipt block against the `finalized` tag.
 - **Rollback:** redeploy the previous gateway and Oracle images. The previous
   gateway ignores the Oracle `finality` field. While a non-final revert is
   pending, rolling back the gateway resumes the old immediate-`failed`
@@ -140,11 +161,6 @@ already use the model's evidence rule, so neither needed a mapping change.
   gasless path already requires two independent providers. Adding a second
   governance witness is a configuration and evidence decision for WP-7
   INFRA-05.
-- Replacement detection takes the replacement's block from the observation.
-  No producer reports `replaced` yet, so it is never mapped as final.
-- `POST /settlement/handoffs/{handoffId}/execution-events` still lets an
-  authenticated service caller assert `confirmed` without attaching finality
-  evidence. The state machine still prevents an ambiguous broadcast from
-  being overwritten as `failed`.
+- No producer reports `replaced` yet, so the gateway never maps it as final.
 - Acceptance still requires candidate-bound evidence from the deployed
   environment (issue #648). Local tests cover the model's logic only.

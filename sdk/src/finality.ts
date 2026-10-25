@@ -37,6 +37,7 @@ export type TransactionFinalityReason =
   | 'wrong_chain'
   | 'provider_disagreement'
   | 'receipt_not_canonical'
+  | 'replacement_not_canonical'
   | 'included'
   | 'finality_tag_unsupported'
   | 'safe_tag_reached'
@@ -57,7 +58,11 @@ export interface TransactionFinalityObservation {
   safeBlockNumber: FinalityTagObservation;
   finalizedBlockNumber: FinalityTagObservation;
   receipt: { blockNumber: number; blockHash: string; status: 0 | 1 } | null;
-  /** Hash of this provider's canonical block at `receipt.blockNumber`, when a receipt exists. */
+  /**
+   * Hash of this provider's canonical block at the height of the receipt, or of
+   * the replacement when there is no receipt. `null` when that block cannot be
+   * read, which never counts as canonical.
+   */
   canonicalBlockHash: string | null;
   /** A different transaction that consumed the same sender nonce, when observed. */
   replacement?: { transactionHash: string; blockNumber: number; blockHash: string } | null;
@@ -127,14 +132,18 @@ function isValidObservation(observation: TransactionFinalityObservation): boolea
   ) {
     return false;
   }
+  if (
+    observation.canonicalBlockHash !== null &&
+    !HASH_PATTERN.test(observation.canonicalBlockHash)
+  ) {
+    return false;
+  }
   if (receipt) {
     if (
       !isBlockNumber(receipt.blockNumber) ||
       receipt.blockNumber > latestBlockNumber ||
       !HASH_PATTERN.test(receipt.blockHash) ||
-      (receipt.status !== 0 && receipt.status !== 1) ||
-      (observation.canonicalBlockHash !== null &&
-        !HASH_PATTERN.test(observation.canonicalBlockHash))
+      (receipt.status !== 0 && receipt.status !== 1)
     ) {
       return false;
     }
@@ -233,14 +242,14 @@ export function classifyTransactionFinality(
   const anchor = first.receipt ?? first.replacement ?? null;
   if (!anchor) return unobserved();
 
+  // A receipt or replacement only counts while its block is still each provider's canonical block.
   if (
-    first.receipt &&
     input.observations.some(
       (observation) =>
-        observation.canonicalBlockHash?.toLowerCase() !== first.receipt?.blockHash.toLowerCase(),
+        observation.canonicalBlockHash?.toLowerCase() !== anchor.blockHash.toLowerCase(),
     )
   ) {
-    return result('unknown', 'receipt_not_canonical');
+    return result('unknown', first.receipt ? 'receipt_not_canonical' : 'replacement_not_canonical');
   }
 
   const depth = input.observations

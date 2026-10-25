@@ -4,6 +4,7 @@
 import { canTransitionTransactionFinality } from '@agroasys/sdk';
 import {
   GASLESS_OUTCOME_FINALITY,
+  isServiceReportableExecution,
   SETTLEMENT_EXECUTION_FINALITY,
 } from '../src/core/settlementFinality';
 import {
@@ -62,5 +63,23 @@ describe('gateway settlement finality conformance', () => {
       expect(() => validateExecutionTransition(current, 'failed', 'failed')).not.toThrow();
       expect(() => validateExecutionTransition(current, 'rejected', 'rejected')).not.toThrow();
     }
+  });
+
+  test('service callers cannot assert a chain outcome the model treats as final', () => {
+    for (const status of SETTLEMENT_EXECUTION_STATUSES) {
+      const final = SETTLEMENT_EXECUTION_FINALITY[status];
+      const chainOutcome =
+        final !== null &&
+        final.state !== 'failed' &&
+        final.state !== 'unknown' &&
+        final.state !== 'submitted';
+      expect([status, isServiceReportableExecution('accepted', status)]).toEqual([
+        status,
+        !chainOutcome,
+      ]);
+    }
+    expect(isServiceReportableExecution('reconciled', 'confirmed')).toBe(true);
+    expect(isServiceReportableExecution('drift_detected', 'confirmed')).toBe(true);
+    expect(isServiceReportableExecution('submitted', 'confirmed')).toBe(false);
   });
 });

@@ -258,7 +258,7 @@ describe('transaction finality model', () => {
         blockNumber: 130,
         blockHash: OTHER_HASH,
       };
-      const base = { receipt: null, canonicalBlockHash: null, replacement };
+      const base = { receipt: null, canonicalBlockHash: OTHER_HASH, replacement };
       expect(classify([observation(base)])).toMatchObject({
         state: 'replaced',
         final: false,
@@ -270,6 +270,31 @@ describe('transaction finality model', () => {
         final: true,
       });
     });
+
+    test.each([
+      ['an unreadable', null],
+      ['a conflicting', BLOCK_HASH],
+    ])(
+      'never reports a final replacement when its block has %s canonical hash',
+      (_label, canonicalBlockHash) => {
+        const replacement = {
+          transactionHash: REPLACEMENT_TX,
+          blockNumber: 150,
+          blockHash: OTHER_HASH,
+        };
+        expect(
+          classify([
+            observation({
+              receipt: null,
+              canonicalBlockHash,
+              replacement,
+              safeBlockNumber: 160,
+              finalizedBlockNumber: 150,
+            }),
+          ]),
+        ).toMatchObject({ state: 'unknown', reason: 'replacement_not_canonical', final: false });
+      },
+    );
   });
 
   describe('invalid observations', () => {

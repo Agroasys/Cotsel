@@ -2,7 +2,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomUUID } from 'crypto';
-import { canTransitionTransactionFinality } from '@agroasys/sdk';
+import {
+  canTransitionTransactionFinality,
+  type TransactionFinalityAssessment,
+} from '@agroasys/sdk';
 import {
   GovernanceActionRecord,
   GovernanceMonitoringState,
@@ -291,6 +294,10 @@ export class GovernanceDirectSignMonitor {
     }
 
     const assessment = await assessGovernanceFinality(this.verifier, action);
+    if (assessment?.reason === 'receipt_not_canonical') {
+      return this.persistCanonicalityLost(claim, requestId, assessment);
+    }
+
     const projection = assessment ? projectGovernanceFinality(assessment) : null;
     if (!assessment || !projection) {
       if (governanceActionAgeMs(action, inspectedAt) < this.pendingConfirmationStaleAfterMs) {
@@ -357,6 +364,53 @@ export class GovernanceDirectSignMonitor {
     );
 
     return this.completeTransition(claim, updatedAction, auditEntry);
+  }
+
+  /**
+   * The receipt the monitor relied on is no longer in a canonical block. The
+   * action returns to an unresolved position and stays monitored; the window
+   * that turns a missing receipt stale does not apply to an observed reorg.
+   */
+  private async persistCanonicalityLost(
+    claim: GovernanceMonitorClaim,
+    requestId: string,
+    assessment: TransactionFinalityAssessment,
+  ): Promise<GovernanceActionRecord | null> {
+    const action = claim.action;
+    if (action.monitoringState === 'pending_confirmation' && action.blockNumber === null) {
+      return null;
+    }
+
+    const lateBroadcast = action.errorCode?.startsWith('LATE_BROADCAST_');
+    const unresolvedAction: GovernanceActionRecord = {
+      ...action,
+      status: 'broadcast',
+      monitoringState: 'pending_confirmation',
+      blockNumber: null,
+      executedAt: action.executedAt,
+      errorCode: lateBroadcast ? action.errorCode : 'TX_RECEIPT_NOT_CANONICAL',
+      errorMessage: lateBroadcast
+        ? action.errorMessage
+        : 'Observed receipt block is no longer canonical; monitoring continues',
+    };
+
+    const auditEntry = buildGovernanceMonitoringAuditEntry(
+      action,
+      requestId,
+      'governance.action.monitoring.canonicality_lost',
+      unresolvedAction.status,
+      {
+        newStatus: unresolvedAction.status,
+        newMonitoringState: unresolvedAction.monitoringState,
+        previousMonitoringState: action.monitoringState ?? null,
+        previousBlockNumber: action.blockNumber,
+        finalityModelVersion: assessment.modelVersion,
+        finalityState: assessment.state,
+        finalityReason: assessment.reason,
+      },
+    );
+
+    return this.completeTransition(claim, unresolvedAction, auditEntry);
   }
 
   private async persistTerminalFailure(

@@ -1328,7 +1328,37 @@ describe('gateway settlement routes contract', () => {
           body: JSON.stringify(confirmBody),
         },
       );
-      expect(confirmResponse.status).toBe(202);
+      const confirmPayload = await confirmResponse.json();
+      expect(confirmResponse.status).toBe(409);
+      expect(confirmPayload.error.message).toBe(
+        'Chain outcomes are recorded only from gateway-verified finalized evidence',
+      );
+
+      for (const executionStatus of ['reverted', 'replaced']) {
+        const outcomeBody = { ...confirmBody, eventType: executionStatus, executionStatus };
+        const outcomeResponse = await fetch(
+          `${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Idempotency-Key': `event-${executionStatus}`,
+              ...withServiceAuth(eventPath, outcomeBody),
+            },
+            body: JSON.stringify(outcomeBody),
+          },
+        );
+        expect(outcomeResponse.status).toBe(409);
+      }
+
+      const listAfterRefusal = await fetch(
+        `${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`,
+        { headers: { ...withServiceAuth(eventPath, null, 'GET') } },
+      );
+      const refusalList = await listAfterRefusal.json();
+      expect(
+        refusalList.data.map((event: { executionStatus: string }) => event.executionStatus),
+      ).toEqual(['submitted']);
 
       const staleReconcileBody = {
         eventType: 'reconciled',

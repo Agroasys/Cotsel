@@ -1284,6 +1284,9 @@ paths:
         Service-authenticated mutation for authoritative execution and reconciliation truth coming back into the
         Cotsel gateway boundary. Every accepted event produces a durable callback-delivery record for the configured
         platform backend when callback delivery is enabled.
+        Callers cannot carry finality evidence, so an event that moves a handoff to `confirmed`, `reverted`, or
+        `replaced` is refused with 409. Those chain outcomes are recorded only by the gateway's own finalized-evidence
+        paths. `reconciled` and `drift_detected` events may restate an already `confirmed` status.
       operationId: createSettlementExecutionEvent
       security: []
       parameters:
