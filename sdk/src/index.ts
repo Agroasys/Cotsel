@@ -73,6 +73,7 @@ export * from './types/runtimePreflight';
 // config
 export * from './config';
 export * from './confirmation';
+export * from './finality';
 export * from './runtime';
 
 // utils

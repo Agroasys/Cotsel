@@ -118,7 +118,13 @@ describe('OracleSettlementProgressionService', () => {
     });
   });
 
-  it('records confirmed oracle truth without marking it reconciled', async () => {
+  const finalized = {
+    modelVersion: 'cotsel.transaction-finality.v1',
+    state: 'finalized',
+    final: true,
+  };
+
+  async function recordOracleResponse(body: Record<string, unknown>) {
     const store = {
       getHandoff: jest
         .fn()
@@ -129,9 +135,9 @@ describe('OracleSettlementProgressionService', () => {
         new Response(
           JSON.stringify({
             success: true,
-            status: 'CONFIRMED',
             txHash: `0x${'b'.repeat(64)}`,
             blockNumber: 123,
+            ...body,
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         ),
@@ -147,15 +153,40 @@ describe('OracleSettlementProgressionService', () => {
     );
 
     await service.executeHandoff('sth-42', 'req-confirmed');
+    return settlementService.recordExecutionEvent as jest.Mock;
+  }
 
-    expect(settlementService.recordExecutionEvent).toHaveBeenCalledWith(
+  it('records confirmed oracle truth without marking it reconciled', async () => {
+    const recorded = await recordOracleResponse({ status: 'CONFIRMED', finality: finalized });
+
+    expect(recorded).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'confirmed',
         executionStatus: 'confirmed',
         reconciliationStatus: 'pending',
         providerStatus: 'oracle_confirmed',
         txHash: `0x${'b'.repeat(64)}`,
-        metadata: expect.objectContaining({ oracleBlockNumber: 123 }),
+        metadata: expect.objectContaining({ oracleBlockNumber: 123, oracleFinality: finalized }),
+      }),
+    );
+  });
+
+  it.each([
+    ['no finality', {}],
+    ['a safe position', { finality: { ...finalized, state: 'safe', final: false } }],
+    ['a non-final finalized claim', { finality: { ...finalized, final: false } }],
+    [
+      'another model version',
+      { finality: { ...finalized, modelVersion: 'cotsel.transaction-finality.v0' } },
+    ],
+  ])('keeps a CONFIRMED status with %s as submitted', async (_label, extra) => {
+    const recorded = await recordOracleResponse({ status: 'CONFIRMED', ...extra });
+
+    expect(recorded).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'submitted',
+        executionStatus: 'submitted',
+        metadata: expect.objectContaining({ oracleStatus: 'CONFIRMED' }),
       }),
     );
   });

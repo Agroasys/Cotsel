@@ -16,6 +16,7 @@ import { requireReviewedUserActionCapability } from '../core/gaslessExecutionVal
 import type { GaslessTransactionOutcomeStore } from '../core/gaslessTransactionOutcomeStore';
 import { createServiceAuthMiddleware } from '../core/serviceAuth';
 import { SettlementService } from '../core/settlementService';
+import { isServiceReportableExecution } from '../core/settlementFinality';
 import { parseSettlementExecutionBinding } from '../core/settlementExecutionBinding';
 import {
   ASSET_AMOUNT_SPEC,
@@ -371,10 +372,19 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           'body',
         );
         const executionStatus = requireExecutionStatus(body.executionStatus);
+        const eventType = requireEventType(body.eventType);
+        if (!isServiceReportableExecution(eventType, executionStatus)) {
+          throw new GatewayError(
+            409,
+            'CONFLICT',
+            'Chain outcomes are recorded only from gateway-verified finalized evidence',
+            { eventType, executionStatus },
+          );
+        }
         const txHash = optionalString(body.txHash, 'txHash');
         const result = await options.settlementService.recordExecutionEvent({
           handoffId,
-          eventType: requireEventType(body.eventType),
+          eventType,
           executionStatus,
           reconciliationStatus: requireReconciliationStatus(body.reconciliationStatus),
           providerStatus: optionalString(body.providerStatus, 'providerStatus'),

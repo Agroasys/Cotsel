@@ -1,37 +1,45 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { canTransitionTransactionFinality } from '@agroasys/sdk';
 import { GatewayError } from '../errors';
+import { SETTLEMENT_EXECUTION_FINALITY } from './settlementFinality';
 import { SettlementEventType, SettlementExecutionStatus } from './settlementStore';
 
-const EXECUTION_TRANSITIONS: Record<SettlementExecutionStatus, SettlementExecutionStatus[]> = {
-  pending: [
-    'accepted',
-    'queued',
-    'broadcast_unknown',
-    'confirmation_pending',
-    'submitted',
-    'failed',
-    'rejected',
-  ],
-  accepted: [
-    'queued',
-    'broadcast_unknown',
-    'confirmation_pending',
-    'submitted',
-    'failed',
-    'rejected',
-  ],
-  queued: ['broadcast_unknown', 'confirmation_pending', 'submitted', 'failed', 'rejected'],
-  broadcast_unknown: ['confirmation_pending', 'confirmed', 'reverted', 'replaced', 'failed'],
-  confirmation_pending: ['confirmed', 'reverted', 'replaced'],
-  submitted: ['confirmation_pending', 'confirmed', 'reverted', 'replaced', 'failed', 'rejected'],
-  confirmed: ['confirmed'],
-  reverted: ['reverted'],
-  replaced: ['replaced'],
-  failed: ['failed'],
-  rejected: ['rejected'],
-};
+/**
+ * Once a transaction may have reached the network it can no longer become
+ * `failed` or `rejected` (never broadcast); it must resolve on-chain or stay
+ * an owned unknown. Every edge must also be legal in the shared finality model.
+ */
+export const EXECUTION_TRANSITIONS: Record<SettlementExecutionStatus, SettlementExecutionStatus[]> =
+  {
+    pending: [
+      'accepted',
+      'queued',
+      'broadcast_unknown',
+      'confirmation_pending',
+      'submitted',
+      'failed',
+      'rejected',
+    ],
+    accepted: [
+      'queued',
+      'broadcast_unknown',
+      'confirmation_pending',
+      'submitted',
+      'failed',
+      'rejected',
+    ],
+    queued: ['broadcast_unknown', 'confirmation_pending', 'submitted', 'failed', 'rejected'],
+    broadcast_unknown: ['confirmation_pending', 'confirmed', 'reverted', 'replaced'],
+    confirmation_pending: ['confirmed', 'reverted', 'replaced'],
+    submitted: ['confirmation_pending', 'confirmed', 'reverted', 'replaced'],
+    confirmed: ['confirmed'],
+    reverted: ['reverted'],
+    replaced: ['replaced'],
+    failed: ['failed'],
+    rejected: ['rejected'],
+  };
 
 const RECONCILIATION_EVENT_TYPES = new Set<SettlementEventType>(['reconciled', 'drift_detected']);
 const NON_MUTATING_EXECUTION_EVENT_TYPES = new Set<SettlementEventType>(['simulation_completed']);
@@ -102,7 +110,12 @@ export function validateExecutionTransition(
     return;
   }
 
-  if (!EXECUTION_TRANSITIONS[current].includes(next)) {
+  const from = SETTLEMENT_EXECUTION_FINALITY[current];
+  const to = SETTLEMENT_EXECUTION_FINALITY[next];
+  if (
+    !EXECUTION_TRANSITIONS[current].includes(next) ||
+    (from && to && !canTransitionTransactionFinality(from, to))
+  ) {
     throw new GatewayError(
       409,
       'CONFLICT',

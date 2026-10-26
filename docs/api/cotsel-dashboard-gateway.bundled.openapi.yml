@@ -1284,6 +1284,9 @@ paths:
         Service-authenticated mutation for authoritative execution and reconciliation truth coming back into the
         Cotsel gateway boundary. Every accepted event produces a durable callback-delivery record for the configured
         platform backend when callback delivery is enabled.
+        Callers cannot carry finality evidence, so an event that moves a handoff to `confirmed`, `reverted`, or
+        `replaced` is refused with 409. Those chain outcomes are recorded only by the gateway's own finalized-evidence
+        paths. `reconciled` and `drift_detected` events may restate an already `confirmed` status.
       operationId: createSettlementExecutionEvent
       security: []
       parameters:
@@ -6623,6 +6626,7 @@ components:
         - failed
     GovernanceMonitoringState:
       type: string
+      description: Projection of the shared transaction finality model (cotsel.transaction-finality.v1). `confirmed` means a receipt in a canonical block above the finalized tag. `finalized` requires the chain's finalized block tag to cover the receipt block. `reverted` with action status `broadcast` is a revert that is not yet finalized; with status `failed` it is final.
       enum:
         - not_started
         - pending_verification

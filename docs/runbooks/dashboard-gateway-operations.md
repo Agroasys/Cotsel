@@ -319,7 +319,9 @@ evidence window is explicitly approved.
 7. The caller submits `POST /governance/actions/:actionId/confirm`.
 8. Gateway records `broadcast` or `broadcast_pending_verification` and starts backend monitoring.
 9. Operators verify tx hash, verification state, monitoring state, receipt, and
-   chain confirmation depth through finalization.
+   the chain's `finalized` block tag reaching the receipt block. Block depth
+   alone never finalizes an action; see
+   `docs/architecture/transaction-finality-model.md`.
 
 The gateway never signs or broadcasts governance transactions. Do not use an
 old checkout, manual contract call, direct database write, executor, queue,

@@ -3,6 +3,7 @@
  */
 import { createHash } from 'crypto';
 import { AbstractProvider } from 'ethers';
+import type { FinalityTagObservation, TransactionFinalityObservation } from '@agroasys/sdk';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import type { GatewayConfig } from '../config/env';
 import type {
@@ -99,7 +100,52 @@ export class RpcGovernanceTransactionVerifier implements GovernanceTransactionVe
   async getBlockNumber(): Promise<number | null> {
     return this.provider.getBlockNumber();
   }
+
+  /**
+   * Tags are read before the head so a consistent provider can never report a
+   * tag ahead of it. Read failures propagate; only an explicit tag rejection
+   * is recorded as unsupported, which can only weaken the classification.
+   */
+  async observeTransactionFinality(txHash: string): Promise<TransactionFinalityObservation> {
+    const [network, safeBlockNumber, finalizedBlockNumber] = await Promise.all([
+      this.provider.getNetwork(),
+      this.readTag('safe'),
+      this.readTag('finalized'),
+    ]);
+    const [latestBlockNumber, receipt] = await Promise.all([
+      this.provider.getBlockNumber(),
+      this.provider.getTransactionReceipt(txHash),
+    ]);
+    const canonical = receipt ? await this.provider.getBlock(receipt.blockNumber) : null;
+    const status = receipt?.status;
+    return {
+      providerId: this.providerIdentity,
+      chainId: Number(network.chainId),
+      latestBlockNumber,
+      safeBlockNumber,
+      finalizedBlockNumber,
+      receipt:
+        receipt && (status === 0 || status === 1)
+          ? { blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, status }
+          : null,
+      canonicalBlockHash: canonical?.hash ?? null,
+    };
+  }
+
+  private async readTag(tag: 'safe' | 'finalized'): Promise<FinalityTagObservation> {
+    try {
+      const block = await this.provider.getBlock(tag);
+      return block ? block.number : null;
+    } catch (error) {
+      if (UNSUPPORTED_TAG_ERROR.test(error instanceof Error ? error.message : String(error))) {
+        return 'unsupported';
+      }
+      throw error;
+    }
+  }
 }
+
+const UNSUPPORTED_TAG_ERROR = /block ?tag|unsupported|invalid argument|-32602/i;
 
 export function createDefaultTransactionVerifier(
   config: GatewayConfig,

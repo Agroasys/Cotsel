@@ -2,6 +2,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { getAddress, isAddress } from 'ethers';
+import {
+  classifyTransactionFinality,
+  type TransactionFinalityAssessment,
+  type TransactionFinalityPosition,
+} from '@agroasys/sdk';
 import type { AuditLogEntry } from './auditLogStore';
 import type {
   GovernanceActionRecord,
@@ -10,7 +15,6 @@ import type {
 } from './governanceStore';
 import type {
   GovernanceObservedTransaction,
-  GovernanceObservedTransactionReceipt,
   GovernanceTransactionVerifier,
 } from './governanceMutationTypes';
 
@@ -81,17 +85,6 @@ export function verifyObservedGovernanceTransaction(
   };
 }
 
-export function confirmationsFromHead(
-  receipt: GovernanceObservedTransactionReceipt | null,
-  headBlockNumber: number | null,
-): number | null {
-  if (!receipt?.blockNumber || headBlockNumber === null || headBlockNumber < receipt.blockNumber) {
-    return null;
-  }
-
-  return headBlockNumber - receipt.blockNumber + 1;
-}
-
 export function governanceActionAgeMs(
   action: GovernanceActionRecord,
   referenceTime: string,
@@ -130,24 +123,113 @@ export function buildGovernanceMonitoringAuditEntry(
   };
 }
 
-export async function safeGetGovernanceReceipt(
+/** The chain the action was prepared for; nothing observed on another chain counts. */
+export function governanceExpectedChainId(action: GovernanceActionRecord): number | null {
+  const chainId =
+    action.signing?.chainId ?? (action.chainId === null ? null : Number(action.chainId));
+  return chainId !== null && Number.isSafeInteger(chainId) && chainId > 0 ? chainId : null;
+}
+
+/**
+ * Classifies the broadcast through the shared WP-2 finality model. A read
+ * failure yields `null`: absence of evidence, never a weaker or stronger state.
+ */
+export async function assessGovernanceFinality(
   verifier: GovernanceTransactionVerifier,
-  txHash: string,
-): Promise<GovernanceObservedTransactionReceipt | null> {
+  action: GovernanceActionRecord,
+): Promise<TransactionFinalityAssessment | null> {
+  const expectedChainId = governanceExpectedChainId(action);
+  if (!action.txHash || expectedChainId === null) {
+    return null;
+  }
+
   try {
-    return await verifier.getTransactionReceipt(txHash);
+    const observation = await verifier.observeTransactionFinality(action.txHash);
+    return classifyTransactionFinality({
+      expectedChainId,
+      submission: 'broadcast',
+      observations: [observation],
+    });
   } catch {
     return null;
   }
 }
 
-export async function safeGetGovernanceBlockNumber(
-  verifier: GovernanceTransactionVerifier,
-): Promise<number | null> {
-  try {
-    return await verifier.getBlockNumber();
-  } catch {
-    return null;
+export interface GovernanceFinalityProjection {
+  status: GovernanceActionRecord['status'];
+  monitoringState: GovernanceMonitoringState;
+  executed: boolean;
+  eventType: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+}
+
+/**
+ * Projects a classified finality onto governance state. Only a finalized
+ * success executes and only a finalized revert fails; anything without a
+ * receipt in a canonical block yields `null` and leaves the action unchanged.
+ */
+export function projectGovernanceFinality(
+  assessment: TransactionFinalityAssessment,
+): GovernanceFinalityProjection | null {
+  const settled = { errorCode: null, errorMessage: null };
+  switch (assessment.state) {
+    case 'finalized':
+      return {
+        ...settled,
+        status: 'executed',
+        monitoringState: 'finalized',
+        executed: true,
+        eventType: 'governance.action.monitoring.finalized',
+      };
+    case 'safe':
+    case 'confirmed':
+      return {
+        ...settled,
+        status: 'broadcast',
+        monitoringState: 'confirmed',
+        executed: false,
+        eventType: 'governance.action.monitoring.confirmed',
+      };
+    case 'reverted':
+      return assessment.final
+        ? {
+            status: 'failed',
+            monitoringState: 'reverted',
+            executed: false,
+            eventType: 'governance.action.monitoring.reverted',
+            errorCode: 'TX_REVERTED',
+            errorMessage: 'Observed governance transaction reverted on-chain',
+          }
+        : {
+            ...settled,
+            status: 'broadcast',
+            monitoringState: 'reverted',
+            executed: false,
+            eventType: 'governance.action.monitoring.reverted_unfinalized',
+          };
+    default:
+      return null;
+  }
+}
+
+/** The shared finality position a stored governance action claims. */
+export function governanceActionFinality(
+  action: Pick<GovernanceActionRecord, 'status' | 'monitoringState'>,
+): TransactionFinalityPosition | null {
+  switch (action.monitoringState) {
+    case 'pending_confirmation':
+      return { state: 'submitted', final: false };
+    case 'confirmed':
+      return { state: 'confirmed', final: false };
+    case 'finalized':
+      return { state: 'finalized', final: true };
+    case 'reverted':
+      return { state: 'reverted', final: action.status === 'failed' };
+    case 'stale':
+      return { state: 'unknown', final: false };
+    default:
+      return null;
   }
 }
 
@@ -157,18 +239,8 @@ export async function resolveGovernanceConfirmationOutcome(input: {
   finalSignerWallet: string;
   observedBlockNumber: number | null;
   verifier: GovernanceTransactionVerifier;
-  confirmationDepth: number;
-  finalizationDepth: number;
 }): Promise<GovernanceConfirmationOutcome> {
-  const {
-    action,
-    inspectedAt,
-    finalSignerWallet,
-    observedBlockNumber,
-    verifier,
-    confirmationDepth,
-    finalizationDepth,
-  } = input;
+  const { action, inspectedAt, finalSignerWallet, observedBlockNumber, verifier } = input;
   const pending: GovernanceConfirmationOutcome = {
     status: 'broadcast',
     monitoringState: 'pending_confirmation',
@@ -181,52 +253,20 @@ export async function resolveGovernanceConfirmationOutcome(input: {
     errorMessage: null,
   };
 
-  if (!action.txHash) {
+  const assessment = await assessGovernanceFinality(verifier, action);
+  const projection = assessment ? projectGovernanceFinality(assessment) : null;
+  if (!assessment || !projection) {
     return pending;
-  }
-
-  const receipt = await safeGetGovernanceReceipt(verifier, action.txHash);
-  if (!receipt) {
-    return pending;
-  }
-
-  if (receipt.status === 'reverted') {
-    return {
-      ...pending,
-      status: 'failed',
-      monitoringState: 'reverted',
-      blockNumber: receipt.blockNumber ?? observedBlockNumber,
-      executedAt: null,
-      eventType: 'governance.action.monitoring.reverted',
-      errorCode: 'TX_REVERTED',
-      errorMessage: 'Observed governance transaction reverted on-chain',
-    };
-  }
-
-  const headBlockNumber = await safeGetGovernanceBlockNumber(verifier);
-  const confirmations = confirmationsFromHead(receipt, headBlockNumber);
-  if (confirmations !== null && confirmations >= finalizationDepth) {
-    return {
-      ...pending,
-      status: 'executed',
-      monitoringState: 'finalized',
-      blockNumber: receipt.blockNumber ?? observedBlockNumber,
-      executedAt: inspectedAt,
-      eventType: 'governance.action.monitoring.finalized',
-    };
-  }
-
-  if (confirmations !== null && confirmations >= confirmationDepth) {
-    return {
-      ...pending,
-      monitoringState: 'confirmed',
-      blockNumber: receipt.blockNumber ?? observedBlockNumber,
-      eventType: 'governance.action.monitoring.confirmed',
-    };
   }
 
   return {
     ...pending,
-    blockNumber: receipt.blockNumber ?? observedBlockNumber,
+    status: projection.status,
+    monitoringState: projection.monitoringState,
+    blockNumber: assessment.blockNumber ?? observedBlockNumber,
+    executedAt: projection.executed ? inspectedAt : null,
+    eventType: projection.eventType,
+    errorCode: projection.errorCode,
+    errorMessage: projection.errorMessage,
   };
 }

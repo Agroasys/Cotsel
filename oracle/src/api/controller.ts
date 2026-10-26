@@ -10,6 +10,7 @@ import {
   timestamp,
 } from '@agroasys/shared-http';
 import { TriggerManager } from '../core/trigger-manager';
+import { type OracleTriggerFinality, triggerFinality } from '../core/trigger-finality';
 import { Logger } from '../utils/logger';
 import {
   ApprovalRequest,
@@ -50,6 +51,7 @@ type TriggerExecutionResult = {
   blockNumber?: number;
   idempotent: boolean;
   message: string;
+  finality?: OracleTriggerFinality | null;
 };
 
 const ORACLE_TRIGGER_TYPES = Object.values(TriggerType);
@@ -70,6 +72,7 @@ function buildOracleExecutionResponse(result: TriggerExecutionResult): OracleRes
     blockNumber: result.blockNumber,
     idempotent: result.idempotent,
     message: result.message,
+    finality: result.finality ?? null,
     timestamp: timestamp(),
   };
 }
@@ -211,6 +214,7 @@ function serializeTrigger(trigger: Trigger) {
     blockNumber: trigger.block_number ? Number(trigger.block_number) : null,
     confirmationStage: trigger.confirmation_stage,
     confirmationStageAt: trigger.confirmation_stage_at?.toISOString() ?? null,
+    finality: triggerFinality(trigger),
     indexerConfirmed: trigger.indexer_confirmed,
     indexerConfirmedAt: trigger.indexer_confirmed_at?.toISOString() ?? null,
     indexerEventId: trigger.indexer_event_id,
