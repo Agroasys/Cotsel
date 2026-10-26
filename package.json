@@ -78,7 +78,7 @@
     "@eslint/js": "^10.0.1",
     "bn.js": "5.2.5",
     "defu": "6.1.7",
-    "eslint": "^10.12.0",
+    "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
     "ethers": "6.17.0",
     "globals": "^17.13.0",
@@ -89,9 +89,9 @@
     "pg": "8.23.1",
     "prettier": "3.9.10",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.71.1",
-    "undici": "8.11.2",
-    "viem": "2.57.4"
+    "typescript-eslint": "^8.71.2",
+    "undici": "8.12.2",
+    "viem": "2.57.7"
   },
   "lint-staged": {
     "*.{js,cjs,mjs,ts}": [
@@ -118,7 +118,7 @@
     "serialize-javascript": "7.0.5",
     "socket.io-parser": "4.2.7",
     "tmp": "0.2.7",
-    "undici": "8.11.2",
+    "undici": "8.12.2",
     "adm-zip": "0.6.1",
     "form-data@>=4.0.0 <4.0.6": "4.0.6",
     "@babel/core@<=7.29.0": "7.29.6",
