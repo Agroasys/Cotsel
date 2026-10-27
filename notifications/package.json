@@ -15,6 +15,9 @@
     "prepack": "npm run build"
   },
   "license": "Apache-2.0",
+  "dependencies": {
+    "@agroasys/shared-telemetry": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "typescript": ">=6.0.2 <6.1.0"

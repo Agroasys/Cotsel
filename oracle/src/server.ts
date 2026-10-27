@@ -172,10 +172,7 @@ async function bootstrap() {
     app.use(createRawBodyJsonParser());
 
     app.use((req, res, next) => {
-      Logger.info(`${req.method} ${req.path}`, {
-        ip: req.ip,
-        userAgent: req.headers['user-agent'],
-      });
+      Logger.info(`${req.method} ${req.path}`, { ip: req.ip });
       next();
     });
 

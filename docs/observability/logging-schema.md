@@ -98,6 +98,75 @@ Data-classification enforcement is governed by
 `docs/security/data-classification-policy.md` and the release-gate guard
 `scripts/tests/data-classification-guard.mjs`.
 
+## Telemetry field schema
+
+WP-8 COMP-04 and FAIL-17. Telemetry is default-deny: a field reaches a log
+line, a metric event, or an alert only when the shared schema classifies it.
+
+`@agroasys/shared-telemetry` applies the schema to every record before it is
+written. The gateway, Oracle, treasury, reconciliation, Ricardian, auth,
+relayer, and indexer loggers use it. The indexer applies it to Subsquid
+dependency records as well. The notifications library applies it to its
+fallback logger and scrubs every value it renders into a webhook body.
+
+The schema lives in `shared-telemetry/fieldPolicy.js`
+(`telemetry-schema.v1`). It handles each field as follows:
+
+| Field                            | Handling                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------------- |
+| Classified operational field     | Emitted. String values are scrubbed.                                                        |
+| Endpoint field, such as `rpcUrl` | Reduced to scheme and host. A URL path, query, or user part becomes `/[redacted]`.          |
+| Client address field `ip`        | Truncated to the network: IPv4 `/24`, IPv6 `/48`.                                           |
+| Prohibited name at any depth     | Value replaced with `[REDACTED]`. Classification cannot override this.                      |
+| Unclassified name                | Removed. Its dotted path is listed in `telemetryDroppedFields`. The value is never written. |
+
+Prohibited names include the names in the data-classification policy and any
+name that contains a credential word such as "secret", "password",
+"authorization", or "cookie".
+
+The schema scrubs every emitted string, including `message` and `error`. It
+replaces these values inside free text:
+
+- PEM private-key blocks
+- JSON Web Tokens and `Bearer` or `Basic` credentials
+- the path, query, and user part of any URL
+- email addresses
+- IBANs that pass the ISO 13616 checksum
+
+The schema also bounds each record. It truncates strings after 4,096
+characters, arrays after 50 items, and nesting after 6 levels. It replaces
+binary values with `[binary]` and reference cycles with `[circular]`.
+
+Limits:
+
+- A raw 32-byte hex value in free text is not scrubbed. It cannot be told
+  apart from a transaction hash. Field names carry that protection instead.
+- Dashboards, traces, pager routing, retention, and deletion are deployment
+  controls. This schema does not supply them.
+
+### Operator reading of `telemetryDroppedFields`
+
+A record that contains `telemetryDroppedFields` shows a classification gap,
+not a leak: the value was not written. Raise it with the shared-package owner
+in `docs/owners.md` so the field can be classified or removed.
+
+### Classify a new log field
+
+The release gate runs `scripts/tests/telemetry-field-schema-guard.mjs`. The
+guard fails when a logger call names a literal field that is unclassified or
+prohibited. Fields that come from spread or variable objects are not visible
+to the guard; the runtime schema drops them if they are unclassified.
+
+To add a field:
+
+1. Select its class in `docs/security/data-classification-policy.md`.
+2. Add the field name to the matching list in `shared-telemetry/fieldPolicy.js`.
+3. Run `node --test scripts/tests/telemetry-field-schema-guard.test.mjs`.
+4. Run `pnpm --filter @agroasys/shared-telemetry run test`.
+
+Do not classify a value that the data-classification policy prohibits.
+Log a reference, hash, or masked suffix of that value instead.
+
 ## Public error responses
 
 WP-10 I-06. A response never carries internal failure text: no stack trace,

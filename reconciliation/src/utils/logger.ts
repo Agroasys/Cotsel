@@ -1,3 +1,5 @@
+import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
+
 interface LogMeta {
   tradeId?: string | null;
   actionKey?: string | null;
@@ -40,16 +42,16 @@ export class Logger {
     };
 
     if (level === 'error') {
-      console.error(JSON.stringify(payload));
+      console.error(serializeTelemetryRecord(payload));
       return;
     }
 
     if (level === 'warn') {
-      console.warn(JSON.stringify(payload));
+      console.warn(serializeTelemetryRecord(payload));
       return;
     }
 
-    console.log(JSON.stringify(payload));
+    console.log(serializeTelemetryRecord(payload));
   }
 
   static info(message: string, meta?: LogMeta): void {

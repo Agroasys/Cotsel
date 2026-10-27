@@ -10,12 +10,13 @@ domains or places where business workflows are moved to avoid clear ownership.
 
 ## Current Shared Packages
 
-| Package       | Role                                                                          | Boundary status |
-| ------------- | ----------------------------------------------------------------------------- | --------------- |
-| `shared-auth` | Service-to-service authentication canonical strings, signatures, nonce stores | Healthy         |
-| `shared-db`   | Service-scoped Postgres pool and session-setting helpers                      | Healthy         |
-| `shared-edge` | HTTP edge helpers such as CORS and rate limiting                              | Healthy         |
-| `shared-http` | Response envelopes and request validation primitives                          | Healthy         |
+| Package            | Role                                                                          | Boundary status |
+| ------------------ | ----------------------------------------------------------------------------- | --------------- |
+| `shared-auth`      | Service-to-service authentication canonical strings, signatures, nonce stores | Healthy         |
+| `shared-db`        | Service-scoped Postgres pool and session-setting helpers                      | Healthy         |
+| `shared-edge`      | HTTP edge helpers such as CORS and rate limiting                              | Healthy         |
+| `shared-http`      | Response envelopes and request validation primitives                          | Healthy         |
+| `shared-telemetry` | Default-deny telemetry field schema and log, metric, and alert scrubbing      | Healthy         |
 
 ## What Belongs In Shared Packages
 

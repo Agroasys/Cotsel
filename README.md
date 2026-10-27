@@ -168,6 +168,7 @@ cotsel/
 ├── shared-db/          # Shared Postgres pool, role, and RLS helpers
 ├── shared-edge/        # Shared CORS and rate-limit primitives
 ├── shared-http/        # Shared HTTP response and validation helpers
+├── shared-telemetry/   # Default-deny telemetry field schema and scrubbing
 ├── docs/               # ADRs, runbooks, API contracts, and governance docs
 ├── scripts/            # CI guards, ops scripts, and verification helpers
 ├── env/                # Environment templates and profile inputs

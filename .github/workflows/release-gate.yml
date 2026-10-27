@@ -75,6 +75,7 @@ jobs:
               - 'shared-db/**'
               - 'shared-edge/**'
               - 'shared-http/**'
+              - 'shared-telemetry/**'
               - 'relayer/**'
               - 'README.md'
               - 'CONTRIBUTING.md'
@@ -296,6 +297,8 @@ jobs:
           run_check shared-db-tests pnpm --filter @agroasys/shared-db run test
           run_check shared-http-lint pnpm --filter @agroasys/shared-http run lint
           run_check shared-http-tests pnpm --filter @agroasys/shared-http run test
+          run_check shared-telemetry-lint pnpm --filter @agroasys/shared-telemetry run lint
+          run_check shared-telemetry-tests pnpm --filter @agroasys/shared-telemetry run test
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -424,6 +427,7 @@ jobs:
           run_check programmability-governance scripts/tests/programmability-governance-guard.sh
           run_check base-mainnet-governance scripts/tests/base-mainnet-governance-guard.sh
           run_check data-classification-guard node scripts/tests/data-classification-guard.mjs
+          run_check telemetry-field-schema-guard node --test scripts/tests/telemetry-field-schema-guard.test.mjs
           run_check runtime-rds-ca-trust node --test scripts/tests/runtime-rds-ca-trust.test.mjs
           run_check runtime-configuration node --test scripts/tests/runtime-migration-boundary.test.mjs scripts/tests/staging-production-config.test.mjs
           run_check runtime-containment-evidence node --test scripts/tests/runtime-containment-evidence.test.mjs

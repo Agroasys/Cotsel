@@ -1,7 +1,9 @@
+import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
+
 type LogMetadata = Record<string, unknown>;
 
 function write(level: 'info' | 'warn' | 'error', message: string, metadata?: LogMetadata): void {
-  const entry = JSON.stringify({
+  const entry = serializeTelemetryRecord({
     level,
     timestamp: new Date().toISOString(),
     service: 'gasless-relayer',

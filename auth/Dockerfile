@@ -19,6 +19,7 @@ COPY shared-auth/package.json shared-auth/package.json
 COPY shared-db/package.json shared-db/package.json
 COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
+COPY shared-telemetry/package.json shared-telemetry/package.json
 COPY treasury/package.json treasury/package.json
 
 RUN apk add --no-cache --virtual .build-deps python3 make g++
@@ -30,6 +31,7 @@ COPY shared-auth shared-auth
 COPY shared-db shared-db
 COPY shared-edge shared-edge
 COPY shared-http shared-http
+COPY shared-telemetry shared-telemetry
 
 RUN pnpm --filter auth run build
 
@@ -62,6 +64,7 @@ COPY shared-auth/package.json shared-auth/package.json
 COPY shared-db/package.json shared-db/package.json
 COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
+COPY shared-telemetry/package.json shared-telemetry/package.json
 COPY treasury/package.json treasury/package.json
 
 RUN apk add --no-cache --virtual .build-deps python3 make g++ \
@@ -80,6 +83,7 @@ COPY --from=builder /app/shared-auth /app/shared-auth
 COPY --from=builder /app/shared-db /app/shared-db
 COPY --from=builder /app/shared-edge /app/shared-edge
 COPY --from=builder /app/shared-http /app/shared-http
+COPY --from=builder /app/shared-telemetry /app/shared-telemetry
 COPY --from=builder /app/auth/dist /app/auth/dist
 COPY --from=builder /app/auth/src/database/schema.sql /app/auth/src/database/schema.sql
 COPY --from=builder /app/auth/src/database/migrations.json /app/auth/src/database/migrations.json

@@ -221,7 +221,13 @@ test('shared package changes select every transitive consumer through the full s
     workflow.indexOf('            contracts:'),
   );
 
-  for (const workspace of ['shared-auth', 'shared-db', 'shared-edge', 'shared-http']) {
+  for (const workspace of [
+    'shared-auth',
+    'shared-db',
+    'shared-edge',
+    'shared-http',
+    'shared-telemetry',
+  ]) {
     assert.match(sharedFilter, new RegExp(`- '${workspace}/\\*\\*'`));
   }
 
