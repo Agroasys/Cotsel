@@ -12,8 +12,8 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
+// Dependency-free on purpose: ci/docs-profile-guard runs without node_modules.
 const require = createRequire(import.meta.url);
-const ts = require('typescript');
 const { classifyTelemetryField } = require('../../shared-telemetry');
 
 export const SERVICE_SOURCE_ROOTS = [
@@ -28,8 +28,10 @@ export const SERVICE_SOURCE_ROOTS = [
   'treasury/src',
 ];
 
-const LOGGER_RECEIVER = /(^|\.)(Logger|logger|log)$/u;
-const LOGGER_METHODS = new Set(['debug', 'info', 'warn', 'error', 'audit']);
+const LOGGER_CALL =
+  /(?<![\w$.?])((?:[\w$]+\s*\??\.\s*)*(?:Logger|logger|log))\s*\??\.\s*(debug|info|warn|error|audit)\s*\(/gu;
+const OPENERS = { '(': ')', '[': ']', '{': '}' };
+const CLOSERS = new Set([')', ']', '}']);
 const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', 'lib', 'tests', 'test', '__tests__']);
 
 function listSourceFiles(root, directory) {
@@ -48,47 +50,173 @@ function listSourceFiles(root, directory) {
   return files;
 }
 
-function metadataArguments(call) {
-  // Logger.audit(action, tradeId, result) carries fields only in `result`.
-  return call.expression.name.text === 'audit' ? call.arguments.slice(2) : call.arguments.slice(1);
+/**
+ * Blank out comments and string contents, keeping offsets and newlines, so
+ * brackets and commas inside them cannot confuse the argument scanner.
+ * Template literal `${...}` expressions stay visible as code.
+ */
+export function maskNonCode(source) {
+  const out = source.split('');
+  const blank = (index) => {
+    if (out[index] !== '\n') out[index] = ' ';
+  };
+  const templateDepths = [];
+  let braceDepth = 0;
+  let index = 0;
+
+  const skipTemplate = () => {
+    // Positioned just after a backtick or a closing `}` of an interpolation.
+    while (index < source.length) {
+      const char = source[index];
+      if (char === '\\') {
+        blank(index);
+        blank(index + 1);
+        index += 2;
+      } else if (char === '`') {
+        index += 1;
+        return;
+      } else if (char === '$' && source[index + 1] === '{') {
+        templateDepths.push(braceDepth);
+        braceDepth += 1;
+        index += 2;
+        return;
+      } else {
+        blank(index);
+        index += 1;
+      }
+    }
+  };
+
+  while (index < source.length) {
+    const char = source[index];
+    const next = source[index + 1];
+
+    if (char === '/' && next === '/') {
+      while (index < source.length && source[index] !== '\n') blank(index++);
+    } else if (char === '/' && next === '*') {
+      const close = source.indexOf('*/', index + 2);
+      const stop = close === -1 ? source.length : close + 2;
+      while (index < stop) blank(index++);
+    } else if (char === "'" || char === '"') {
+      index += 1;
+      while (index < source.length && source[index] !== char && source[index] !== '\n') {
+        if (source[index] === '\\') blank(index++);
+        blank(index++);
+      }
+      index += 1;
+    } else if (char === '`') {
+      index += 1;
+      skipTemplate();
+    } else if (char === '{') {
+      braceDepth += 1;
+      index += 1;
+    } else if (char === '}') {
+      braceDepth -= 1;
+      index += 1;
+      if (templateDepths.length > 0 && templateDepths[templateDepths.length - 1] === braceDepth) {
+        templateDepths.pop();
+        skipTemplate();
+      }
+    } else {
+      index += 1;
+    }
+  }
+
+  return out.join('');
 }
 
-function collectLiteralFields(objectLiteral, sourceFile, fields) {
-  for (const property of objectLiteral.properties) {
-    if (ts.isSpreadAssignment(property) || !property.name) continue;
-    if (ts.isComputedPropertyName(property.name)) continue;
+/** Split `masked[from, to)` at top-level commas into trimmed [start, end) ranges. */
+function splitTopLevel(masked, from, to) {
+  const ranges = [];
+  const stack = [];
+  let segmentStart = from;
 
-    fields.push({
-      name: property.name.getText(sourceFile).replace(/^['"]|['"]$/gu, ''),
-      line: sourceFile.getLineAndCharacterOfPosition(property.getStart(sourceFile)).line + 1,
-    });
+  for (let index = from; index <= to; index += 1) {
+    const char = index === to ? ',' : masked[index];
+    if (OPENERS[char]) {
+      stack.push(OPENERS[char]);
+    } else if (CLOSERS.has(char)) {
+      stack.pop();
+    } else if (char === ',' && stack.length === 0) {
+      let start = segmentStart;
+      let end = index;
+      while (start < end && /\s/u.test(masked[start])) start += 1;
+      while (end > start && /\s/u.test(masked[end - 1])) end -= 1;
+      if (end > start) ranges.push([start, end]);
+      segmentStart = index + 1;
+    }
+  }
+  return ranges;
+}
 
-    if (ts.isPropertyAssignment(property) && ts.isObjectLiteralExpression(property.initializer)) {
-      collectLiteralFields(property.initializer, sourceFile, fields);
+/** Index of the bracket that closes the one at `open`, or -1. */
+function matchingBracket(masked, open) {
+  const stack = [];
+  for (let index = open; index < masked.length; index += 1) {
+    const char = masked[index];
+    if (OPENERS[char]) {
+      stack.push(OPENERS[char]);
+    } else if (CLOSERS.has(char)) {
+      if (stack.pop() !== char) return -1;
+      if (stack.length === 0) return index;
+    }
+  }
+  return -1;
+}
+
+/** True when the range is exactly one object literal, not `{...} as T` or `{...}.x`. */
+function isObjectLiteral(masked, [start, end]) {
+  return masked[start] === '{' && matchingBracket(masked, start) === end - 1;
+}
+
+function lineAt(source, offset) {
+  let line = 1;
+  for (let index = 0; index < offset; index += 1) {
+    if (source[index] === '\n') line += 1;
+  }
+  return line;
+}
+
+const PROPERTY_KEY = /^(?:(['"])([^'"]*)\1|([A-Za-z_$][\w$]*))/u;
+
+function collectLiteralFields(source, masked, [start, end], fields) {
+  for (const [propertyStart, propertyEnd] of splitTopLevel(masked, start + 1, end - 1)) {
+    const text = source.slice(propertyStart, propertyEnd);
+    if (text.startsWith('...') || text.startsWith('[')) continue;
+
+    const key = PROPERTY_KEY.exec(text);
+    if (!key) continue;
+    fields.push({ name: key[2] ?? key[3], line: lineAt(source, propertyStart) });
+
+    let valueStart = propertyStart + key[0].length;
+    while (valueStart < propertyEnd && /\s/u.test(masked[valueStart])) valueStart += 1;
+    if (masked[valueStart] !== ':') continue;
+    valueStart += 1;
+    while (valueStart < propertyEnd && /\s/u.test(masked[valueStart])) valueStart += 1;
+
+    if (isObjectLiteral(masked, [valueStart, propertyEnd])) {
+      collectLiteralFields(source, masked, [valueStart, propertyEnd], fields);
     }
   }
 }
 
-export function findLoggerFields(relativePath, source) {
-  const sourceFile = ts.createSourceFile(relativePath, source, ts.ScriptTarget.Latest, true);
+export function findLoggerFields(_relativePath, source) {
+  const masked = maskNonCode(source);
   const fields = [];
 
-  const visit = (node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      LOGGER_METHODS.has(node.expression.name.text) &&
-      LOGGER_RECEIVER.test(node.expression.expression.getText(sourceFile))
-    ) {
-      for (const argument of metadataArguments(node)) {
-        if (ts.isObjectLiteralExpression(argument)) {
-          collectLiteralFields(argument, sourceFile, fields);
-        }
+  for (const call of masked.matchAll(LOGGER_CALL)) {
+    const open = call.index + call[0].length - 1;
+    const close = matchingBracket(masked, open);
+    if (close === -1) continue;
+
+    // Logger.audit(action, tradeId, result) carries fields only in `result`.
+    const skipped = call[2] === 'audit' ? 2 : 1;
+    for (const range of splitTopLevel(masked, open + 1, close).slice(skipped)) {
+      if (isObjectLiteral(masked, range)) {
+        collectLiteralFields(source, masked, range, fields);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  }
 
   return fields;
 }
