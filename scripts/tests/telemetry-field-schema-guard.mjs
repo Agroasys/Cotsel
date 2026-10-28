@@ -30,6 +30,17 @@ export const SERVICE_SOURCE_ROOTS = [
 
 const LOGGER_CALL =
   /(?<![\w$.?])((?:[\w$]+\s*\??\.\s*)*(?:Logger|logger|log))\s*\??\.\s*(debug|info|warn|error|audit)\s*\(/gu;
+// Records written without a logger. The number is how many leading arguments
+// carry no fields: logBootstrapEvent(level, eventType, message, meta).
+const DIRECT_SINKS = new Map([
+  ['serializeTelemetryRecord', 0],
+  ['sanitizeTelemetryRecord', 0],
+  ['logBootstrapEvent', 3],
+]);
+const DIRECT_SINK_CALL = new RegExp(
+  `(?<![\\w$.])(${[...DIRECT_SINKS.keys()].join('|')})\\s*\\(`,
+  'gu',
+);
 const OPENERS = { '(': ')', '[': ']', '{': '}' };
 const CLOSERS = new Set([')', ']', '}']);
 const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', 'lib', 'tests', 'test', '__tests__']);
@@ -200,18 +211,29 @@ function collectLiteralFields(source, masked, [start, end], fields) {
   }
 }
 
+/** Each call that writes telemetry, with the number of leading arguments to skip. */
+function telemetryCalls(masked) {
+  const calls = [];
+  for (const call of masked.matchAll(LOGGER_CALL)) {
+    // Logger.audit(action, tradeId, result) carries fields only in `result`.
+    calls.push({ index: call.index, length: call[0].length, skipped: call[2] === 'audit' ? 2 : 1 });
+  }
+  for (const call of masked.matchAll(DIRECT_SINK_CALL)) {
+    calls.push({ index: call.index, length: call[0].length, skipped: DIRECT_SINKS.get(call[1]) });
+  }
+  return calls.sort((left, right) => left.index - right.index);
+}
+
 export function findLoggerFields(_relativePath, source) {
   const masked = maskNonCode(source);
   const fields = [];
 
-  for (const call of masked.matchAll(LOGGER_CALL)) {
-    const open = call.index + call[0].length - 1;
+  for (const call of telemetryCalls(masked)) {
+    const open = call.index + call.length - 1;
     const close = matchingBracket(masked, open);
     if (close === -1) continue;
 
-    // Logger.audit(action, tradeId, result) carries fields only in `result`.
-    const skipped = call[2] === 'audit' ? 2 : 1;
-    for (const range of splitTopLevel(masked, open + 1, close).slice(skipped)) {
+    for (const range of splitTopLevel(masked, open + 1, close).slice(call.skipped)) {
       if (isObjectLiteral(masked, range)) {
         collectLiteralFields(source, masked, range, fields);
       }

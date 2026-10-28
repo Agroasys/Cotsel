@@ -47,6 +47,20 @@ test('scans optional chaining, quoted keys, and ignores brackets in strings and 
   ]);
 });
 
+test('collects fields written through direct telemetry sinks', () => {
+  const fields = findLoggerFields(
+    'indexer/src/startup.ts',
+    `
+      export function logBootstrapEvent(level, eventType, message, meta = {}) {}
+      process.stderr.write(serializeTelemetryRecord({ level, eventType, ...meta }));
+      logBootstrapEvent('info', 'chain.ready', 'ready', { finalizedBlock, head: 1 });
+      sanitizeTelemetryRecord({ route: req.originalUrl });
+    `,
+  ).map((field) => field.name);
+
+  assert.deepEqual(fields, ['level', 'eventType', 'finalizedBlock', 'head', 'route']);
+});
+
 test('runs without installed dependencies', () => {
   const guard = fs.readFileSync(
     new URL('./telemetry-field-schema-guard.mjs', import.meta.url),

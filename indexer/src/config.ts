@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
+import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
 import { parsePostgresSslMode, type PostgresSslMode } from '@agroasys/shared-db';
 import { assertDeploymentPins, type DeploymentProfile } from './preflight';
 
@@ -192,7 +193,15 @@ export function loadConfig(): IndexerConfig {
 
     return config;
   } catch (error) {
-    console.error('indexer config failed:', error);
+    process.stderr.write(
+      `${serializeTelemetryRecord({
+        level: 'error',
+        service: 'indexer',
+        eventType: 'config.invalid',
+        message: 'indexer config failed',
+        error,
+      })}\n`,
+    );
     process.exit(1);
   }
 }

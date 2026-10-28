@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import http from 'http';
+import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
 import { config } from './config';
 import { readFinancialCoverage } from './core/financialCoverage';
 import { pool, testConnection } from './database/connection';
@@ -150,7 +151,7 @@ export function startHealthServer(): http.Server {
 
   server.listen(HEALTH_PORT, () => {
     process.stdout.write(
-      JSON.stringify({
+      serializeTelemetryRecord({
         level: 'info',
         service: 'reconciliation',
         message: 'Health server started',

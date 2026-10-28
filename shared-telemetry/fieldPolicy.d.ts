@@ -2,6 +2,7 @@ export declare const FIELD_CLASS: Readonly<{
   PUBLIC: 'public_operational';
   INTERNAL: 'internal_operational';
   ENDPOINT: 'endpoint_origin';
+  REQUEST_PATH: 'request_path';
   NETWORK_ADDRESS: 'masked_network_address';
 }>;
 

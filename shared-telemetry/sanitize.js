@@ -17,6 +17,9 @@ const PEM_PRIVATE_KEY_PATTERN =
 const JWT_PATTERN = /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g;
 const AUTH_SCHEME_PATTERN = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
 const URL_PATTERN = /\b[a-z][a-z0-9+.-]{1,15}:\/\/[^\s"'<>`]+/gi;
+// A relative request target such as `/trades?api_key=...`: the query and
+// fragment are caller-controlled and can carry credentials or personal data.
+const RELATIVE_QUERY_PATTERN = /(^|[\s"'(=,[])(\/[^\s?#"'<>`]*)[?#](?!\[redacted\])[^\s"'<>`)\]]*/g;
 const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
 const IBAN_CANDIDATE_PATTERN = /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}\b/g;
 
@@ -57,6 +60,7 @@ function scrubString(value) {
     .replace(JWT_PATTERN, '[REDACTED:jwt]')
     .replace(AUTH_SCHEME_PATTERN, (_match, scheme) => `${scheme} [REDACTED]`)
     .replace(URL_PATTERN, (url) => endpointOrigin(url))
+    .replace(RELATIVE_QUERY_PATTERN, '$1$2?[redacted]')
     .replace(EMAIL_PATTERN, '[REDACTED:email]')
     .replace(IBAN_CANDIDATE_PATTERN, (candidate) =>
       isIban(candidate) ? '[REDACTED:iban]' : candidate,
@@ -68,9 +72,18 @@ function scrubString(value) {
   return scrubbed;
 }
 
+/** Keeps the request path and drops the query and fragment, whatever precedes them. */
+function requestPath(value) {
+  const cut = value.search(/[?#]/);
+  return cut === -1 ? scrubString(value) : `${scrubString(value.slice(0, cut))}?[redacted]`;
+}
+
 /** IPv4 keeps the /24 and IPv6 the /48: enough to spot a network, not a person. */
 function maskNetworkAddress(value) {
   if (typeof value !== 'string') return REDACTED;
+  // An already-masked prefix stays as it is, so sanitizing twice is harmless.
+  if (/^\d+\.\d+\.\d+\.0\/24$/.test(value) && net.isIPv4(value.slice(0, -3))) return value;
+  if (value.endsWith('::/48') && net.isIPv6(value.slice(0, -3))) return value;
   const address = value.startsWith('::ffff:') ? value.slice(7) : value;
   if (net.isIPv4(address)) {
     return `${address.split('.').slice(0, 3).join('.')}.0/24`;
@@ -167,6 +180,10 @@ function sanitizeField(key, value, context, path, depth) {
       return typeof value === 'string'
         ? endpointOrigin(value)
         : sanitizeValue(value, context, fieldPath, depth);
+    case FIELD_CLASS.REQUEST_PATH:
+      return typeof value === 'string'
+        ? requestPath(value)
+        : sanitizeValue(value, context, fieldPath, depth);
     case FIELD_CLASS.NETWORK_ADDRESS:
       return value === null || value === undefined ? value : maskNetworkAddress(value);
     default:
@@ -218,6 +235,7 @@ module.exports = {
   REDACTED,
   maskNetworkAddress,
   endpointOrigin,
+  requestPath,
   scrubString,
   sanitizeTelemetryRecord,
   serializeTelemetryRecord,

@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import { ethers } from 'ethers';
 import { parseAllowedOrigins } from '@agroasys/shared-edge';
+import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
 import { parsePostgresSslMode } from '@agroasys/shared-db';
 import { resolveSettlementRuntime } from '@agroasys/sdk';
 import { OracleConfig } from './types';
@@ -293,7 +294,7 @@ export function loadConfig(): OracleConfig {
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error(String(error));
     console.error(
-      JSON.stringify({
+      serializeTelemetryRecord({
         level: 'error',
         message: 'Oracle config validation failed',
         error: normalizedError.message,

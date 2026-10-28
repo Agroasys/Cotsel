@@ -213,3 +213,41 @@ test('serializeTelemetryRecord emits sanitized JSON', () => {
     refreshToken: REDACTED,
   });
 });
+
+test('request paths drop the query string and fragment', () => {
+  const record = sanitizeTelemetryRecord({
+    route: '/trades?api_key=demo-secret&phone=15551234567',
+    path: `/settlements/42#${SEEDS.jwt}`,
+    endpoint: '/api/dashboard-gateway/v1/trades',
+  });
+
+  assert.equal(record.route, '/trades?[redacted]');
+  assert.equal(record.path, '/settlements/42?[redacted]');
+  assert.equal(record.endpoint, '/api/dashboard-gateway/v1/trades');
+  assert.doesNotMatch(JSON.stringify(record), /demo-secret|15551234567/);
+  assertNoSeeds(JSON.stringify(record));
+});
+
+test('relative request targets in free text lose their query string', () => {
+  const record = sanitizeTelemetryRecord({
+    message: 'GET /trades?api_key=demo-secret&phone=15551234567 failed',
+    error: 'redirected to (/login?next=/trades) is it ok? yes / no?',
+    stack: 'Error: boom\n    at handler (/app/gateway/dist/routes/trades.js:10:5)',
+  });
+
+  assert.equal(record.message, 'GET /trades?[redacted] failed');
+  assert.equal(record.error, 'redirected to (/login?[redacted]) is it ok? yes / no?');
+  assert.equal(
+    record.stack,
+    'Error: boom\n    at handler (/app/gateway/dist/routes/trades.js:10:5)',
+  );
+});
+
+test('sanitizing a sanitized record changes nothing', () => {
+  const once = sanitizeTelemetryRecord({
+    route: '/trades?api_key=demo-secret',
+    message: `GET /trades?x=1 via https://rpc.example/v2/${SEEDS.rpcKey}`,
+    ip: SEEDS.ip,
+  });
+  assert.deepEqual(sanitizeTelemetryRecord(once), once);
+});

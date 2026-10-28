@@ -112,13 +112,14 @@ fallback logger and scrubs every value it renders into a webhook body.
 The schema lives in `shared-telemetry/fieldPolicy.js`
 (`telemetry-schema.v1`). It handles each field as follows:
 
-| Field                            | Handling                                                                                    |
-| -------------------------------- | ------------------------------------------------------------------------------------------- |
-| Classified operational field     | Emitted. String values are scrubbed.                                                        |
-| Endpoint field, such as `rpcUrl` | Reduced to scheme and host. A URL path, query, or user part becomes `/[redacted]`.          |
-| Client address field `ip`        | Truncated to the network: IPv4 `/24`, IPv6 `/48`.                                           |
-| Prohibited name at any depth     | Value replaced with `[REDACTED]`. Classification cannot override this.                      |
-| Unclassified name                | Removed. Its dotted path is listed in `telemetryDroppedFields`. The value is never written. |
+| Field                                           | Handling                                                                                    |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Classified operational field                    | Emitted. String values are scrubbed.                                                        |
+| Endpoint field, such as `rpcUrl`                | Reduced to scheme and host. A URL path, query, or user part becomes `/[redacted]`.          |
+| Request path field: `route`, `path`, `endpoint` | Query string and fragment replaced with `?[redacted]`. The path is kept.                    |
+| Client address field `ip`                       | Truncated to the network: IPv4 `/24`, IPv6 `/48`.                                           |
+| Prohibited name at any depth                    | Value replaced with `[REDACTED]`. Classification cannot override this.                      |
+| Unclassified name                               | Removed. Its dotted path is listed in `telemetryDroppedFields`. The value is never written. |
 
 Prohibited names include the names in the data-classification policy and any
 name that contains a credential word such as "secret", "password",
@@ -129,7 +130,9 @@ replaces these values inside free text:
 
 - PEM private-key blocks
 - JSON Web Tokens and `Bearer` or `Basic` credentials
-- the path, query, and user part of any URL
+- the path, query, and user part of any absolute URL
+- the query string and fragment of a relative request target, such as
+  `/trades?...`
 - email addresses
 - IBANs that pass the ISO 13616 checksum
 
@@ -153,9 +156,14 @@ in `docs/owners.md` so the field can be classified or removed.
 ### Classify a new log field
 
 The release gate runs `scripts/tests/telemetry-field-schema-guard.mjs`. The
-guard fails when a logger call names a literal field that is unclassified or
-prohibited. Fields that come from spread or variable objects are not visible
-to the guard; the runtime schema drops them if they are unclassified.
+guard fails when a telemetry call names a literal field that is unclassified
+or prohibited. Telemetry calls are logger calls and direct writes through
+`serializeTelemetryRecord`, `sanitizeTelemetryRecord`, or the indexer
+`logBootstrapEvent`. Fields that come from spread or variable objects are not
+visible to the guard; the runtime schema drops them if they are unclassified.
+
+Write telemetry only through a service logger or `serializeTelemetryRecord`.
+Do not write `JSON.stringify` output to stdout or stderr directly.
 
 To add a field:
 

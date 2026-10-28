@@ -19,6 +19,8 @@ const FIELD_CLASS = Object.freeze({
   INTERNAL: 'internal_operational',
   // Reduced to scheme and host: RPC and webhook URLs carry keys in the path.
   ENDPOINT: 'endpoint_origin',
+  // A request target: the query and fragment are dropped.
+  REQUEST_PATH: 'request_path',
   // Personal data: truncated to the network prefix.
   NETWORK_ADDRESS: 'masked_network_address',
 });
@@ -69,6 +71,15 @@ const PUBLIC_FIELDS = [
   'boundaryTag',
   'blockInterval',
   'logIndex',
+  'contractAddress',
+  'codehash',
+  'abiFingerprint',
+  'startBlockVerified',
+  'finalizedBlock',
+  'head',
+  'checkpointHeight',
+  'checkpointState',
+  'checked',
   'chainId',
   'networkName',
   'escrowAddress',
@@ -87,10 +98,7 @@ const PUBLIC_FIELDS = [
   'lagBlocks',
   'maxLagBlocks',
   // Request shape.
-  'route',
-  'path',
   'method',
-  'endpoint',
   'operation',
   'operationName',
   'statusCode',
@@ -322,6 +330,8 @@ const ENDPOINT_FIELDS = [
   'authBaseUrl',
 ];
 
+const REQUEST_PATH_FIELDS = ['route', 'path', 'endpoint'];
+
 const NETWORK_ADDRESS_FIELDS = ['ip'];
 
 function normalizeFieldName(name) {
@@ -403,6 +413,7 @@ function buildFieldPolicy() {
   register(PUBLIC_FIELDS, FIELD_CLASS.PUBLIC);
   register(INTERNAL_FIELDS, FIELD_CLASS.INTERNAL);
   register(ENDPOINT_FIELDS, FIELD_CLASS.ENDPOINT);
+  register(REQUEST_PATH_FIELDS, FIELD_CLASS.REQUEST_PATH);
   register(NETWORK_ADDRESS_FIELDS, FIELD_CLASS.NETWORK_ADDRESS);
   return policy;
 }
