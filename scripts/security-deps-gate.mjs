@@ -29,6 +29,19 @@ const developmentAuditAllowlist = new Map([
     },
   ],
   [
+    'GHSA-gcqx-w48m-w2h4',
+    {
+      moduleName: 'deepmerge',
+      severity: 'low',
+      versions: new Set(['4.3.1']),
+      patchedVersions: '<0.0.0',
+      pathPrefix: 'auth>jest>',
+      owner: 'Cotsel security maintainers',
+      expiresOn: '2026-10-31',
+      reason: 'No patched release exists. This path is limited to development-only Jest tooling.',
+    },
+  ],
+  [
     'GHSA-hqr4-qq8f-hg3x',
     {
       moduleName: 'stream-json',
