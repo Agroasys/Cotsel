@@ -17,7 +17,7 @@
     "@agroasys/sdk": "workspace:*",
     "@agroasys/shared-auth": "workspace:*",
     "@agroasys/shared-telemetry": "workspace:*",
-    "@aws-sdk/client-kms": "3.1149.0",
+    "@aws-sdk/client-kms": "3.1155.0",
     "ethers": "^6.17.0",
     "express": "^5.3.0",
     "helmet": "^8.3.0",
