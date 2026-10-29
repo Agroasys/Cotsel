@@ -24,6 +24,7 @@
     "@agroasys/shared-auth": "*",
     "@agroasys/shared-db": "*",
     "@agroasys/shared-edge": "*",
+    "@agroasys/shared-telemetry": "workspace:*",
     "cors": "^2.8.6",
     "dotenv": "^18.0.7",
     "ethers": "^6.17.0",

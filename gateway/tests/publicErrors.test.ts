@@ -73,11 +73,16 @@ describe('gateway public errors', () => {
       expect(serialized).not.toContain(leaked);
     }
 
-    const logged = JSON.parse(warnLog.mock.calls[0][0] as string);
-    expect(logged).toMatchObject({
+    // The log keeps the diagnostic for operators; the telemetry schema still
+    // reduces the RPC URL to its origin so the provider key never lands there.
+    const loggedLine = warnLog.mock.calls[0][0] as string;
+    expect(JSON.parse(loggedLine)).toMatchObject({
       correlationId: 'trace-123',
-      diagnostics: { cause: cause.message },
+      diagnostics: {
+        cause: 'missing response (requestBody="{}", url="https://base-sepolia.example/[redacted]")',
+      },
     });
+    expect(loggedLine).not.toContain('alchemy-key');
   });
 
   test('an unexpected database failure returns only INTERNAL_ERROR and the trace ID', async () => {

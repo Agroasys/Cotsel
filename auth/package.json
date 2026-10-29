@@ -21,7 +21,8 @@
     "@agroasys/shared-db": "^1.0.0",
     "@agroasys/shared-http": "^1.0.0",
     "@agroasys/shared-edge": "^1.0.0",
-    "@agroasys/shared-auth": "^1.0.0"
+    "@agroasys/shared-auth": "^1.0.0",
+    "@agroasys/shared-telemetry": "workspace:*"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

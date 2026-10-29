@@ -19,6 +19,7 @@ COPY shared-auth/package.json shared-auth/package.json
 COPY shared-db/package.json shared-db/package.json
 COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
+COPY shared-telemetry/package.json shared-telemetry/package.json
 COPY treasury/package.json treasury/package.json
 
 RUN pnpm install --frozen-lockfile --ignore-scripts
@@ -26,6 +27,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY relayer relayer
 COPY sdk sdk
 COPY shared-auth shared-auth
+COPY shared-telemetry shared-telemetry
 
 RUN pnpm --filter @agroasys/sdk run build && pnpm --filter @agroasys/relayer run build
 
@@ -53,6 +55,7 @@ COPY shared-auth/package.json shared-auth/package.json
 COPY shared-db/package.json shared-db/package.json
 COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
+COPY shared-telemetry/package.json shared-telemetry/package.json
 COPY treasury/package.json treasury/package.json
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
@@ -68,6 +71,7 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
 COPY --from=builder /app/relayer/dist /app/relayer/dist
 COPY --from=builder /app/sdk/dist /app/sdk/dist
 COPY --from=builder /app/shared-auth /app/shared-auth
+COPY --from=builder /app/shared-telemetry /app/shared-telemetry
 
 RUN addgroup -S agro && adduser -S agro -G agro \
   && chown -R agro:agro /app

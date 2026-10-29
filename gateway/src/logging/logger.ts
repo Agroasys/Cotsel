@@ -1,6 +1,8 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
+
 interface LogMeta {
   requestId?: string | null;
   correlationId?: string | null;
@@ -15,38 +17,9 @@ interface LogMeta {
 }
 
 const SERVICE_NAME = 'gateway';
-const REDACT_KEYS = new Set([
-  'authorization',
-  'token',
-  'accessToken',
-  'refreshToken',
-  'apiKey',
-  'secret',
-  'password',
-  'hmacSecret',
-]);
-
-function redactValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) => redactValue(item));
-  }
-
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, entry]) => {
-        if (REDACT_KEYS.has(key)) {
-          return [key, '[REDACTED]'];
-        }
-        return [key, redactValue(entry)];
-      }),
-    );
-  }
-
-  return value;
-}
 
 function baseContext(meta?: LogMeta): Record<string, unknown> {
-  return redactValue({
+  return {
     service: SERVICE_NAME,
     env: process.env.NODE_ENV || 'development',
     requestId: meta?.requestId ?? null,
@@ -59,7 +32,7 @@ function baseContext(meta?: LogMeta): Record<string, unknown> {
     statusCode: meta?.statusCode ?? null,
     durationMs: meta?.durationMs ?? null,
     ...meta,
-  }) as Record<string, unknown>;
+  };
 }
 
 function normalizeMeta(metaOrError?: unknown): LogMeta | undefined {
@@ -79,31 +52,31 @@ export class Logger {
     message: string,
     meta?: LogMeta,
   ): void {
-    const payload = {
+    const payload = serializeTelemetryRecord({
       level,
       timestamp: new Date().toISOString(),
       message,
       ...baseContext(meta),
-    };
+    });
 
     if (level === 'error') {
-      console.error(JSON.stringify(payload));
+      console.error(payload);
       return;
     }
 
     if (level === 'warn') {
-      console.warn(JSON.stringify(payload));
+      console.warn(payload);
       return;
     }
 
     if (level === 'debug') {
       if (process.env.NODE_ENV === 'development') {
-        console.debug(JSON.stringify(payload));
+        console.debug(payload);
       }
       return;
     }
 
-    console.log(JSON.stringify(payload));
+    console.log(payload);
   }
 
   static info(message: string, meta?: LogMeta): void {

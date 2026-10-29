@@ -90,3 +90,10 @@ Current guard coverage:
 
 If a new operator-facing log contract or evidence template is introduced, extend
 the guard in the same change instead of relying on reviewer memory.
+
+Runtime enforcement is performed by `@agroasys/shared-telemetry`. Every service
+logger, the indexer Subsquid sink, and the notifications webhook renderer apply
+its default-deny field schema before a record leaves the process.
+`scripts/tests/telemetry-field-schema-guard.mjs` fails the release gate when a
+logger call names a field that the schema does not classify. See
+`docs/observability/logging-schema.md` for the field handling rules.

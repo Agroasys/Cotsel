@@ -154,3 +154,38 @@ test('embeds template version and severity route in payload', async () => {
   assert.equal(fieldByTitle.severityRoute, 'pager');
   assert.equal(fieldByTitle.routingVersion, NOTIFICATION_ROUTING_VERSION);
 });
+
+test('scrubs credentials, URLs and personal data from rendered webhook fields', async () => {
+  let body;
+  global.fetch = async (_url, init) => {
+    body = init.body;
+    return { ok: true, status: 200, statusText: 'OK' };
+  };
+
+  const notifier = new WebhookNotifier({
+    enabled: true,
+    webhookUrl: 'https://hooks.example.invalid/notify',
+    cooldownMs: 1000,
+    requestTimeoutMs: 1000,
+    retryAttempts: 0,
+  });
+
+  const sent = await notifier.notify(
+    createEvent({
+      type: 'NOTIFICATION_ESCALATION',
+      message: 'RPC https://base-sepolia.g.alchemy.com/v2/alchemy-key-0123456789 refused',
+      metadata: {
+        escalationReason: 'unacknowledged',
+        originalMessage: 'contact buyer.person@example.com',
+        lastError: 'Bearer sk_live_0123456789abcdef rejected',
+      },
+    }),
+  );
+
+  assert.equal(sent, true);
+  assert.doesNotMatch(body, /alchemy-key-0123456789/);
+  assert.doesNotMatch(body, /buyer\.person@example\.com/);
+  assert.doesNotMatch(body, /sk_live_0123456789abcdef/);
+  assert.match(body, /base-sepolia\.g\.alchemy\.com\/\[redacted\]/);
+  assert.match(body, /unacknowledged/);
+});

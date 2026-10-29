@@ -1,3 +1,4 @@
+import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
 import type { IndexerConfig } from './config';
 import type { IndexerAlerts } from './alerts';
 import {
@@ -14,7 +15,7 @@ export function logBootstrapEvent(
   meta: Record<string, unknown> = {},
 ): void {
   process.stderr.write(
-    `${JSON.stringify({ level, service: 'indexer', eventType, message, ...meta })}\n`,
+    `${serializeTelemetryRecord({ level, service: 'indexer', eventType, message, ...meta })}\n`,
   );
 }
 

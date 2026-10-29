@@ -1,3 +1,5 @@
+import { scrubString, serializeTelemetryRecord } from '@agroasys/shared-telemetry';
+
 export type NotificationSeverity = 'info' | 'warning' | 'critical';
 export type NotificationSeverityRoute = 'informational' | 'operations' | 'pager';
 
@@ -127,7 +129,7 @@ export class WebhookNotifier implements Notifier, NotificationTransport {
       return;
     }
 
-    console.log(JSON.stringify({ level: 'info', message, ...meta }));
+    console.log(serializeTelemetryRecord({ level: 'info', message, ...meta }));
   }
 
   private logWarn(message: string, meta?: Record<string, unknown>): void {
@@ -136,7 +138,7 @@ export class WebhookNotifier implements Notifier, NotificationTransport {
       return;
     }
 
-    console.warn(JSON.stringify({ level: 'warn', message, ...meta }));
+    console.warn(serializeTelemetryRecord({ level: 'warn', message, ...meta }));
   }
 
   private logError(message: string, meta?: Record<string, unknown>): void {
@@ -145,7 +147,7 @@ export class WebhookNotifier implements Notifier, NotificationTransport {
       return;
     }
 
-    console.error(JSON.stringify({ level: 'error', message, ...meta }));
+    console.error(serializeTelemetryRecord({ level: 'error', message, ...meta }));
   }
 
   private colorForSeverity(severity: NotificationSeverity): string {
@@ -243,11 +245,12 @@ export class WebhookNotifier implements Notifier, NotificationTransport {
       attachments: [
         {
           color: this.colorForSeverity(event.severity),
+          // Webhook bodies leave the trust boundary: scrub every rendered value.
           fields: [
             { title: 'message', value: event.message, short: false },
             ...metadataFields,
             ...fields,
-          ],
+          ].map((field) => ({ ...field, value: scrubString(field.value) })),
         },
       ],
     };

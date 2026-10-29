@@ -78,13 +78,14 @@ remain clear at every release candidate head.
   chain moves to a compatible patched version. The compatibility check verifies
   normal JSON-RPC parsing, the depth limit, and both assembler paths.
 
-The full-tree gate temporarily accepts two additional development-only
-advisories. Both entries name Cotsel security maintainers as owner and expire
+The full-tree gate temporarily accepts three additional development-only
+advisories. All entries name Cotsel security maintainers as owner and expire
 on 31 October 2026:
 
 | Advisory                                                                 | Dependency path                                 | Reason for temporary acceptance                                                                                           |
 | ------------------------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [GHSA-hp3w-g68c-fv3c](https://github.com/advisories/GHSA-hp3w-g68c-fv3c) | `auth > jest > … > sprintf-js@1.0.3`            | No patched release exists. The production audit excludes this test-tool path.                                             |
+| [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) | `auth > jest > … > deepmerge@4.3.1`             | No patched release exists. The production audit excludes this test-tool path.                                             |
 | [GHSA-hqr4-qq8f-hg3x](https://github.com/advisories/GHSA-hqr4-qq8f-hg3x) | `sdk > @web3auth/modal > … > stream-json@1.9.1` | The production audit excludes this development dependency, and version 1.9.1 has no JSONC parser or verifier entry point. |
 
 The gate checks advisory ID, package, severity, version, and dependency path for

@@ -1,3 +1,4 @@
+import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import type { NotificationEvent, NotificationLogger, NotificationTransport } from './index';
@@ -56,9 +57,12 @@ export interface DispatchSummary {
 }
 
 const consoleLogger: NotificationLogger = {
-  info: (message, meta) => console.log(JSON.stringify({ level: 'info', message, ...meta })),
-  warn: (message, meta) => console.warn(JSON.stringify({ level: 'warn', message, ...meta })),
-  error: (message, meta) => console.error(JSON.stringify({ level: 'error', message, ...meta })),
+  info: (message, meta) =>
+    console.log(serializeTelemetryRecord({ level: 'info', message, ...meta })),
+  warn: (message, meta) =>
+    console.warn(serializeTelemetryRecord({ level: 'warn', message, ...meta })),
+  error: (message, meta) =>
+    console.error(serializeTelemetryRecord({ level: 'error', message, ...meta })),
 };
 
 function errorMessage(error: unknown): string {

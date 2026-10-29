@@ -35,6 +35,7 @@
     "shared-edge",
     "shared-db",
     "shared-auth",
+    "shared-telemetry",
     "reconciliation",
     "notifications",
     "ricardian",

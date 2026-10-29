@@ -1,3 +1,5 @@
+import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
+
 interface LogMeta {
   tradeId?: string | null;
   actionKey?: string | null;
@@ -50,7 +52,7 @@ export class Logger {
 
   static info(message: string, meta?: LogMeta): void {
     console.log(
-      JSON.stringify({
+      serializeTelemetryRecord({
         level: 'info',
         timestamp: this.formatTimestamp(),
         message,
@@ -61,7 +63,7 @@ export class Logger {
 
   static error(message: string, metaOrError?: unknown): void {
     console.error(
-      JSON.stringify({
+      serializeTelemetryRecord({
         level: 'error',
         timestamp: this.formatTimestamp(),
         message,
@@ -72,7 +74,7 @@ export class Logger {
 
   static warn(message: string, meta?: LogMeta): void {
     console.warn(
-      JSON.stringify({
+      serializeTelemetryRecord({
         level: 'warn',
         timestamp: this.formatTimestamp(),
         message,
@@ -83,7 +85,7 @@ export class Logger {
 
   static audit(action: string, tradeId: string, result: Record<string, unknown>): void {
     console.log(
-      JSON.stringify({
+      serializeTelemetryRecord({
         level: 'audit',
         timestamp: this.formatTimestamp(),
         action,

@@ -1,4 +1,5 @@
 import { EvmBatchProcessor, type EvmBatchProcessorFields } from '@subsquid/evm-processor';
+import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
 import { selectReachableRpcEndpoint, redactRpcUrlForLogs } from './rpc-preflight';
 import { loadConfig } from './config';
 import { ESCROW_EVENT_TOPICS } from './eventTopics';
@@ -72,7 +73,7 @@ export async function applyReachableRpcEndpoint(): Promise<{ url: string; reacha
   );
   processor.setRpcEndpoint(rpcEndpointSettings(selection.url));
   console.log(
-    JSON.stringify({
+    serializeTelemetryRecord({
       level: selection.selectedIndex > 0 ? 'warn' : 'info',
       service: 'indexer',
       eventType: selection.selectedIndex > 0 ? 'rpc.fallback_selected' : 'rpc.primary_selected',

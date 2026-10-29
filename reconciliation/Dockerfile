@@ -19,6 +19,7 @@ COPY shared-auth/package.json shared-auth/package.json
 COPY shared-db/package.json shared-db/package.json
 COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
+COPY shared-telemetry/package.json shared-telemetry/package.json
 COPY treasury/package.json treasury/package.json
 
 RUN apk add --no-cache python3 make g++
@@ -29,6 +30,7 @@ COPY notifications notifications
 COPY reconciliation reconciliation
 COPY sdk sdk
 COPY shared-db shared-db
+COPY shared-telemetry shared-telemetry
 
 RUN pnpm --filter @agroasys/sdk run build \
   && pnpm --filter @agroasys/notifications run build \
@@ -63,6 +65,7 @@ COPY shared-auth/package.json shared-auth/package.json
 COPY shared-db/package.json shared-db/package.json
 COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
+COPY shared-telemetry/package.json shared-telemetry/package.json
 COPY treasury/package.json treasury/package.json
 
 RUN apk add --no-cache --virtual .build-deps python3 make g++ \
@@ -80,6 +83,7 @@ RUN apk add --no-cache --virtual .build-deps python3 make g++ \
 COPY --from=builder /app/notifications/dist /app/notifications/dist
 COPY --from=builder /app/sdk/dist /app/sdk/dist
 COPY --from=builder /app/shared-db /app/shared-db
+COPY --from=builder /app/shared-telemetry /app/shared-telemetry
 COPY --from=builder /app/reconciliation/dist /app/reconciliation/dist
 
 RUN addgroup -S agro && adduser -S agro -G agro \

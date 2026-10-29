@@ -1,0 +1,20 @@
+{
+  "name": "@agroasys/shared-telemetry",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "lint": "eslint --max-warnings=0 .",
+    "test": "node --test fieldPolicy.test.js sanitize.test.js"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "fieldPolicy.js",
+    "fieldPolicy.d.ts",
+    "sanitize.js",
+    "sanitize.d.ts"
+  ],
+  "license": "Apache-2.0"
+}

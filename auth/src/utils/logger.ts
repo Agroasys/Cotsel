@@ -2,6 +2,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
+
 interface LogMeta {
   userId?: string | null;
   requestId?: string | null;
@@ -38,7 +40,7 @@ export class Logger {
 
   static info(message: string, meta?: LogMeta): void {
     console.log(
-      JSON.stringify({
+      serializeTelemetryRecord({
         level: 'info',
         timestamp: this.formatTimestamp(),
         message,
@@ -49,7 +51,7 @@ export class Logger {
 
   static warn(message: string, meta?: LogMeta): void {
     console.warn(
-      JSON.stringify({
+      serializeTelemetryRecord({
         level: 'warn',
         timestamp: this.formatTimestamp(),
         message,
@@ -60,7 +62,7 @@ export class Logger {
 
   static error(message: string, metaOrError?: unknown): void {
     console.error(
-      JSON.stringify({
+      serializeTelemetryRecord({
         level: 'error',
         timestamp: this.formatTimestamp(),
         message,
@@ -72,7 +74,7 @@ export class Logger {
   static debug(message: string, meta?: LogMeta): void {
     if (process.env.NODE_ENV === 'development') {
       console.debug(
-        JSON.stringify({
+        serializeTelemetryRecord({
           level: 'debug',
           timestamp: this.formatTimestamp(),
           message,
