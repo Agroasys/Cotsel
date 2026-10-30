@@ -96,6 +96,14 @@ is still enumerated. An inner join would count such an entry in the snapshot but
 never return it on any page, so the pages could never reconcile. That entry
 carries a null state and is therefore scanned but never exported.
 
+The snapshot count and page are separate reads. If a completed first page
+contradicts the snapshot count or amount total, the API returns
+`409 InconsistentExportSnapshot`. Restart the export with a new cutoff. For a
+multi-page export, compare the accumulated scanned count with the snapshot
+before using the result. A timestamp cutoff alone does not hold one
+database snapshot across separate HTTP requests; candidate acceptance still
+requires a controlled concurrent-write and recovery rehearsal.
+
 The cursor token carries the cutoff it was issued under, and a continuation
 supplying a different cutoff is rejected with `CutoffMismatch`. Paging one
 snapshot's cursor against another would skip or repeat rows while every page

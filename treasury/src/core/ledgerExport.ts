@@ -210,6 +210,25 @@ export function parseExportRequest(
 }
 
 export function buildExportPage<TEntry>(input: ExportPageInput<TEntry>): ExportPage<TEntry> {
+  // The count and page are separate database reads. A transaction that commits
+  // between them can make a one-page export claim completion for a different
+  // candidate set. Refuse that contradiction before sending any rows.
+  if (input.request.cursor === null && !input.hasMore) {
+    const scannedAmount = input.candidates.reduce(
+      (total, entry) => total + parseRawAmount(input.readAmountRaw(entry), 'amountRaw'),
+      0n,
+    );
+    if (
+      input.candidates.length !== input.snapshot.rowCount ||
+      scannedAmount !== BigInt(input.snapshot.totalAmountRaw)
+    ) {
+      throw new ExportRequestError(
+        'InconsistentExportSnapshot',
+        'Ledger export snapshot changed while the page was read; restart the export with a new cutoff',
+      );
+    }
+  }
+
   const entries = input.candidates.filter((entry) => input.selectExportable(entry));
   const exportedAmountRaw = formatRawAmount(
     entries.reduce(

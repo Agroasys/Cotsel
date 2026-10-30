@@ -1313,7 +1313,11 @@ export class TreasuryController {
     } catch (error: unknown) {
       if (error instanceof ExportRequestError) {
         res
-          .status(error.code === 'IncompleteExport' ? 409 : 400)
+          .status(
+            error.code === 'IncompleteExport' || error.code === 'InconsistentExportSnapshot'
+              ? 409
+              : 400,
+          )
           .json(failure(error.code, error.message));
         return;
       }

@@ -311,6 +311,31 @@ describe('TreasuryController eligibility gates', () => {
     );
   });
 
+  test('exportEntries returns a conflict when a completed page contradicts its snapshot', async () => {
+    jest
+      .spyOn(LoadedTreasuryEligibilityService.prototype, 'assessEntries')
+      .mockResolvedValue(new Map());
+    jest.mocked(queriesModule.getLedgerEntriesForExport).mockResolvedValue({
+      entries: [makeEntry(11)],
+      hasMore: false,
+    });
+    jest.mocked(queriesModule.getLedgerExportSnapshot).mockResolvedValue({
+      rowCount: 0,
+      totalAmountRaw: '0',
+    });
+
+    const controller = new LoadedTreasuryController();
+    const res = mockResponse();
+    const req = { query: { format: 'json' } } as unknown as ExportEntriesRequest;
+
+    await controller.exportEntries(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, error: 'InconsistentExportSnapshot' }),
+    );
+  });
+
   test('reconciliation control summary exposes upstream freshness and coverage state', async () => {
     jest.spyOn(LoadedReconciliationGateService.prototype, 'summarizeTrades').mockResolvedValue({
       status: 'UNKNOWN',

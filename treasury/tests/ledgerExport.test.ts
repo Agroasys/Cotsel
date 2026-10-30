@@ -27,6 +27,14 @@ function row(id: number, amountRaw: string, eligible = true): Row {
 }
 
 function page(rows: Row[], hasMore: boolean, overrides: Partial<{ limit: number }> = {}) {
+  const snapshot = hasMore
+    ? { rowCount: 9, totalAmountRaw: '9000' }
+    : {
+        rowCount: rows.length,
+        totalAmountRaw: rows
+          .reduce((total, entry) => total + BigInt(entry.amount_raw), 0n)
+          .toString(),
+      };
   return buildExportPage({
     request: {
       cutoff: NOW,
@@ -34,7 +42,7 @@ function page(rows: Row[], hasMore: boolean, overrides: Partial<{ limit: number 
       limit: overrides.limit ?? DEFAULT_EXPORT_PAGE_SIZE,
       allowPartial: false,
     },
-    snapshot: { rowCount: 9, totalAmountRaw: '9000' },
+    snapshot,
     candidates: rows,
     hasMore,
     selectExportable: (entry) => entry.eligibleForExport,
@@ -131,7 +139,7 @@ describe('buildExportPage', () => {
   it('reports the cutoff, snapshot totals and per-page totals', () => {
     const result = page([row(1, '100'), row(2, '250')], false);
     expect(result.cutoff).toBe(NOW.toISOString());
-    expect(result.snapshot).toEqual({ rowCount: 9, totalAmountRaw: '9000' });
+    expect(result.snapshot).toEqual({ rowCount: 2, totalAmountRaw: '350' });
     expect(result.scannedRowCount).toBe(2);
     expect(result.exportedRowCount).toBe(2);
     expect(result.exportedAmountRaw).toBe('350');
@@ -172,6 +180,67 @@ describe('buildExportPage', () => {
 
   it('rejects a non-canonical amount rather than exporting it', () => {
     expect(() => page([row(1, '')], false)).toThrow(/not a canonical treasury amount/);
+  });
+
+  it.each([
+    [{ rowCount: 0, totalAmountRaw: '0' }, [row(1, '100')]],
+    [{ rowCount: 2, totalAmountRaw: '200' }, [row(1, '100')]],
+    [{ rowCount: 1, totalAmountRaw: '200' }, [row(1, '100')]],
+  ])('refuses a completed page inconsistent with its snapshot', (snapshot, candidates) => {
+    expect(() =>
+      buildExportPage({
+        request: { cutoff: NOW, cursor: null, limit: 1000, allowPartial: false },
+        snapshot,
+        candidates,
+        hasMore: false,
+        selectExportable: (entry) => entry.eligibleForExport,
+        readAmountRaw: (entry) => entry.amount_raw,
+        readCursor: (entry) => ({ createdAt: entry.created_at, id: entry.id }),
+      }),
+    ).toThrow(/snapshot changed/);
+  });
+
+  it('continues through more than 5,000 same-timestamp rows exactly once', () => {
+    const allRows: Row[] = Array.from({ length: 5001 }, (_, index) => ({
+      id: 5001 - index,
+      created_at: new Date('2026-09-17T10:00:00.000Z'),
+      amount_raw: '1',
+      eligibleForExport: true,
+    }));
+    const seen: number[] = [];
+    let exportedAmount = 0n;
+    let request = parseExportRequest({ cutoff: NOW.toISOString(), limit: '1000' }, NOW);
+
+    for (let pageNumber = 0; pageNumber < 6; pageNumber += 1) {
+      const remaining = allRows.filter((entry) => !request.cursor || entry.id < request.cursor.id);
+      const result = buildExportPage({
+        request,
+        snapshot: { rowCount: 5001, totalAmountRaw: '5001' },
+        candidates: remaining.slice(0, request.limit),
+        hasMore: remaining.length > request.limit,
+        selectExportable: (entry) => entry.eligibleForExport,
+        readAmountRaw: (entry) => entry.amount_raw,
+        readCursor: (entry) => ({ createdAt: entry.created_at, id: entry.id }),
+      });
+      seen.push(...result.entries.map((entry) => entry.id));
+      exportedAmount += BigInt(result.exportedAmountRaw);
+
+      if (result.nextCursor === null) {
+        expect(result.complete).toBe(true);
+        break;
+      }
+      expect(result.complete).toBe(false);
+      request = parseExportRequest(
+        { cutoff: NOW.toISOString(), cursor: result.nextCursor, limit: '1000' },
+        NOW,
+      );
+    }
+
+    expect(seen).toHaveLength(5001);
+    expect(new Set(seen).size).toBe(5001);
+    expect(seen[0]).toBe(5001);
+    expect(seen[5000]).toBe(1);
+    expect(exportedAmount).toBe(5001n);
   });
 });
 
