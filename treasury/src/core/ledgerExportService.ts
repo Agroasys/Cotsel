@@ -24,8 +24,9 @@ const defaultReader: LedgerExportReader = {
 
 /**
  * Reads one keyset page at the request's cutoff, annotates it, and folds it into
- * an export page. The snapshot and the page are read concurrently: both are
- * bounded by the same cutoff, so neither can observe rows the other cannot.
+ * an export page. The snapshot and page are separate database reads, so a
+ * concurrent commit may make them disagree despite the common cutoff. The
+ * page builder rejects contradictions before returning a completed export.
  */
 export async function loadLedgerExportPage<TEntry extends AnnotatedLedgerEntry>(
   request: ExportRequest,

@@ -21,6 +21,8 @@ describePostgres('treasury ledger export coverage', () => {
   let admin: Pool;
   let pool: Pool;
   let queries: typeof import('../src/database/queries/ledger');
+  let loadExportPage: typeof import('../src/core/ledgerExportService').loadLedgerExportPage;
+  let parseExportRequest: typeof import('../src/core/ledgerExport').parseExportRequest;
 
   beforeAll(async () => {
     dbName = `treasury_export_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -46,6 +48,8 @@ describePostgres('treasury ledger export coverage', () => {
     );
 
     queries = await import('../src/database/queries/ledger');
+    ({ loadLedgerExportPage: loadExportPage } = await import('../src/core/ledgerExportService'));
+    ({ parseExportRequest } = await import('../src/core/ledgerExport'));
   }, 60000);
 
   afterAll(async () => {
@@ -180,5 +184,44 @@ describePostgres('treasury ledger export coverage', () => {
     expect(scanned).toBe(snapshot.rowCount);
     expect(seen.size).toBe(snapshot.rowCount);
     expect(scannedAmount).toBe(BigInt(snapshot.totalAmountRaw));
+  });
+
+  it('refuses a continuation after a pre-cutoff transaction commits between pages', async () => {
+    const writer = await pool.connect();
+    let committed = false;
+    try {
+      await writer.query('BEGIN');
+      await writer.query(
+        `INSERT INTO treasury_ledger_entries (
+           entry_key, trade_id, tx_hash, block_number, event_name,
+           component_type, amount_raw, source_timestamp, created_at
+         ) VALUES ('export-late-commit', 'trade-late-commit', '0xtx-late-commit',
+                   100, 'PlatformFeesPaidStage1', 'PLATFORM_FEE', '1', NOW(), NOW())`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      const exportCutoff = new Date();
+      const first = await loadExportPage(
+        parseExportRequest({ cutoff: exportCutoff.toISOString(), limit: '1' }),
+        async (entries) => entries.map((entry) => ({ ...entry, eligibleForExport: true })),
+      );
+      expect(first.nextCursor).not.toBeNull();
+
+      await writer.query('COMMIT');
+      committed = true;
+
+      const continuation = parseExportRequest({
+        cutoff: exportCutoff.toISOString(),
+        cursor: first.nextCursor,
+        limit: '1',
+      });
+      await expect(
+        loadExportPage(continuation, async (entries) =>
+          entries.map((entry) => ({ ...entry, eligibleForExport: true })),
+        ),
+      ).rejects.toThrow(/snapshot changed/);
+    } finally {
+      if (!committed) await writer.query('ROLLBACK');
+      writer.release();
+    }
   });
 });

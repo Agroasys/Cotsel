@@ -57,13 +57,13 @@ every later page.
 
 The export is now a keyset page bounded by a fixed cutoff.
 
-| Parameter      | Meaning                                                                                            |
-| -------------- | -------------------------------------------------------------------------------------------------- |
-| `cutoff`       | ISO-8601 snapshot boundary. Defaults to now. Must be restated on every page.                       |
-| `cursor`       | Opaque continuation from the previous page's `nextCursor`. Carries the cutoff it was issued under. |
-| `limit`        | Page size, default 500, maximum 1000. An oversized limit is **refused**, not clamped.              |
-| `format`       | `json` (default) or `csv`.                                                                         |
-| `allowPartial` | `true` to accept a knowingly truncated CSV. Default `false`.                                       |
+| Parameter      | Meaning                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `cutoff`       | ISO-8601 snapshot boundary. Defaults to now. Must be restated on every page.                                        |
+| `cursor`       | Opaque continuation from the previous page's `nextCursor`. Carries the cutoff, snapshot totals, and scanned totals. |
+| `limit`        | Page size, default 500, maximum 1000. An oversized limit is **refused**, not clamped.                               |
+| `format`       | `json` (default) or `csv`.                                                                                          |
+| `allowPartial` | `true` to accept a knowingly truncated CSV. Default `false`.                                                        |
 
 The JSON envelope carries what makes the export checkable:
 
@@ -74,7 +74,7 @@ The JSON envelope carries what makes the export checkable:
   "scannedRowCount": 500,
   "exportedRowCount": 447,
   "exportedAmountRaw": "3220000000",
-  "nextCursor": "MjAyNi0wOS0xN1QxMTo1OTowMC4wMDBafDEyMzQ=",
+  "nextCursor": "<opaque version 2 cursor>",
   "complete": false,
   "entries": []
 }
@@ -96,18 +96,19 @@ is still enumerated. An inner join would count such an entry in the snapshot but
 never return it on any page, so the pages could never reconcile. That entry
 carries a null state and is therefore scanned but never exported.
 
-The snapshot count and page are separate reads. If a completed first page
-contradicts the snapshot count or amount total, the API returns
-`409 InconsistentExportSnapshot`. Restart the export with a new cutoff. For a
-multi-page export, compare the accumulated scanned count with the snapshot
-before using the result. A timestamp cutoff alone does not hold one
-database snapshot across separate HTTP requests; candidate acceptance still
-requires a controlled concurrent-write and recovery rehearsal.
+The snapshot count and page are separate reads. The cursor carries the first
+page's snapshot count, amount total, and cumulative scanned totals. Each page
+checks those values against a fresh snapshot. A changed count or amount, or a
+completed page with incomplete scanned totals, returns
+`409 InconsistentExportSnapshot`. Restart with a new cutoff. A timestamp cutoff
+does not hold one database snapshot across separate HTTP requests; candidate
+acceptance still requires a controlled concurrent-write and recovery rehearsal.
 
-The cursor token carries the cutoff it was issued under, and a continuation
+The version 2 cursor token carries the cutoff it was issued under, and a continuation
 supplying a different cutoff is rejected with `CutoffMismatch`. Paging one
 snapshot's cursor against another would skip or repeat rows while every page
-still reported itself complete.
+still reported itself complete. A version 1 cursor cannot prove cumulative
+coverage and must restart the export after this change.
 
 ### Truncation is explicit
 

@@ -1,14 +1,14 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { formatRawAmount, parseRawAmount } from './canonicalAmount';
+import { parseRawAmount } from './canonicalAmount';
 
 /**
  * An export is a statement about the ledger at one instant. Without a fixed
  * cutoff, page two is drawn from a different ledger than page one, and rows
  * inserted mid-export are either duplicated or skipped depending on sort order.
- * Every page of one export therefore carries the same cutoff, and continuation
- * is keyset rather than offset so concurrent inserts cannot shift a page.
+ * Every page carries the same cutoff and snapshot totals. Continuation is
+ * keyset rather than offset, and a changed candidate set fails closed.
  */
 export const MAX_EXPORT_PAGE_SIZE = 1000;
 export const DEFAULT_EXPORT_PAGE_SIZE = 500;
@@ -33,9 +33,15 @@ export interface ExportCursor {
   id: number;
 }
 
+export interface ExportContinuationCursor extends ExportCursor {
+  snapshot: ExportSnapshotTotals;
+  scannedRowCount: number;
+  scannedAmountRaw: string;
+}
+
 export interface ExportRequest {
   cutoff: Date;
-  cursor: ExportCursor | null;
+  cursor: ExportContinuationCursor | null;
   limit: number;
   allowPartial: boolean;
 }
@@ -73,14 +79,37 @@ export interface ExportPage<TEntry> {
  * under one cutoff continued against another would page across two different
  * snapshots, skipping or repeating rows while still reporting `complete`.
  */
-function encodeCursor(cutoff: Date, cursor: ExportCursor): string {
+function encodeCursor(
+  cutoff: Date,
+  cursor: ExportCursor,
+  snapshot: ExportSnapshotTotals,
+  scannedRowCount: number,
+  scannedAmountRaw: string,
+): string {
   return Buffer.from(
-    `${cutoff.toISOString()}|${cursor.createdAt.toISOString()}|${cursor.id}`,
+    `v2|${cutoff.toISOString()}|${cursor.createdAt.toISOString()}|${cursor.id}|${snapshot.rowCount}|${snapshot.totalAmountRaw}|${scannedRowCount}|${scannedAmountRaw}`,
     'utf8',
   ).toString('base64url');
 }
 
-export function decodeCursor(value: string): ExportCursor & { cutoff: Date } {
+function parseCursorCount(value: string, field: string): number {
+  if (!/^(0|[1-9][0-9]*)$/.test(value) || !Number.isSafeInteger(Number(value))) {
+    throw new ExportRequestError('InvalidCursor', `cursor ${field} is not a safe count`);
+  }
+  return Number(value);
+}
+
+function parseCursorAmount(value: string, field: string): string {
+  if (value.length > 200 || !/^(0|[1-9][0-9]*)$/.test(value)) {
+    throw new ExportRequestError('InvalidCursor', `cursor ${field} is not a canonical amount`);
+  }
+  return value;
+}
+
+export function decodeCursor(value: string): ExportContinuationCursor & { cutoff: Date } {
+  if (value.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new ExportRequestError('InvalidCursor', 'cursor is not valid base64url');
+  }
   let decoded: string;
   try {
     decoded = Buffer.from(value, 'base64url').toString('utf8');
@@ -89,14 +118,19 @@ export function decodeCursor(value: string): ExportCursor & { cutoff: Date } {
   }
 
   const parts = decoded.split('|');
-  if (parts.length !== 3) {
+  if (parts.length !== 8 || parts[0] !== 'v2') {
     throw new ExportRequestError('InvalidCursor', 'cursor is malformed');
   }
 
-  const [rawCutoff, rawCreatedAt, rawId] = parts;
+  const [rawCutoff, rawCreatedAt, rawId, rawRowCount, rawTotal, rawScannedCount, rawScannedAmount] =
+    parts.slice(1);
   const cutoff = new Date(rawCutoff);
   const createdAt = new Date(rawCreatedAt);
   const id = Number(rawId);
+  const rowCount = parseCursorCount(rawRowCount, 'row count');
+  const totalAmountRaw = parseCursorAmount(rawTotal, 'total amount');
+  const scannedRowCount = parseCursorCount(rawScannedCount, 'scanned row count');
+  const scannedAmountRaw = parseCursorAmount(rawScannedAmount, 'scanned amount');
 
   if (Number.isNaN(cutoff.getTime())) {
     throw new ExportRequestError('InvalidCursor', 'cursor cutoff is not a valid date');
@@ -106,11 +140,22 @@ export function decodeCursor(value: string): ExportCursor & { cutoff: Date } {
     throw new ExportRequestError('InvalidCursor', 'cursor timestamp is not a valid date');
   }
 
-  if (!Number.isInteger(id) || id <= 0) {
+  if (!/^[1-9][0-9]*$/.test(rawId) || !Number.isSafeInteger(id)) {
     throw new ExportRequestError('InvalidCursor', 'cursor id is not a positive integer');
   }
 
-  return { cutoff, createdAt, id };
+  if (scannedRowCount > rowCount || BigInt(scannedAmountRaw) > BigInt(totalAmountRaw)) {
+    throw new ExportRequestError('InvalidCursor', 'cursor scanned totals exceed the snapshot');
+  }
+
+  return {
+    cutoff,
+    createdAt,
+    id,
+    snapshot: { rowCount, totalAmountRaw },
+    scannedRowCount,
+    scannedAmountRaw,
+  };
 }
 
 function parseLimit(raw: unknown): number {
@@ -203,45 +248,60 @@ export function parseExportRequest(
 
   return {
     cutoff,
-    cursor: decoded ? { createdAt: decoded.createdAt, id: decoded.id } : null,
+    cursor: decoded
+      ? {
+          createdAt: decoded.createdAt,
+          id: decoded.id,
+          snapshot: decoded.snapshot,
+          scannedRowCount: decoded.scannedRowCount,
+          scannedAmountRaw: decoded.scannedAmountRaw,
+        }
+      : null,
     limit: parseLimit(query.limit),
     allowPartial: parseBoolean(query.allowPartial, 'AllowPartial'),
   };
 }
 
 export function buildExportPage<TEntry>(input: ExportPageInput<TEntry>): ExportPage<TEntry> {
-  // The count and page are separate database reads. A transaction that commits
-  // between them can make a one-page export claim completion for a different
-  // candidate set. Refuse that contradiction before sending any rows.
-  if (input.request.cursor === null && !input.hasMore) {
-    const scannedAmount = input.candidates.reduce(
+  const baseline = input.request.cursor?.snapshot ?? input.snapshot;
+  const snapshotChanged =
+    input.snapshot.rowCount !== baseline.rowCount ||
+    BigInt(input.snapshot.totalAmountRaw) !== BigInt(baseline.totalAmountRaw);
+  const scannedRowCount = (input.request.cursor?.scannedRowCount ?? 0) + input.candidates.length;
+  const scannedAmount =
+    BigInt(input.request.cursor?.scannedAmountRaw ?? '0') +
+    input.candidates.reduce(
       (total, entry) => total + parseRawAmount(input.readAmountRaw(entry), 'amountRaw'),
       0n,
     );
-    if (
-      input.candidates.length !== input.snapshot.rowCount ||
-      scannedAmount !== BigInt(input.snapshot.totalAmountRaw)
-    ) {
-      throw new ExportRequestError(
-        'InconsistentExportSnapshot',
-        'Ledger export snapshot changed while the page was read; restart the export with a new cutoff',
-      );
-    }
+  if (
+    snapshotChanged ||
+    scannedRowCount > baseline.rowCount ||
+    scannedAmount > BigInt(baseline.totalAmountRaw) ||
+    (!input.hasMore &&
+      (scannedRowCount !== baseline.rowCount || scannedAmount !== BigInt(baseline.totalAmountRaw)))
+  ) {
+    throw new ExportRequestError(
+      'InconsistentExportSnapshot',
+      'Ledger export snapshot changed while paging; restart the export with a new cutoff',
+    );
   }
 
   const entries = input.candidates.filter((entry) => input.selectExportable(entry));
-  const exportedAmountRaw = formatRawAmount(
-    entries.reduce(
-      (total, entry) => total + parseRawAmount(input.readAmountRaw(entry), 'amountRaw'),
-      0n,
-    ),
-    'exportedAmountRaw',
-  );
+  const exportedAmountRaw = entries
+    .reduce((total, entry) => total + parseRawAmount(input.readAmountRaw(entry), 'amountRaw'), 0n)
+    .toString();
 
   const lastCandidate = input.candidates[input.candidates.length - 1];
   const nextCursor =
     input.hasMore && lastCandidate
-      ? encodeCursor(input.request.cutoff, input.readCursor(lastCandidate))
+      ? encodeCursor(
+          input.request.cutoff,
+          input.readCursor(lastCandidate),
+          baseline,
+          scannedRowCount,
+          scannedAmount.toString(),
+        )
       : null;
 
   return {
