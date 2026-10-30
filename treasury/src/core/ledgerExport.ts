@@ -106,8 +106,8 @@ function parseCursorAmount(value: string, field: string): string {
   return value;
 }
 
-export function decodeCursor(value: string): ExportContinuationCursor & { cutoff: Date } {
-  if (value.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(value)) {
+export function decodeCursor(value: unknown): ExportContinuationCursor & { cutoff: Date } {
+  if (typeof value !== 'string' || value.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(value)) {
     throw new ExportRequestError('InvalidCursor', 'cursor is not valid base64url');
   }
   let decoded: string;

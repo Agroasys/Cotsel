@@ -21,6 +21,7 @@ describePostgres('treasury ledger export coverage', () => {
   let admin: Pool;
   let pool: Pool;
   let queries: typeof import('../src/database/queries/ledger');
+  let connection: typeof import('../src/database/connection');
   let loadExportPage: typeof import('../src/core/ledgerExportService').loadLedgerExportPage;
   let parseExportRequest: typeof import('../src/core/ledgerExport').parseExportRequest;
 
@@ -47,21 +48,16 @@ describePostgres('treasury ledger export coverage', () => {
       readFileSync(resolve(databaseDir, '002_canonical_monetary_amounts.sql'), 'utf8'),
     );
 
+    jest.resetModules();
     queries = await import('../src/database/queries/ledger');
+    connection = await import('../src/database/connection');
     ({ loadLedgerExportPage: loadExportPage } = await import('../src/core/ledgerExportService'));
     ({ parseExportRequest } = await import('../src/core/ledgerExport'));
   }, 60000);
 
   afterAll(async () => {
     await pool?.end();
-    const connection = await import('../src/database/connection');
-    await connection.pool?.end().catch(() => undefined);
-    await admin?.query(
-      `SELECT pg_terminate_backend(pid)
-       FROM pg_stat_activity
-       WHERE datname = $1 AND pid <> pg_backend_pid()`,
-      [dbName],
-    );
+    await connection?.closeConnection();
     await admin?.query(`DROP DATABASE IF EXISTS "${dbName}"`);
     await admin?.end();
   }, 60000);

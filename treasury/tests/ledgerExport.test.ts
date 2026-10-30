@@ -131,6 +131,10 @@ describe('parseExportRequest', () => {
 });
 
 describe('decodeCursor', () => {
+  it('rejects an array supplied directly to the decoder', () => {
+    expect(() => decodeCursor(['not-a-cursor'])).toThrow(ExportRequestError);
+  });
+
   it('round-trips a cursor emitted by a page, carrying its cutoff', () => {
     const emitted = page([row(1, '100'), row(2, '200')], true).nextCursor as string;
     expect(decodeCursor(emitted)).toEqual({
