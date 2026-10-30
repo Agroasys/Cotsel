@@ -109,7 +109,7 @@ describe('OperationsSummaryService', () => {
           staleAfterMs: 1_000,
           check: async () => {
             if (staleShouldFail) {
-              throw new Error('upstream failed');
+              throw new Error('upstream failed at https://provider.example/key-secret');
             }
           },
         },
@@ -156,7 +156,7 @@ describe('OperationsSummaryService', () => {
           staleAfterMs: 60_000,
           check: async () => {
             if (shouldFail) {
-              throw new Error('upstream failed');
+              throw new Error('upstream failed at https://provider.example/key-secret');
             }
           },
         },
@@ -175,6 +175,10 @@ describe('OperationsSummaryService', () => {
     shouldFail = true;
 
     const firstFailureSnapshot = await service.getOperationsSummary();
+    expect(firstFailureSnapshot.services[0]?.detail).toBe(
+      'Latest probe failed: Service probe failed',
+    );
+    expect(JSON.stringify(firstFailureSnapshot)).not.toMatch(/provider\.example|key-secret/u);
     expect(firstFailureSnapshot.incidents.items[0]?.firstObservedAt).toBe(
       '2026-03-12T00:01:00.000Z',
     );

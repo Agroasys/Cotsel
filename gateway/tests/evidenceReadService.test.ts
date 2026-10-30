@@ -288,7 +288,7 @@ describe('evidence read service', () => {
     expect(result.verification.tradeHashMatchesDocument).toBeNull();
     expect(result.verification.settlementHashMatchesTrade).toBeNull();
     expect(result.freshness.available).toBe(false);
-    expect(result.freshness.degradedReason).toContain('settlement ledger unavailable');
+    expect(result.freshness.degradedReason).toContain('Settlement handoff lookup is unavailable');
     expect(result.freshness.degradedReason).toContain('Ricardian document owner is unresolved');
   });
 
@@ -359,7 +359,7 @@ describe('evidence read service', () => {
     expect(result.verification.tradeHashMatchesDocument).toBeNull();
     expect(result.verification.settlementHashMatchesTrade).toBe(true);
     expect(result.freshness.available).toBe(false);
-    expect(result.freshness.degradedReason).toContain('ricardian service unavailable');
+    expect(result.freshness.degradedReason).toContain('Ricardian service is unavailable');
   });
 
   test('preserves successful evidence reads when one source degrades', async () => {
@@ -395,7 +395,7 @@ describe('evidence read service', () => {
 
     expect(result.complianceDecisions).toHaveLength(0);
     expect(result.freshness.available).toBe(false);
-    expect(result.freshness.degradedReason).toContain('compliance store unavailable');
+    expect(result.freshness.degradedReason).toContain('Compliance evidence source is unavailable');
     expect(result.freshness.sourceFreshAt).toBe('2026-03-14T10:06:00.000Z');
   });
 });

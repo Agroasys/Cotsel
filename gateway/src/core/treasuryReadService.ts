@@ -51,14 +51,6 @@ function asDisplayAmount(value: bigint): string {
   return formatUnits(value, 6);
 }
 
-function degradedReason(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-
-  return 'Treasury source is unavailable';
-}
-
 export class TreasuryReadService implements TreasuryReadReader {
   constructor(
     private readonly governanceReader: GovernanceMutationPreflightReader,
@@ -111,7 +103,7 @@ export class TreasuryReadService implements TreasuryReadReader {
           available: true,
         },
       };
-    } catch (error) {
+    } catch {
       return {
         state: null,
         freshness: {
@@ -119,7 +111,7 @@ export class TreasuryReadService implements TreasuryReadReader {
           sourceFreshAt: null,
           queriedAt,
           available: false,
-          degradedReason: degradedReason(error),
+          degradedReason: 'Treasury source is unavailable',
         },
       };
     }

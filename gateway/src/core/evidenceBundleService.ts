@@ -179,14 +179,10 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
     });
     const degradedReason = combineDegradedReasons([
       this.resolveDegradedReason(trade),
-      tradeStatusResult.status === 'rejected'
-        ? this.describeDegradedReason(tradeStatusResult.reason)
-        : undefined,
-      decisionsResult.status === 'rejected'
-        ? this.describeDegradedReason(decisionsResult.reason)
-        : undefined,
+      tradeStatusResult.status === 'rejected' ? 'Compliance status is unavailable' : undefined,
+      decisionsResult.status === 'rejected' ? 'Trade decisions are unavailable' : undefined,
       oracleProgressionBlockResult.status === 'rejected'
-        ? this.describeDegradedReason(oracleProgressionBlockResult.reason)
+        ? 'Oracle progression evidence is unavailable'
         : undefined,
     ]);
     const manifestWithoutDigest = {
@@ -256,14 +252,6 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
   async list(input: { tradeId?: string; limit?: number } = {}): Promise<EvidenceBundleManifest[]> {
     const records = await this.store.list(input);
     return records.map((record) => record.manifest as unknown as EvidenceBundleManifest);
-  }
-
-  private describeDegradedReason(error: unknown): string {
-    if (error instanceof Error && error.message.trim().length > 0) {
-      return error.message;
-    }
-
-    return 'Evidence source is unavailable';
   }
 
   private async collectTradeDecisions(tradeId: string): Promise<ComplianceDecisionRecord[]> {

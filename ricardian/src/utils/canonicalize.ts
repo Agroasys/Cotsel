@@ -1,3 +1,5 @@
+import { CallerSafeError } from '@agroasys/shared-http';
+
 export type CanonicalPrimitive = null | boolean | string | number;
 export type CanonicalValue = CanonicalPrimitive | CanonicalValue[] | CanonicalObject;
 export interface CanonicalObject {
@@ -6,7 +8,7 @@ export interface CanonicalObject {
 
 function assertFiniteNumber(value: number): void {
   if (!Number.isFinite(value)) {
-    throw new Error('Non-finite numbers are not supported in Ricardian canonicalization');
+    throw new CallerSafeError('Non-finite numbers are not supported in Ricardian canonicalization');
   }
 }
 
@@ -57,7 +59,7 @@ export function canonicalize(value: unknown): CanonicalValue {
     return canonicalizeObject(value as Record<string, unknown>);
   }
 
-  throw new Error(`Unsupported value type in Ricardian payload: ${typeof value}`);
+  throw new CallerSafeError(`Unsupported value type in Ricardian payload: ${typeof value}`);
 }
 
 export function canonicalJsonStringify(value: unknown): string {
