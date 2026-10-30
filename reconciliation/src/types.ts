@@ -23,6 +23,7 @@ export type DriftCode =
   | 'INDEXED_INVALID_ADDRESS'
   | 'ONCHAIN_INVALID_ADDRESS'
   | 'INDEXER_TRADE_MISSING'
+  | 'INDEXER_DUPLICATE_TRADE'
   | 'INDEXER_SURPLUS_RECORDS';
 
 export interface IndexedTradeRecord {

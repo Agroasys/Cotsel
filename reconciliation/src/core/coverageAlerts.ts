@@ -24,6 +24,7 @@ export class CoverageAlerts {
 
     const isCoverageGap =
       finding.mismatchCode === 'INDEXER_TRADE_MISSING' ||
+      finding.mismatchCode === 'INDEXER_DUPLICATE_TRADE' ||
       finding.mismatchCode === 'INDEXER_SURPLUS_RECORDS';
 
     await this.raise({
