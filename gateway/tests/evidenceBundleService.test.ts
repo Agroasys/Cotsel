@@ -243,8 +243,8 @@ describe('GatewayEvidenceBundleService', () => {
     });
 
     expect(manifest.available).toBe(false);
-    expect(manifest.degradedReason).toContain('compliance status unavailable');
-    expect(manifest.degradedReason).toContain('trade decisions unavailable');
+    expect(manifest.degradedReason).toContain('Compliance status is unavailable');
+    expect(manifest.degradedReason).toContain('Trade decisions are unavailable');
     expect(manifest.evidenceReferences).toEqual([]);
     expect(manifest.artifactReferences).toEqual(
       expect.arrayContaining([

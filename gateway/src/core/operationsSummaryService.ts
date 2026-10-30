@@ -74,14 +74,6 @@ interface ProbeCache {
 const DEFAULT_DEGRADED_LATENCY_MS = 2000;
 const DEFAULT_TIMEOUT_MS = 5000;
 
-function toErrorDetail(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return String(error);
-}
-
 function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -216,8 +208,8 @@ export class OperationsSummaryService implements OperationsSummaryReader {
           ? { detail: `Recovered from prior failure observed at ${cacheEntry.firstFailureAt}` }
           : {}),
       };
-    } catch (error) {
-      const detail = toErrorDetail(error);
+    } catch {
+      const detail = 'Service probe failed';
       const cacheEntry = this.cache.get(probe.key);
       const lastSuccessAt = cacheEntry?.lastSuccessAt ?? null;
       const lastLatencyMs = cacheEntry?.lastLatencyMs ?? null;

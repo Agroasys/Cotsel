@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'crypto';
+import { CallerSafeError } from '@agroasys/shared-http';
 import { CANONICALIZATION_RULES_VERSION, RicardianHashRequest } from '../types';
 import { canonicalJsonStringify } from './canonicalize';
 
@@ -26,11 +27,11 @@ export function verifyHashIntegrity(row: {
 
 export function buildRicardianHash(request: RicardianHashRequest): HashBuildResult {
   if (!request.documentRef || request.documentRef.trim().length === 0) {
-    throw new Error('documentRef is required');
+    throw new CallerSafeError('documentRef is required');
   }
 
   if (!request.terms || typeof request.terms !== 'object') {
-    throw new Error('terms must be an object');
+    throw new CallerSafeError('terms must be an object');
   }
 
   const metadata = request.metadata || {};

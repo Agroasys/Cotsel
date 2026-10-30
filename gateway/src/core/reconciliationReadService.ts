@@ -129,14 +129,6 @@ function mapReconciliationRecord(
   };
 }
 
-function degradedReason(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-
-  return 'Settlement ledger is unavailable';
-}
-
 function combineDegradedReasons(reasons: Array<string | null | undefined>): string | undefined {
   const values = [
     ...new Set(
@@ -166,9 +158,9 @@ export class ReconciliationReadService implements ReconciliationReadReader {
       const projectionResult = await this.settlementStore
         .getTradeSettlementProjectionMap([...new Set(handoffs.items.map((item) => item.tradeId))])
         .then((value) => ({ ok: true as const, value }))
-        .catch((error) => ({
+        .catch(() => ({
           ok: false as const,
-          error: degradedReason(error),
+          error: 'Trade settlement projection is unavailable',
         }));
 
       const items = handoffs.items.map((handoff) =>
@@ -199,7 +191,7 @@ export class ReconciliationReadService implements ReconciliationReadReader {
           ...(responseDegradedReason ? { degradedReason: responseDegradedReason } : {}),
         },
       };
-    } catch (error) {
+    } catch {
       return {
         items: [],
         pagination: {
@@ -212,7 +204,7 @@ export class ReconciliationReadService implements ReconciliationReadReader {
           sourceFreshAt: null,
           queriedAt,
           available: false,
-          degradedReason: degradedReason(error),
+          degradedReason: 'Settlement ledger is unavailable',
         },
       };
     }
@@ -247,9 +239,9 @@ export class ReconciliationReadService implements ReconciliationReadReader {
           ? (projectionsResult.value.get(handoff.tradeId) ?? null)
           : null;
       const responseDegradedReason = combineDegradedReasons([
-        eventsResult.status === 'rejected' ? degradedReason(eventsResult.reason) : undefined,
+        eventsResult.status === 'rejected' ? 'Settlement events are unavailable' : undefined,
         projectionsResult.status === 'rejected'
-          ? degradedReason(projectionsResult.reason)
+          ? 'Trade settlement projection is unavailable'
           : undefined,
       ]);
 
@@ -268,7 +260,7 @@ export class ReconciliationReadService implements ReconciliationReadReader {
           ...(responseDegradedReason ? { degradedReason: responseDegradedReason } : {}),
         },
       };
-    } catch (error) {
+    } catch {
       return {
         handoff: null,
         events: [],
@@ -277,7 +269,7 @@ export class ReconciliationReadService implements ReconciliationReadReader {
           sourceFreshAt: null,
           queriedAt,
           available: false,
-          degradedReason: degradedReason(error),
+          degradedReason: 'Settlement ledger is unavailable',
         },
       };
     }

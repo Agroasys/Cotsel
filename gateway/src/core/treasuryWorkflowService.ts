@@ -215,13 +215,12 @@ async function parseTreasuryResponse<T>(response: Response, fallbackMessage: str
   }
 
   if (response.status === 404) {
-    throw new GatewayError(404, 'NOT_FOUND', payload?.error?.message ?? fallbackMessage);
+    throw new GatewayError(404, 'NOT_FOUND', fallbackMessage);
   }
 
   if (response.status === 409) {
-    throw new GatewayError(409, 'CONFLICT', payload?.error?.message ?? fallbackMessage, {
+    throw new GatewayError(409, 'CONFLICT', fallbackMessage, {
       upstream: 'treasury',
-      details: payload?.error?.details,
     });
   }
 
@@ -229,12 +228,10 @@ async function parseTreasuryResponse<T>(response: Response, fallbackMessage: str
     throw new GatewayError(
       response.status === 400 ? 400 : 502,
       response.status === 400 ? 'VALIDATION_ERROR' : 'UPSTREAM_UNAVAILABLE',
-      payload?.error?.message ?? fallbackMessage,
+      fallbackMessage,
       {
         upstream: 'treasury',
         upstreamStatus: response.status,
-        upstreamCode: payload?.error?.code,
-        details: payload?.error?.details,
       },
     );
   }

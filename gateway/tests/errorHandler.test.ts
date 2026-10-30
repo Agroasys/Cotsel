@@ -72,6 +72,48 @@ async function withServer(extraRouter: Router) {
 }
 
 describe('gateway error envelope', () => {
+  test('404 response omits path and query secrets', async () => {
+    const { server, baseUrl } = await withServer(Router());
+    try {
+      const response = await fetch(`${baseUrl}/missing/token-secret?api_key=query-secret`, {
+        headers: { 'x-request-id': 'req-missing-1234' },
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(404);
+      expect(payload.error).toMatchObject({ code: 'NOT_FOUND', requestId: 'req-missing-1234' });
+      expect(payload.error.details).toBeUndefined();
+      expect(JSON.stringify(payload)).not.toMatch(/token-secret|query-secret|api_key/u);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('invalid caller correlation headers are replaced before reflection', async () => {
+    const router = Router();
+    router.get('/boom', () => {
+      throw new Error('SQL password is private');
+    });
+    const { server, baseUrl } = await withServer(router);
+    try {
+      const response = await fetch(`${baseUrl}/boom`, {
+        headers: {
+          'x-request-id': 'secret=private',
+          'x-correlation-id': 'https://provider.example/key-secret',
+        },
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(payload.error.requestId).toMatch(/^[0-9a-f-]{36}$/u);
+      expect(payload.error.traceId).toBe(payload.error.requestId);
+      expect(JSON.stringify(payload)).not.toMatch(/private|provider\.example|key-secret/u);
+      expect(response.headers.get('x-correlation-id')).toBe(payload.error.requestId);
+    } finally {
+      server.close();
+    }
+  });
+
   test('normalizes GatewayError instances', async () => {
     const router = Router();
     router.get('/boom', () => {

@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import {
+  CallerSafeError,
+  correlationIdFor,
   failure,
   HttpError,
   requireObject,
@@ -85,6 +87,23 @@ function sendStoreFailure(req: Request, res: Response, error: unknown, operation
   });
 }
 
+function sendPublicFailure(
+  req: Request,
+  res: Response,
+  status: number,
+  code: string,
+  message: string,
+  storeCode?: string,
+): void {
+  const correlationId = correlationIdFor(req);
+  res.setHeader?.('x-correlation-id', correlationId);
+  res.status(status).json({
+    ...failure(code, message),
+    ...(storeCode ? { code: storeCode } : {}),
+    correlationId,
+  });
+}
+
 export class RicardianController {
   constructor(private readonly tenantOptions: TenantResolutionOptions) {}
 
@@ -110,10 +129,14 @@ export class RicardianController {
         res.status(200).json(success(mapRowToResponse(row, tenantId)));
       } catch (error: unknown) {
         if (error instanceof DocumentConflictError) {
-          res.status(409).json({
-            ...failure('Conflict', error.message),
-            code: error.code,
-          });
+          sendPublicFailure(
+            req,
+            res,
+            409,
+            'Conflict',
+            'Ricardian registration conflicts with immutable history',
+            error.code,
+          );
           return;
         }
 
@@ -121,18 +144,16 @@ export class RicardianController {
       }
     } catch (error: unknown) {
       if (error instanceof HttpError) {
-        res.status(error.statusCode).json(failure(error.code, error.message, error.details));
+        sendPublicFailure(req, res, error.statusCode, error.code, error.message);
         return;
       }
 
-      res
-        .status(400)
-        .json(
-          failure(
-            'ValidationError',
-            error instanceof Error ? error.message : 'Invalid Ricardian payload',
-          ),
-        );
+      if (error instanceof CallerSafeError) {
+        sendPublicFailure(req, res, 400, 'ValidationError', error.message);
+        return;
+      }
+
+      sendStoreFailure(req, res, error, 'createHash');
     }
   }
 
@@ -162,15 +183,12 @@ export class RicardianController {
       res.status(200).json(success(await load()));
     } catch (error: unknown) {
       if (error instanceof HttpError) {
-        res.status(error.statusCode).json(failure(error.code, error.message, error.details));
+        sendPublicFailure(req, res, error.statusCode, error.code, error.message);
         return;
       }
 
       if (error instanceof DocumentNotFoundError) {
-        res.status(404).json({
-          ...failure('NotFound', error.message),
-          code: error.code,
-        });
+        sendPublicFailure(req, res, 404, 'NotFound', 'Ricardian hash not found', error.code);
         return;
       }
 
