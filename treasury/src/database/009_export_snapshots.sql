@@ -4,7 +4,7 @@ SET LOCAL lock_timeout = '5s';
 
 CREATE TABLE treasury_export_jobs (
     id UUID PRIMARY KEY,
-    caller_id TEXT NOT NULL CHECK (length(caller_id) BETWEEN 1 AND 255),
+    caller_id TEXT NOT NULL CHECK (length(caller_id) BETWEEN 1 AND 600),
     idempotency_key_hash CHAR(64) NOT NULL CHECK (idempotency_key_hash ~ '^[0-9a-f]{64}$'),
     request_hash CHAR(64) NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
     cutoff TIMESTAMPTZ NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE treasury_export_rows (
 CREATE TABLE treasury_export_tokens (
     token_hash CHAR(64) PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
     job_id UUID NOT NULL REFERENCES treasury_export_jobs(id),
-    caller_id TEXT NOT NULL CHECK (length(caller_id) BETWEEN 1 AND 255),
+    caller_id TEXT NOT NULL CHECK (length(caller_id) BETWEEN 1 AND 600),
     next_position BIGINT NOT NULL CHECK (next_position >= 0),
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

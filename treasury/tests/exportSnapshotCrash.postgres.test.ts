@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import path from 'node:path';
@@ -162,9 +162,7 @@ describePostgres('treasury export crash recovery', () => {
       options: `-c role=${runtimeRole} -c app.service_name=treasury -c app.runtime_db_user=${runtimeRole}`,
     });
     const store = new ExportSnapshotStore(servicePool);
-    const caller = createHash('sha256')
-      .update(JSON.stringify(['svc', null]))
-      .digest('hex');
+    const caller = JSON.stringify(['svc', null]);
     const cutoff = new Date('1981-01-01T00:00:00Z');
     const job = await store.create(caller, 'mid-crash', cutoff);
     let child: ReturnType<typeof spawn> | undefined;

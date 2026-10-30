@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Request, Response } from 'express';
 import { Pool, type PoolClient } from 'pg';
@@ -289,9 +289,7 @@ describePostgres('treasury export snapshot migration', () => {
           }
         },
       } as unknown as TreasuryEligibilityService;
-      const caller = createHash('sha256')
-        .update(JSON.stringify(['svc', null]))
-        .digest('hex');
+      const caller = JSON.stringify(['svc', null]);
       const buildJob = await store.create(caller, 'build-key', cutoff);
       const builder = new ExportSnapshotBuilder(servicePool, fakeEligibility);
       await expect(builder.build(buildJob.id, 6000)).rejects.toThrow(

@@ -62,8 +62,8 @@
       "version": "202610300009",
       "name": "export_snapshots",
       "file": "009_export_snapshots.sql",
-      "sha256": "df73bc2bcbad14315b44f736f1f6dc05a29905d7fd057be2b430a2cb84fcee37",
-      "schema_sha256": "37f47f9a41cdd7a7d34c347ec266c44a782afcf5159ce74ec0682f6bfe25ba8d"
+      "sha256": "2a70d8f18ca23ae6d20388964b8ffa11f5444ebf346d6c59e054aa462bb88123",
+      "schema_sha256": "ee53dc39ec3c0251d96a9da42bff6bf519b5b5f7a70f8b90a05cb4f9b05d3e8a"
     }
   ]
 }

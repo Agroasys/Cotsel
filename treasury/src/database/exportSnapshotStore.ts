@@ -31,7 +31,7 @@ export class ExportSnapshotStore {
   async create(caller: string, idempotencyKey: string, cutoff: Date): Promise<JobRow> {
     if (
       !caller ||
-      caller.length > 255 ||
+      caller.length > 600 ||
       !idempotencyKey ||
       idempotencyKey.length > 255 ||
       !Number.isFinite(cutoff.getTime())

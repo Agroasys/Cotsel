@@ -83,3 +83,8 @@ test('references that merely mention a credential concept stay usable', () => {
 test('an unknown field is unclassified', () => {
   assert.equal(classifyTelemetryField('buyerLegalName'), 'unclassified');
 });
+
+test('export job references are internal while tokens remain prohibited', () => {
+  assert.equal(classifyTelemetryField('exportId'), 'internal_operational');
+  assert.equal(classifyTelemetryField('token'), 'prohibited');
+});

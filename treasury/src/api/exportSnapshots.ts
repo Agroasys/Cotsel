@@ -1,5 +1,4 @@
 /** SPDX-License-Identifier: Apache-2.0 */
-import { createHash } from 'node:crypto';
 import type { Request, Response } from 'express';
 import {
   failure,
@@ -30,9 +29,7 @@ function callerFor(req: Request): string {
   const principal = (req as AuthenticatedRequest).serviceAuth;
   if (!principal?.apiKeyId || principal.scheme !== 'api_key')
     throw new HttpError(401, 'ActorUnauthenticated', 'Authentication is required for exports');
-  return createHash('sha256')
-    .update(JSON.stringify([principal.apiKeyId, principal.humanPrincipalId ?? null]))
-    .digest('hex');
+  return JSON.stringify([principal.apiKeyId, principal.humanPrincipalId ?? null]);
 }
 
 function exportId(req: Request): string {
