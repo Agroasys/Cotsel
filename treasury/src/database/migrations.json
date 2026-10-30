@@ -57,6 +57,13 @@
       "file": "008_sweep_finalized_evidence.sql",
       "sha256": "1db70689fe08887100179c0bffefd54875208d54d5441c93f331c98376da86b7",
       "schema_sha256": "ade505a78a70757afcae83527c497af26b6b7ad5e985f318dbb0e45d75bb306a"
+    },
+    {
+      "version": "202610300009",
+      "name": "export_snapshots",
+      "file": "009_export_snapshots.sql",
+      "sha256": "df73bc2bcbad14315b44f736f1f6dc05a29905d7fd057be2b430a2cb84fcee37",
+      "schema_sha256": "37f47f9a41cdd7a7d34c347ec266c44a782afcf5159ce74ec0682f6bfe25ba8d"
     }
   ]
 }

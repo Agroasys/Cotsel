@@ -336,6 +336,53 @@ describe('TreasuryController eligibility gates', () => {
     );
   });
 
+  test.each(['v1|old', 'v2|old'])(
+    'rejects legacy %s continuation before reading the ledger',
+    async (cursor) => {
+      const controller = new LoadedTreasuryController();
+      const res = mockResponse();
+      const req = {
+        query: { format: 'json', cursor: Buffer.from(cursor).toString('base64url') },
+      } as unknown as ExportEntriesRequest;
+
+      await controller.exportEntries(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'ExportContinuationRequiresSnapshot' }),
+      );
+      expect(queriesModule.getLedgerEntriesForExport).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(['json', 'csv'])(
+    'refuses incomplete %s export even when partial delivery is requested',
+    async (format) => {
+      jest
+        .spyOn(LoadedTreasuryEligibilityService.prototype, 'assessEntries')
+        .mockResolvedValue(new Map());
+      jest.mocked(queriesModule.getLedgerEntriesForExport).mockResolvedValue({
+        entries: [makeEntry(11)],
+        hasMore: true,
+      });
+      jest.mocked(queriesModule.getLedgerExportSnapshot).mockResolvedValue({
+        rowCount: 2,
+        totalAmountRaw: '84',
+      });
+      const controller = new LoadedTreasuryController();
+      const res = mockResponse();
+      const req = { query: { format, allowPartial: 'true' } } as unknown as ExportEntriesRequest;
+
+      await controller.exportEntries(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'ExportContinuationRequiresSnapshot' }),
+      );
+      expect(res.send).not.toHaveBeenCalled();
+    },
+  );
+
   test('reconciliation control summary exposes upstream freshness and coverage state', async () => {
     jest.spyOn(LoadedReconciliationGateService.prototype, 'summarizeTrades').mockResolvedValue({
       status: 'UNKNOWN',

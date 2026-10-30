@@ -8,7 +8,8 @@ import { parseRawAmount } from './canonicalAmount';
  * cutoff, page two is drawn from a different ledger than page one, and rows
  * inserted mid-export are either duplicated or skipped depending on sort order.
  * Every page carries the same cutoff and snapshot totals. Continuation is
- * keyset rather than offset, and a changed candidate set fails closed.
+ * keyset rather than offset. Changed totals fail closed, but equal totals do
+ * not establish that the candidate rows or their eligibility are unchanged.
  */
 export const MAX_EXPORT_PAGE_SIZE = 1000;
 export const DEFAULT_EXPORT_PAGE_SIZE = 500;
@@ -320,7 +321,8 @@ export function buildExportPage<TEntry>(input: ExportPageInput<TEntry>): ExportP
  * CSV has no envelope to carry a continuation token, so an incomplete CSV page
  * is indistinguishable from a complete export once it is written to disk. That
  * is the failure mode this issue exists to remove, so it is refused outright
- * unless the caller states that a partial file is what they want.
+ * unless the caller states that a partial file is what they want. The legacy
+ * HTTP endpoint applies a stricter rule and refuses every incomplete page.
  */
 export function assertCompleteExportDelivery(
   page: ExportPage<unknown>,

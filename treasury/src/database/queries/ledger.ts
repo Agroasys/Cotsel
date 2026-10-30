@@ -302,9 +302,8 @@ export async function getLedgerEntries(params: {
 }
 
 /**
- * Counts and totals the candidate set at the export cutoff. The consumer
- * reconciles the pages it received against these two numbers, which is what
- * makes "every record exactly once" checkable rather than assumed.
+ * Counts and totals the candidate set at the export cutoff. Matching totals
+ * do not prove row identity: a replacement row can have the same amount.
  */
 export async function getLedgerExportSnapshot(cutoff: Date): Promise<{
   rowCount: number;
