@@ -1,10 +1,22 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 
 const store = path.resolve('node_modules/.pnpm');
+const require = createRequire(import.meta.url);
+for (const version of ['3.1.5', '5.1.9']) {
+  test(`minimatch ${version} has no preprocessing methods`, () => {
+    const modulePath = path.join(store, `minimatch@${version}`, 'node_modules/minimatch');
+    const { Minimatch } = require(modulePath);
+    assert.equal(Minimatch.prototype.firstPhasePreProcess, undefined);
+    assert.equal(Minimatch.prototype.secondPhasePreProcess, undefined);
+    assert.equal(new Minimatch('src/**/*.ts').match('src/core/example.ts'), true);
+  });
+}
+
 test('modern minimatch consumers resolve patched installations', () => {
   const seen = new Set();
   for (const entry of fs.readdirSync(store)) {
