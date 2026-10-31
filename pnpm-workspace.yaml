@@ -60,6 +60,8 @@ minimumReleaseAgeExclude:
   # name because pnpm 10 matches this setting on package name only. The overrides
   # block below pins the resolved version.
   - js-yaml
+  # Security fix for GHSA-mrwp-f3q8-3g9p, pinned below while within the release-age window.
+  - follow-redirects
 overrides:
   # GHSA-7mx3-vvmw-hjmv affects every earlier GraphQL Tools utils major (PR #865);
   # GHSA-c4qx-w738-7hr3 affects 10.10.1 through 12.0.1.
@@ -81,7 +83,7 @@ overrides:
   # Mocha 11 (Hardhat 2.29) uses diff 7, affected by GHSA-73rr-hh4g-fpgx.
   diff@>=6 <8.0.3: 8.0.3
   fast-uri: 3.1.9
-  follow-redirects: 1.16.1
+  follow-redirects: 1.16.2
   form-data@>=4.0.0 <4.0.6: 4.0.6
   # Dedupe graphql to a single instance. @subsquid/openreader builds the schema
   # while @subsquid/graphql-server merges it; when they resolve different graphql
@@ -117,5 +119,12 @@ patchedDependencies:
   '@subsquid/typeorm-store@1.9.2': patches/@subsquid__typeorm-store@1.9.2.patch
   brace-expansion@5.0.12: patches/brace-expansion@5.0.12.patch
   braces@3.0.3: patches/braces@3.0.3.patch
+  # Backport GHSA-3g3m-2fjr-6pw4 to the locked glob majors.
+  glob@10.5.0: patches/glob@10.5.0.patch
+  glob@13.0.6: patches/glob@13.0.6.patch
+  # Backport GHSA-g3hv-75wg-m249 to minimatch versions with preprocessing.
+  minimatch@9.0.9: patches/minimatch@9.0.9.patch
+  minimatch@10.2.5: patches/minimatch@10.2.5.patch
+  minimatch@10.2.6: patches/minimatch@10.2.6.patch
   stream-json@1.9.1: patches/stream-json@1.9.1.patch
 preferWorkspacePackages: true
