@@ -10,6 +10,7 @@ import type { SnapshotEligibilityContext } from '../src/core/exportEligibilityCo
 import type { TradeReconciliationGate } from '../src/core/reconciliationGate';
 import type { ChainCanonicalityVerifier } from '../src/core/chainCanonicality';
 import { freshIngestion } from './helpers/ingestionFreshness';
+import { assertEligibleSnapshotPages } from './helpers/assertSnapshotPages';
 import { snapshotReconciliationFixture } from './helpers/exportSnapshotReconciliation';
 import {
   alwaysCanonicalVerifier,
@@ -470,40 +471,10 @@ describePostgres('treasury export snapshot migration', () => {
         candidate_count: '5003',
         candidate_amount_raw: '210126',
       });
-      const eligibleSeen = new Set<number>();
-      let eligibleTotal = 0n;
-      let eligibleCursor: string | undefined;
-      do {
-        const pageStatus = jest.fn().mockReturnThis();
-        const pageJson = jest.fn().mockReturnThis();
-        await controller.entries(
-          {
-            params: { id: realServiceJob.id },
-            query: { limit: '1000', ...(eligibleCursor ? { cursor: eligibleCursor } : {}) },
-            serviceAuth: { apiKeyId: 'svc', scheme: 'api_key' },
-          } as unknown as Request,
-          { status: pageStatus, json: pageJson } as unknown as Response,
-        );
-        expect(pageStatus).toHaveBeenCalledWith(200);
-        const page = pageJson.mock.calls[0][0].data as {
-          entries: Array<{
-            id: number;
-            amount_raw: string;
-            eligibleForExport: boolean;
-            exportBlockedReasons: string[];
-          }>;
-          nextCursor: string | null;
-        };
-        expect(page.entries.length).toBeLessThanOrEqual(1000);
-        for (const row of page.entries) {
-          expect(row.eligibleForExport).toBe(true);
-          expect(row.exportBlockedReasons).toEqual([]);
-          expect(eligibleSeen.has(row.id)).toBe(false);
-          eligibleSeen.add(row.id);
-          eligibleTotal += BigInt(row.amount_raw);
-        }
-        eligibleCursor = page.nextCursor ?? undefined;
-      } while (eligibleCursor);
+      const { eligibleSeen, eligibleTotal } = await assertEligibleSnapshotPages(
+        controller,
+        realServiceJob.id,
+      );
       expect(eligibleSeen.size).toBe(5003);
       expect(eligibleTotal).toBe(210126n);
       const eligibleLedger = await pool.query(
