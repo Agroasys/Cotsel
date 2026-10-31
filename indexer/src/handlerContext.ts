@@ -15,7 +15,7 @@ export async function getOrLoadTrade(
   tradeId: string,
   trades: Map<string, Trade>,
   ctx: IndexerContext,
-): Promise<Trade | null> {
+): Promise<Trade> {
   let trade = trades.get(tradeId);
   if (trade) {
     return trade;
@@ -27,5 +27,7 @@ export async function getOrLoadTrade(
     return trade;
   }
 
-  return null;
+  throw new Error(
+    `Required parent trade ${tradeId} is missing; hold the checkpoint and replay after correcting event coverage`,
+  );
 }
