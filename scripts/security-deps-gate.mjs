@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+import { matchesVerifiedDisposition } from './dependency-disposition.mjs';
 
 const developmentAuditAllowlist = new Map([
   [
@@ -58,6 +59,30 @@ const developmentAuditAllowlist = new Map([
 ]);
 
 const locallyPatchedAdvisories = new Map([
+  [
+    'GHSA-g3hv-75wg-m249',
+    {
+      moduleName: 'minimatch',
+      severity: 'moderate',
+      versions: new Set(['3.1.5', '5.1.9', '9.0.9', '10.2.5', '10.2.6']),
+      patchedVersions: '>=11.0.1',
+      vulnerableVersions: '<11.0.1',
+      overviewHash: '864649cfe8b481d0f1de3513fe2ce8d7be9dc660d35c7d1497e3275d29616c75',
+      upstreamCommit: '77a0f5c4b80bdc641c3c930a1d9edf5ad2db57f8',
+      disposition:
+        '9/10 backport tested; 3.1.5/5.1.9 lack the reported algorithm in hash-pinned sources',
+    },
+  ],
+  [
+    'GHSA-3g3m-2fjr-6pw4',
+    {
+      moduleName: 'glob',
+      severity: 'moderate',
+      versions: new Set(['10.5.0', '13.0.6']),
+      patchedVersions: '>=14.0.2',
+      upstreamCommit: '4682e8c9babee1b385202ede36389634e12076d7',
+    },
+  ],
   [
     'GHSA-vfj7-8cjw-p6xm',
     {
@@ -170,16 +195,7 @@ function matchesDevelopmentAllowlist(advisory, currentDate = new Date()) {
 
 function matchesLocalPatch(advisory) {
   const allowed = locallyPatchedAdvisories.get(advisoryId(advisory));
-  if (!allowed) return false;
-
-  const findingVersions = (advisory.findings ?? []).map((finding) => finding.version);
-  return (
-    advisory.module_name === allowed.moduleName &&
-    advisory.severity === allowed.severity &&
-    advisory.patched_versions === allowed.patchedVersions &&
-    findingVersions.length > 0 &&
-    findingVersions.every((version) => allowed.versions.has(version))
-  );
+  return matchesVerifiedDisposition(advisory, allowed);
 }
 
 function auditDescription(advisory) {
@@ -241,7 +257,7 @@ if (auditAllReport) {
   for (const advisory of patchedAdvisories) {
     const patch = locallyPatchedAdvisories.get(advisoryId(advisory));
     console.log(
-      `Accepted locally patched advisory: ${auditDescription(advisory)}; patch-source=${patch.upstreamCommit ?? patch.patchFile}; compatibility-check=passed`,
+      `Verified dependency disposition: ${auditDescription(advisory)}; patch-source=${patch.upstreamCommit ?? patch.patchFile}; ${patch.disposition ?? 'local backport'}; compatibility-check=${dependencyCompatibility.exitCode === 0 ? 'passed' : 'FAILED'}`,
     );
   }
 
