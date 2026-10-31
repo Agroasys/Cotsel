@@ -242,3 +242,39 @@ test('an out-of-order child halts, and corrected parent-first replay projects bo
   assert.equal(events[1].claimAmount, 1n);
   assert.equal(writes.find((row) => row.totalTrades !== undefined).totalTrades, 1);
 });
+
+for (const fault of ['undecodable', 'handler-exception']) {
+  test(`${fault} through the batch handler preserves the raw log and halts`, async () => {
+    const raw = encodedLog('ClaimableAccrued');
+    if (fault === 'undecodable') raw.data = '0x';
+    const quarantined = [];
+    const alerts = [];
+    const ctx = {
+      blocks: [{ header: { height: 4242, hash: '0xblock', timestamp: 1000 }, logs: [raw] }],
+      store: {
+        get: async (model) => {
+          if (model.name === 'OverviewSnapshot') return {};
+          throw new Error('injected handler store failure');
+        },
+        upsert: async () => assert.fail('faulted batch must not persist'),
+      },
+      log: { info() {}, error() {} },
+    };
+    await assert.rejects(
+      processBatch(ctx, {
+        quarantine: { recordPoisonLog: async (entry) => quarantined.push(entry) },
+        alerts: new WebhookIndexerAlerts({ notify: async (entry) => alerts.push(entry) }),
+        logger: { error() {} },
+      }),
+      PoisonLogHaltError,
+    );
+    assert.equal(quarantined.length, 1);
+    assert.equal(
+      quarantined[0].reason,
+      fault === 'undecodable' ? 'UNDECODABLE' : 'HANDLER_FAILURE',
+    );
+    assert.equal(quarantined[0].data, raw.data);
+    assert.deepEqual(quarantined[0].topics, raw.topics);
+    assert.equal(alerts[0].severity, 'critical');
+  });
+}
