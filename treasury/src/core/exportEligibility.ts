@@ -5,7 +5,11 @@ import {
 } from '@agroasys/sdk';
 import { PayoutState, TreasuryEntryEligibility } from '../types';
 import type { LedgerEntryForExport } from '../database/queries/ledger';
-import { ReconciliationGateService, type TradeReconciliationGate } from './reconciliationGate';
+import {
+  ReconciliationGateService,
+  type ReconciliationRunAnchor,
+  type TradeReconciliationGate,
+} from './reconciliationGate';
 import {
   ChainCanonicalityVerifier,
   type ChainCanonicalityState,
@@ -24,6 +28,14 @@ import {
 } from '../database/queries';
 import { recordIngestionFreshness } from '../metrics/counters';
 import { Logger } from '../utils/logger';
+import {
+  readSettlementHeads,
+  createEligibilitySnapshotContext,
+  sameReconciliationGate,
+  verifySnapshotEvidence,
+  type SettlementHeadProvider,
+  type SnapshotEligibilityContext,
+} from './exportEligibilityContext';
 
 const EXPORTABLE_STATES: ReadonlySet<PayoutState> = new Set([
   'READY_FOR_EXTERNAL_HANDOFF',
@@ -33,12 +45,9 @@ const EXPORTABLE_STATES: ReadonlySet<PayoutState> = new Set([
 
 const REVOCATION_ACTOR = 'system:chain-canonicality';
 
-interface SettlementHeadProvider {
-  getBlock(tag: 'latest' | 'safe' | 'finalized'): Promise<{ number: bigint | number } | null>;
-}
-
 interface ReconciliationGateReader {
   assessTrades(tradeIds: string[]): Promise<Map<string, TradeReconciliationGate>>;
+  snapshotRunAnchor?(): Promise<ReconciliationRunAnchor>;
 }
 
 interface IngestionFreshnessReader {
@@ -180,49 +189,25 @@ export class TreasuryEligibilityService {
     this.ingestionFreshness = deps?.ingestionFreshness ?? new TreasuryIngestionFreshnessService();
   }
 
-  /**
-   * The three heads are read once per assessment rather than once per entry.
-   * Every entry in one assessment is then judged against the same view of the
-   * chain, which is what makes the result a reconcilable snapshot instead of a
-   * set of verdicts taken at slightly different heads.
-   */
-  private async readHeads(): Promise<{
-    heads: {
-      latestBlockNumber: number;
-      safeBlockNumber: number | null;
-      finalizedBlockNumber: number | null;
-    } | null;
-    failureReason: string | null;
-  }> {
-    if (!this.provider) {
-      return {
-        heads: null,
-        failureReason: 'Settlement runtime is not configured for treasury confirmation checks',
-      };
-    }
+  async createSnapshotContext(): Promise<SnapshotEligibilityContext> {
+    return createEligibilitySnapshotContext(this.provider, this.ingestionFreshness);
+  }
 
-    const [latestBlock, safeBlock, finalizedBlock] = await Promise.all([
-      this.provider.getBlock('latest'),
-      this.provider.getBlock('safe'),
-      this.provider.getBlock('finalized'),
-    ]);
+  async verifySnapshotContext(context: SnapshotEligibilityContext): Promise<void> {
+    await verifySnapshotEvidence({
+      context,
+      provider: this.provider,
+      ingestion: this.ingestionFreshness,
+      reconciliation: this.reconciliationGate,
+    });
+  }
 
-    if (!latestBlock) {
-      return {
-        heads: null,
-        failureReason:
-          'Managed RPC provider returned no latest block for treasury confirmation checks',
-      };
-    }
-
-    return {
-      heads: {
-        latestBlockNumber: Number(latestBlock.number),
-        safeBlockNumber: safeBlock ? Number(safeBlock.number) : null,
-        finalizedBlockNumber: finalizedBlock ? Number(finalizedBlock.number) : null,
-      },
-      failureReason: null,
-    };
+  async establishEmptySnapshotContext(context: SnapshotEligibilityContext): Promise<void> {
+    if (!this.reconciliationGate.snapshotRunAnchor)
+      throw new Error('Reconciliation evidence is unavailable or incomplete');
+    const anchor = await this.reconciliationGate.snapshotRunAnchor();
+    context.reconciliationRunKey = anchor.runKey;
+    context.emptyRunAnchor = anchor;
   }
 
   /**
@@ -366,6 +351,7 @@ export class TreasuryEligibilityService {
 
   async assessEntries(
     entries: LedgerEntryForExport[],
+    context?: SnapshotEligibilityContext,
   ): Promise<Map<number, TreasuryEntryEligibility>> {
     const gates = new Map<number, TreasuryEntryEligibility>();
     if (entries.length === 0) {
@@ -373,14 +359,17 @@ export class TreasuryEligibilityService {
     }
 
     this.canonicalityVerifier.resetCache();
-    const { heads, failureReason } = await this.readHeads();
+    const { heads, failureReason } = context
+      ? { heads: context.heads, failureReason: null }
+      : await readSettlementHeads(this.provider);
     const stableBlockNumber = heads?.finalizedBlockNumber ?? null;
 
     // The finalized head is already in hand here, so the block-lag half of the
     // freshness check costs nothing extra. Readiness cannot do this -- it must
     // not depend on the settlement RPC -- which is why the assessment takes the
     // head as an option rather than reading it itself.
-    const ingestion = await this.ingestionFreshness.assess({ stableBlockNumber });
+    const ingestion =
+      context?.ingestion ?? (await this.ingestionFreshness.assess({ stableBlockNumber }));
     recordIngestionFreshness({
       status: ingestion.status,
       ageSeconds: ingestion.ageSeconds,
@@ -403,6 +392,32 @@ export class TreasuryEligibilityService {
     const reconciliationByTradeId = await this.reconciliationGate.assessTrades(
       entries.map((entry) => entry.trade_id),
     );
+
+    if (context) {
+      context.reconciliationByTradeId.clear();
+      for (const entry of entries) {
+        const gate = reconciliationByTradeId.get(entry.trade_id);
+        if (
+          !gate?.runKey ||
+          gate.freshness !== 'FRESH' ||
+          gate.coverageComplete !== true ||
+          gate.coverageToBlock === null ||
+          entry.block_number > gate.coverageToBlock ||
+          gate.staleRunningRunCount > 0 ||
+          gate.status === 'UNKNOWN'
+        ) {
+          throw new Error('Reconciliation evidence is unavailable or incomplete');
+        }
+        if (context.reconciliationRunKey && context.reconciliationRunKey !== gate.runKey) {
+          throw new Error('Reconciliation run changed during export construction');
+        }
+        const previous = context.reconciliationByTradeId.get(entry.trade_id);
+        if (previous && !sameReconciliationGate(previous, gate))
+          throw new Error('Reconciliation evidence changed during export construction');
+        context.reconciliationByTradeId.set(entry.trade_id, gate);
+        context.reconciliationRunKey = gate.runKey;
+      }
+    }
 
     for (const entry of entries) {
       const confirmationState = heads

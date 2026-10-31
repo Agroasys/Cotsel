@@ -21,6 +21,9 @@ describePostgres('treasury ledger export coverage', () => {
   let admin: Pool;
   let pool: Pool;
   let queries: typeof import('../src/database/queries/ledger');
+  let connection: typeof import('../src/database/connection');
+  let loadExportPage: typeof import('../src/core/ledgerExportService').loadLedgerExportPage;
+  let parseExportRequest: typeof import('../src/core/ledgerExport').parseExportRequest;
 
   beforeAll(async () => {
     dbName = `treasury_export_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -45,19 +48,16 @@ describePostgres('treasury ledger export coverage', () => {
       readFileSync(resolve(databaseDir, '002_canonical_monetary_amounts.sql'), 'utf8'),
     );
 
+    jest.resetModules();
     queries = await import('../src/database/queries/ledger');
+    connection = await import('../src/database/connection');
+    ({ loadLedgerExportPage: loadExportPage } = await import('../src/core/ledgerExportService'));
+    ({ parseExportRequest } = await import('../src/core/ledgerExport'));
   }, 60000);
 
   afterAll(async () => {
     await pool?.end();
-    const connection = await import('../src/database/connection');
-    await connection.pool?.end().catch(() => undefined);
-    await admin?.query(
-      `SELECT pg_terminate_backend(pid)
-       FROM pg_stat_activity
-       WHERE datname = $1 AND pid <> pg_backend_pid()`,
-      [dbName],
-    );
+    await connection?.closeConnection();
     await admin?.query(`DROP DATABASE IF EXISTS "${dbName}"`);
     await admin?.end();
   }, 60000);
@@ -137,5 +137,87 @@ describePostgres('treasury ledger export coverage', () => {
 
     expect(after.rowCount).toBe(before.rowCount);
     expect(page.entries).toHaveLength(before.rowCount);
+  });
+
+  it('enumerates more than 5,000 database rows exactly once under one cutoff', async () => {
+    const before = await queries.getLedgerExportSnapshot(cutoff);
+    await pool.query(
+      `INSERT INTO treasury_ledger_entries (
+         entry_key, trade_id, tx_hash, block_number, event_name,
+         component_type, amount_raw, source_timestamp, created_at
+       )
+       SELECT 'export-bulk-' || n, 'trade-bulk-' || n, '0xtx-bulk-' || n,
+              100, 'PlatformFeesPaidStage1', 'PLATFORM_FEE', '1', $1, $1
+       FROM generate_series(1, 5001) AS n`,
+      [cutoff],
+    );
+
+    const snapshot = await queries.getLedgerExportSnapshot(cutoff);
+    expect(snapshot.rowCount).toBe(before.rowCount + 5001);
+    expect(BigInt(snapshot.totalAmountRaw)).toBe(BigInt(before.totalAmountRaw) + 5001n);
+
+    const seen = new Set<number>();
+    let cursor: { createdAt: Date; id: number } | null = null;
+    let scanned = 0;
+    let scannedAmount = 0n;
+    let pages = 0;
+
+    for (; pages < 7; pages += 1) {
+      const page = await queries.getLedgerEntriesForExport({ cutoff, cursor, limit: 1000 });
+      for (const entry of page.entries) {
+        expect(seen.has(entry.id)).toBe(false);
+        seen.add(entry.id);
+        scannedAmount += BigInt(entry.amount_raw);
+      }
+      scanned += page.entries.length;
+
+      if (!page.hasMore) break;
+      const last = page.entries[page.entries.length - 1];
+      cursor = { createdAt: new Date(last.created_at), id: last.id };
+    }
+
+    expect(pages).toBe(5);
+    expect(scanned).toBe(snapshot.rowCount);
+    expect(seen.size).toBe(snapshot.rowCount);
+    expect(scannedAmount).toBe(BigInt(snapshot.totalAmountRaw));
+  });
+
+  it('refuses a continuation after a pre-cutoff transaction commits between pages', async () => {
+    const writer = await pool.connect();
+    let committed = false;
+    try {
+      await writer.query('BEGIN');
+      await writer.query(
+        `INSERT INTO treasury_ledger_entries (
+           entry_key, trade_id, tx_hash, block_number, event_name,
+           component_type, amount_raw, source_timestamp, created_at
+         ) VALUES ('export-late-commit', 'trade-late-commit', '0xtx-late-commit',
+                   100, 'PlatformFeesPaidStage1', 'PLATFORM_FEE', '1', NOW(), NOW())`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      const exportCutoff = new Date();
+      const first = await loadExportPage(
+        parseExportRequest({ cutoff: exportCutoff.toISOString(), limit: '1' }),
+        async (entries) => entries.map((entry) => ({ ...entry, eligibleForExport: true })),
+      );
+      expect(first.nextCursor).not.toBeNull();
+
+      await writer.query('COMMIT');
+      committed = true;
+
+      const continuation = parseExportRequest({
+        cutoff: exportCutoff.toISOString(),
+        cursor: first.nextCursor,
+        limit: '1',
+      });
+      await expect(
+        loadExportPage(continuation, async (entries) =>
+          entries.map((entry) => ({ ...entry, eligibleForExport: true })),
+        ),
+      ).rejects.toThrow(/snapshot changed/);
+    } finally {
+      if (!committed) await writer.query('ROLLBACK');
+      writer.release();
+    }
   });
 });

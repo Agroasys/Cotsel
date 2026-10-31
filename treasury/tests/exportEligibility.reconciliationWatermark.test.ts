@@ -91,6 +91,62 @@ function serviceWith(reconciliationGate: ReturnType<typeof gateWith>): TreasuryE
 }
 
 describe('TreasuryEligibilityService reconciliation watermark', () => {
+  test('snapshot batches share one finalized anchor and refuse a changed reconciliation run', async () => {
+    const getBlock = jest.fn(async (tag: 'latest' | 'safe' | 'finalized') => ({
+      number: tag === 'latest' ? 120n : tag === 'safe' ? 115n : 110n,
+      hash: `0x${'ab'.repeat(32)}`,
+    }));
+    const assessTrades = jest
+      .fn()
+      .mockImplementationOnce(gateWith({ runKey: 'run-1' }).assessTrades)
+      .mockImplementationOnce(gateWith({ runKey: 'run-2' }).assessTrades);
+    const service = new TreasuryEligibilityService({
+      provider: { getBlock },
+      ingestionFreshness: freshIngestion(),
+      canonicalityVerifier: alwaysCanonicalVerifier(),
+      canonicalityWriter: recordingCanonicalityWriter().writer,
+      reconciliationGate: { assessTrades },
+    });
+    const context = await service.createSnapshotContext();
+    expect(context.finalizedBlockHash).toBe(`0x${'ab'.repeat(32)}`);
+    expect((await service.assessEntries([makeEntry()], context)).get(1)?.eligibleForExport).toBe(
+      true,
+    );
+    expect(getBlock).toHaveBeenCalledTimes(3);
+    await expect(service.verifySnapshotContext(context)).rejects.toThrow(
+      'Reconciliation evidence changed or became unavailable',
+    );
+    expect(getBlock).toHaveBeenCalledTimes(5);
+  });
+
+  test('snapshot verification refuses a changed finalized block hash', async () => {
+    let changed = false;
+    const service = new TreasuryEligibilityService({
+      provider: {
+        getBlock: async (tag) => ({
+          number: tag === 'latest' ? 120n : tag === 'safe' ? 115n : 110n,
+          hash: `0x${(changed && typeof tag === 'number' ? 'cd' : 'ab').repeat(32)}`,
+        }),
+      },
+      ingestionFreshness: freshIngestion(),
+      canonicalityVerifier: alwaysCanonicalVerifier(),
+      canonicalityWriter: recordingCanonicalityWriter().writer,
+      reconciliationGate: gateWith({}),
+    });
+    const context = await service.createSnapshotContext();
+    await service.assessEntries([makeEntry()], context);
+    changed = true;
+    await expect(service.verifySnapshotContext(context)).rejects.toThrow(
+      'Finalized chain anchor changed or is unavailable',
+    );
+  });
+
+  test('snapshot context refuses a finalized head without a hash', async () => {
+    await expect(serviceWith(gateWith({})).createSnapshotContext()).rejects.toThrow(
+      'Finalized chain anchor is unavailable',
+    );
+  });
+
   test('clears an entry the accepted run reached', async () => {
     const gate = (await serviceWith(gateWith({})).assessEntries([makeEntry()])).get(1);
 

@@ -24,6 +24,15 @@ export interface TradeReconciliationGate {
   blockedReasons: string[];
 }
 
+export interface ReconciliationRunAnchor {
+  runKey: string;
+  completedAt: Date;
+  coverageFromBlock: number | null;
+  coverageToBlock: number;
+  coverageComplete: true;
+  staleRunningRunCount: number;
+}
+
 export interface ReconciliationControlSummary {
   status: 'CLEAR' | 'BLOCKED' | 'STALE' | 'MISSING' | 'UNKNOWN';
   freshness: 'FRESH' | 'STALE' | 'MISSING';
@@ -63,7 +72,8 @@ interface CountRow {
   count: string;
 }
 
-type PoolLike = Pick<Pool, 'query'>;
+type QueryReader = Pick<Pool, 'query'>;
+type PoolLike = QueryReader & Partial<Pick<Pool, 'connect'>>;
 
 /** `BIGINT` arrives as a string from `pg`, and `Number(null)` is `0`. */
 function toBlockNumber(value: string | number | null | undefined): number | null {
@@ -72,11 +82,12 @@ function toBlockNumber(value: string | number | null | undefined): number | null
   }
 
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 export class ReconciliationGateService {
   private readonly pool: PoolLike | null;
+  private readonly ownsPool: boolean;
   private readonly now: () => Date;
   private readonly maxAgeSeconds: number;
   private readonly maxRunningRunAgeSeconds: number;
@@ -87,19 +98,22 @@ export class ReconciliationGateService {
     maxAgeSeconds?: number;
     maxRunningRunAgeSeconds?: number;
   }) {
+    this.ownsPool = deps?.pool === undefined && config.reconciliationDb !== null;
     this.pool =
-      deps?.pool ??
-      (config.reconciliationDb
-        ? new Pool({
-            host: config.reconciliationDb.host,
-            port: config.reconciliationDb.port,
-            database: config.reconciliationDb.name,
-            user: config.reconciliationDb.user,
-            password: config.reconciliationDb.password,
-            ssl: resolvePostgresSslConfig(config.reconciliationDb.sslMode),
-            max: 2,
-          })
-        : null);
+      deps?.pool !== undefined
+        ? deps.pool
+        : config.reconciliationDb
+          ? new Pool({
+              host: config.reconciliationDb.host,
+              port: config.reconciliationDb.port,
+              database: config.reconciliationDb.name,
+              user: config.reconciliationDb.user,
+              password: config.reconciliationDb.password,
+              ssl: resolvePostgresSslConfig(config.reconciliationDb.sslMode),
+              options: '-c app.service_name=reconciliation',
+              max: 2,
+            })
+          : null;
     this.now = deps?.now ?? (() => new Date());
     this.maxAgeSeconds = deps?.maxAgeSeconds ?? config.reconciliationMaxAgeSeconds;
     this.maxRunningRunAgeSeconds =
@@ -111,6 +125,10 @@ export class ReconciliationGateService {
     return this.pool !== null;
   }
 
+  async close(): Promise<void> {
+    if (this.ownsPool && this.pool instanceof Pool) await this.pool.end();
+  }
+
   /** Readiness: the reconciliation reader can be queried, so realization is not blind. */
   async checkReadiness(): Promise<void> {
     if (!this.pool) {
@@ -119,7 +137,74 @@ export class ReconciliationGateService {
     await this.pool.query('SELECT 1');
   }
 
+  private async consistentRead<T>(read: (reader: QueryReader) => Promise<T>): Promise<T> {
+    if (!this.pool) throw new Error('Reconciliation database is not configured');
+    if (!this.pool.connect) return read(this.pool);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const result = await read(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** Evidence for an empty export, which has no trade on which to hang a gate. */
+  async snapshotRunAnchor(): Promise<ReconciliationRunAnchor> {
+    if (!this.pool) throw new Error('Reconciliation evidence is unavailable or incomplete');
+    return this.consistentRead((reader) => this.readSnapshotRunAnchor(reader));
+  }
+
+  private async readSnapshotRunAnchor(reader: QueryReader): Promise<ReconciliationRunAnchor> {
+    const latest = await reader.query<LatestCompletedRunRow>(
+      `SELECT run_key, completed_at AT TIME ZONE 'UTC' AS completed_at, coverage_from_block, coverage_to_block, coverage_complete
+       FROM reconcile_runs WHERE status='COMPLETED' ORDER BY completed_at DESC, id DESC LIMIT 1`,
+    );
+    const staleCutoff = new Date(this.now().getTime() - this.maxRunningRunAgeSeconds * 1000);
+    const running = await reader.query<CountRow>(
+      "SELECT COUNT(*)::text AS count FROM reconcile_runs WHERE status='RUNNING' AND started_at AT TIME ZONE 'UTC' < $1::timestamptz",
+      [staleCutoff],
+    );
+    const row = latest.rows[0];
+    const coverageToBlock = toBlockNumber(row?.coverage_to_block);
+    const staleRunningRunCount = Number.parseInt(running.rows[0]?.count ?? '0', 10);
+    const age = row?.completed_at ? this.now().getTime() - row.completed_at.getTime() : NaN;
+    if (
+      !row?.run_key ||
+      !row.completed_at ||
+      !Number.isFinite(age) ||
+      age < 0 ||
+      age > this.maxAgeSeconds * 1000 ||
+      coverageToBlock === null ||
+      row.coverage_complete !== true ||
+      staleRunningRunCount > 0
+    ) {
+      throw new Error('Reconciliation evidence is unavailable or incomplete');
+    }
+    return {
+      runKey: row.run_key,
+      completedAt: row.completed_at,
+      coverageFromBlock: toBlockNumber(row.coverage_from_block),
+      coverageToBlock,
+      coverageComplete: true,
+      staleRunningRunCount,
+    };
+  }
+
   async assessTrades(tradeIds: string[]): Promise<Map<string, TradeReconciliationGate>> {
+    if (!this.pool) return this.assessTradesFromReader(tradeIds, null);
+    return this.consistentRead((reader) => this.assessTradesFromReader(tradeIds, reader));
+  }
+
+  private async assessTradesFromReader(
+    tradeIds: string[],
+    reader: QueryReader | null,
+  ): Promise<Map<string, TradeReconciliationGate>> {
     const uniqueTradeIds = [...new Set(tradeIds.filter((tradeId) => tradeId.trim().length > 0))];
     const result = new Map<string, TradeReconciliationGate>();
 
@@ -127,7 +212,7 @@ export class ReconciliationGateService {
       return result;
     }
 
-    if (!this.pool) {
+    if (!reader) {
       for (const tradeId of uniqueTradeIds) {
         result.set(tradeId, {
           tradeId,
@@ -146,9 +231,9 @@ export class ReconciliationGateService {
       return result;
     }
 
-    const latestRun = await this.pool.query<LatestCompletedRunRow>(
+    const latestRun = await reader.query<LatestCompletedRunRow>(
       `SELECT run_key
-              , completed_at
+              , completed_at AT TIME ZONE 'UTC' AS completed_at
               , coverage_from_block
               , coverage_to_block
               , coverage_complete
@@ -158,11 +243,11 @@ export class ReconciliationGateService {
        LIMIT 1`,
     );
     const staleRunningCutoff = new Date(this.now().getTime() - this.maxRunningRunAgeSeconds * 1000);
-    const staleRunningRuns = await this.pool.query<CountRow>(
+    const staleRunningRuns = await reader.query<CountRow>(
       `SELECT COUNT(*)::text AS count
        FROM reconcile_runs
        WHERE status = 'RUNNING'
-         AND started_at < $1`,
+         AND started_at AT TIME ZONE 'UTC' < $1::timestamptz`,
       [staleRunningCutoff],
     );
     const staleRunningRunCount = Number.parseInt(staleRunningRuns.rows[0]?.count ?? '0', 10);
@@ -188,13 +273,14 @@ export class ReconciliationGateService {
       return result;
     }
 
-    const isStale =
-      completedAt === null ||
-      this.now().getTime() - completedAt.getTime() > this.maxAgeSeconds * 1000;
+    const ageMs = completedAt === null ? NaN : this.now().getTime() - completedAt.getTime();
+    const isStale = !Number.isFinite(ageMs) || ageMs < 0 || ageMs > this.maxAgeSeconds * 1000;
     const freshnessReason = isStale
       ? completedAt === null
         ? 'Latest completed reconciliation run does not have a completion timestamp'
-        : `Latest completed reconciliation run is older than ${this.maxAgeSeconds} seconds`
+        : ageMs < 0
+          ? 'Latest completed reconciliation run has a future completion timestamp'
+          : `Latest completed reconciliation run is older than ${this.maxAgeSeconds} seconds`
       : null;
     const runningReason =
       staleRunningRunCount > 0
@@ -216,14 +302,14 @@ export class ReconciliationGateService {
           : 'Latest completed reconciliation run did not publish a chain coverage watermark';
 
     const [scopedTrades, driftCounts] = await Promise.all([
-      this.pool.query<ScopedTradeRow>(
+      reader.query<ScopedTradeRow>(
         `SELECT trade_id
          FROM reconcile_run_trades
          WHERE run_key = $1
            AND trade_id = ANY($2::text[])`,
         [runKey, uniqueTradeIds],
       ),
-      this.pool.query<DriftCountRow>(
+      reader.query<DriftCountRow>(
         `SELECT trade_id, COUNT(*)::text AS drift_count
          FROM reconcile_drifts
          WHERE run_key = $1

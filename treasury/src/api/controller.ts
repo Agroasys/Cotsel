@@ -1282,6 +1282,12 @@ export class TreasuryController {
 
   async exportEntries(req: Request, res: Response): Promise<void> {
     try {
+      if (req.query.cursor !== undefined && req.query.cursor !== '') {
+        throw new ExportRequestError(
+          'ExportContinuationRequiresSnapshot',
+          'Legacy export continuations are no longer supported. Restart using the snapshot export workflow.',
+        );
+      }
       const format = optionalEnum(req.query.format, EXPORT_FORMATS, 'format') ?? 'json';
       const request = parseExportRequest(req.query);
       const page = await loadLedgerExportPage(request, async (entries) => {
@@ -1294,6 +1300,12 @@ export class TreasuryController {
         }));
       });
 
+      if (!page.complete) {
+        throw new ExportRequestError(
+          'ExportContinuationRequiresSnapshot',
+          'This export requires continuation. Restart using the snapshot export workflow.',
+        );
+      }
       assertCompleteExportDelivery(page, format, request.allowPartial);
 
       if (format === 'csv') {
@@ -1306,14 +1318,19 @@ export class TreasuryController {
         return;
       }
 
-      // The envelope carries the cutoff, snapshot totals and continuation the
-      // consumer needs to prove it received every row exactly once. That is the
-      // point of H-32, so `data` is an export document rather than a bare array.
+      // The envelope carries the cutoff, totals and continuation. Matching
+      // totals alone do not prove that the candidate rows stayed unchanged.
       res.status(200).json(success(page));
     } catch (error: unknown) {
       if (error instanceof ExportRequestError) {
         res
-          .status(error.code === 'IncompleteExport' ? 409 : 400)
+          .status(
+            error.code === 'IncompleteExport' ||
+              error.code === 'InconsistentExportSnapshot' ||
+              error.code === 'ExportContinuationRequiresSnapshot'
+              ? 409
+              : 400,
+          )
           .json(failure(error.code, error.message));
         return;
       }
