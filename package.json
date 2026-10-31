@@ -66,7 +66,7 @@
     "protocol:health": "node scripts/full-protocol-health-report.mjs",
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs",
-    "security:deps:compat": "node scripts/dependency-compatibility-check.mjs && node --test scripts/tests/glob-abort-backport.test.mjs",
+    "security:deps:compat": "node scripts/dependency-compatibility-check.mjs && node --test scripts/tests/glob-abort-backport.test.mjs scripts/tests/minimatch-preprocess-backport.test.mjs",
     "security:deps:gate": "node scripts/security-deps-gate.mjs",
     "quality:file-size:check": "node scripts/source-line-limit.mjs",
     "openapi:dashboard:bundle": "pnpm --filter gateway run openapi:bundle",

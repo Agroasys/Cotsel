@@ -5,8 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@graphql-tools/utils@<12.0.4': 12.0.4
   '@babel/core@<=7.29.0': 7.29.6
+  '@graphql-tools/utils@<12.0.4': 12.0.4
   '@humanfs/node': 0.16.8
   '@protobufjs/utf8': 1.1.1
   adm-zip: 0.6.1
@@ -29,16 +29,16 @@ overrides:
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
   lodash: 4.18.1
   pbkdf2@<=3.1.6: 3.1.7
-  qs: 6.16.1
   proxy-addr@<2.0.8: 2.0.8
+  qs: 6.16.1
   serialize-javascript: 7.1.3
   socket.io-parser: 4.2.7
   tmp: 0.2.7
   undici@<7: 6.29.1
   uuid@<11.1.1: 11.1.1
-  zod@>=4 <4.6.6: 4.6.6
   ws@>=7 <7.5.11: 7.5.11
   ws@>=8 <8.20.1: 8.21.0
+  zod@>=4 <4.6.6: 4.6.6
 
 pnpmfileChecksum: sha256-BhxFwSptmovUgoqsKcWJ2d1iP0uNM098rsXQIS5OaDQ=
 
@@ -58,6 +58,15 @@ patchedDependencies:
   glob@13.0.6:
     hash: aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3
     path: patches/glob@13.0.6.patch
+  minimatch@10.2.5:
+    hash: 22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1
+    path: patches/minimatch@10.2.5.patch
+  minimatch@10.2.6:
+    hash: 22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1
+    path: patches/minimatch@10.2.6.patch
+  minimatch@9.0.9:
+    hash: 0c6f52c82276fb3f067779b9c3a176d0b80884b4d92ba949488b4bb0e7f35ec6
+    path: patches/minimatch@9.0.9.patch
   stream-json@1.9.1:
     hash: fe64e65732c5c53cc420309600b9b089075436191a85e4101e1024c2ce90b786
     path: patches/stream-json@1.9.1.patch
@@ -11573,7 +11582,7 @@ snapshots:
     dependencies:
       '@eslint/object-schema': 3.0.5
       debug: 4.4.3(supports-color@8.1.1)
-      minimatch: 10.2.6
+      minimatch: 10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
     transitivePeerDependencies:
       - supports-color
 
@@ -13566,7 +13575,7 @@ snapshots:
 
   '@types/minimatch@6.0.0':
     dependencies:
-      minimatch: 10.2.5
+      minimatch: 10.2.5(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
 
   '@types/mocha@10.0.10': {}
 
@@ -13702,7 +13711,7 @@ snapshots:
       '@typescript-eslint/types': 8.71.1
       '@typescript-eslint/visitor-keys': 8.71.1
       debug: 4.4.3(supports-color@8.1.1)
-      minimatch: 10.2.6
+      minimatch: 10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
       semver: 7.8.5
       tinyglobby: 0.2.17
       ts-api-utils: 2.5.0(typescript@6.0.3)
@@ -15285,7 +15294,7 @@ snapshots:
       imurmurhash: 0.1.4
       is-glob: 4.0.3
       json-stable-stringify-without-jsonify: 1.0.1
-      minimatch: 10.2.6
+      minimatch: 10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
       natural-compare: 1.4.0
       optionator: 0.9.4
     transitivePeerDependencies:
@@ -15757,14 +15766,14 @@ snapshots:
     dependencies:
       foreground-child: 3.3.1
       jackspeak: 3.4.3
-      minimatch: 9.0.9
+      minimatch: 9.0.9(patch_hash=0c6f52c82276fb3f067779b9c3a176d0b80884b4d92ba949488b4bb0e7f35ec6)
       minipass: 7.1.3
       package-json-from-dist: 1.0.1
       path-scurry: 1.11.1
 
   glob@13.0.6(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3):
     dependencies:
-      minimatch: 10.2.6
+      minimatch: 10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
       minipass: 7.1.3
       path-scurry: 2.0.2
 
@@ -16920,11 +16929,11 @@ snapshots:
 
   minimalistic-crypto-utils@1.0.1: {}
 
-  minimatch@10.2.5:
+  minimatch@10.2.5(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1):
     dependencies:
       brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
-  minimatch@10.2.6:
+  minimatch@10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1):
     dependencies:
       brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
@@ -16936,7 +16945,7 @@ snapshots:
     dependencies:
       brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
-  minimatch@9.0.9:
+  minimatch@9.0.9(patch_hash=0c6f52c82276fb3f067779b9c3a176d0b80884b4d92ba949488b4bb0e7f35ec6):
     dependencies:
       brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
@@ -16994,7 +17003,7 @@ snapshots:
       is-path-inside: 3.0.3
       js-yaml: 4.3.2
       log-symbols: 4.1.0
-      minimatch: 9.0.9
+      minimatch: 9.0.9(patch_hash=0c6f52c82276fb3f067779b9c3a176d0b80884b4d92ba949488b4bb0e7f35ec6)
       ms: 2.1.3
       picocolors: 1.1.1
       serialize-javascript: 7.1.3
@@ -17078,7 +17087,7 @@ snapshots:
       chokidar: 3.6.0
       debug: 4.4.3(supports-color@5.5.0)
       ignore-by-default: 1.0.1
-      minimatch: 10.2.5
+      minimatch: 10.2.5(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
       pstree.remy: 1.1.8
       semver: 7.7.4
       simple-update-notifier: 2.0.0
@@ -18087,7 +18096,7 @@ snapshots:
     dependencies:
       '@istanbuljs/schema': 0.1.6
       glob: 10.5.0(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
-      minimatch: 10.2.6
+      minimatch: 10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
 
   text-encoding-utf-8@1.0.2: {}
 
