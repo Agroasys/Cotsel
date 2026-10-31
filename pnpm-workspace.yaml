@@ -60,6 +60,8 @@ minimumReleaseAgeExclude:
   # name because pnpm 10 matches this setting on package name only. The overrides
   # block below pins the resolved version.
   - js-yaml
+  # Security fix for GHSA-mrwp-f3q8-3g9p, pinned below while within the release-age window.
+  - follow-redirects
 overrides:
   # GHSA-7mx3-vvmw-hjmv affects every earlier GraphQL Tools utils major (PR #865);
   # GHSA-c4qx-w738-7hr3 affects 10.10.1 through 12.0.1.
@@ -81,7 +83,7 @@ overrides:
   # Mocha 11 (Hardhat 2.29) uses diff 7, affected by GHSA-73rr-hh4g-fpgx.
   diff@>=6 <8.0.3: 8.0.3
   fast-uri: 3.1.9
-  follow-redirects: 1.16.1
+  follow-redirects: 1.16.2
   form-data@>=4.0.0 <4.0.6: 4.0.6
   # Dedupe graphql to a single instance. @subsquid/openreader builds the schema
   # while @subsquid/graphql-server merges it; when they resolve different graphql
