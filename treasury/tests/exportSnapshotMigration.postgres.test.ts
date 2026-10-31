@@ -422,6 +422,18 @@ describePostgres('treasury export snapshot migration', () => {
         "INSERT INTO payout_lifecycle_events (ledger_entry_id, state) VALUES ($1, 'READY_FOR_EXTERNAL_HANDOFF')",
         [single.rows[0].id],
       );
+      await pool.query(
+        `INSERT INTO treasury_ledger_entries
+        (entry_key, trade_id, tx_hash, block_number, event_name, component_type, amount_raw,
+         source_timestamp, created_at, block_hash, log_index, log_address, log_identity_hash)
+        SELECT 'eligible-' || n, 'eligible-trade-' || n, 'eligible-tx-' || n, 100,
+               'fee', 'PLATFORM_FEE', '42', TIMESTAMP '2017-01-01', TIMESTAMP '2017-01-01',
+               $1, 0, $2, $3 FROM generate_series(1, 5002) n`,
+        [TEST_BLOCK_HASH, TEST_LOG_ADDRESS, TEST_LOG_IDENTITY_HASH],
+      );
+      await pool.query(`INSERT INTO payout_lifecycle_events (ledger_entry_id, state)
+        SELECT id, 'READY_FOR_EXTERNAL_HANDOFF' FROM treasury_ledger_entries
+        WHERE entry_key LIKE 'eligible-%'`);
       const eligibleService = new TreasuryEligibilityService({
         provider: {
           getBlock: async (tag) => ({
@@ -444,7 +456,7 @@ describePostgres('treasury export snapshot migration', () => {
         `SELECT captured_row->>'amount_raw' AS amount, eligibility FROM treasury_export_rows WHERE job_id=$1 AND attempt=2`,
         [realServiceJob.id],
       );
-      expect(eligibleRows.rows).toHaveLength(1);
+      expect(eligibleRows.rows).toHaveLength(5003);
       expect(eligibleRows.rows[0]).toMatchObject({
         amount: '42',
         eligibility: {
@@ -454,6 +466,52 @@ describePostgres('treasury export snapshot migration', () => {
           exportBlockedReasons: [],
         },
       });
+      expect(await store.get(caller, realServiceJob.id)).toMatchObject({
+        candidate_count: '5003',
+        candidate_amount_raw: '210126',
+      });
+      const eligibleSeen = new Set<number>();
+      let eligibleTotal = 0n;
+      let eligibleCursor: string | undefined;
+      do {
+        const pageStatus = jest.fn().mockReturnThis();
+        const pageJson = jest.fn().mockReturnThis();
+        await controller.entries(
+          {
+            params: { id: realServiceJob.id },
+            query: { limit: '1000', ...(eligibleCursor ? { cursor: eligibleCursor } : {}) },
+            serviceAuth: { apiKeyId: 'svc', scheme: 'api_key' },
+          } as unknown as Request,
+          { status: pageStatus, json: pageJson } as unknown as Response,
+        );
+        expect(pageStatus).toHaveBeenCalledWith(200);
+        const page = pageJson.mock.calls[0][0].data as {
+          entries: Array<{
+            id: number;
+            amount_raw: string;
+            eligibleForExport: boolean;
+            exportBlockedReasons: string[];
+          }>;
+          nextCursor: string | null;
+        };
+        expect(page.entries.length).toBeLessThanOrEqual(1000);
+        for (const row of page.entries) {
+          expect(row.eligibleForExport).toBe(true);
+          expect(row.exportBlockedReasons).toEqual([]);
+          expect(eligibleSeen.has(row.id)).toBe(false);
+          eligibleSeen.add(row.id);
+          eligibleTotal += BigInt(row.amount_raw);
+        }
+        eligibleCursor = page.nextCursor ?? undefined;
+      } while (eligibleCursor);
+      expect(eligibleSeen.size).toBe(5003);
+      expect(eligibleTotal).toBe(210126n);
+      const eligibleLedger = await pool.query(
+        `SELECT id FROM treasury_ledger_entries WHERE created_at <= TIMESTAMP '2018-01-01'`,
+      );
+      expect([...eligibleSeen].sort((a, b) => a - b)).toEqual(
+        eligibleLedger.rows.map((row: { id: number }) => row.id).sort((a, b) => a - b),
+      );
       const emptyJob = await store.create(caller, 'empty-key', new Date('2010-01-01T00:00:00Z'));
       expect(
         await new ExportSnapshotBuilder(servicePool, eligibility).build(emptyJob.id, 6000),
