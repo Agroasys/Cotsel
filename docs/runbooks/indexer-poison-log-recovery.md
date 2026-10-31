@@ -67,6 +67,16 @@ Record `blockNumber`, `txHash`, `logIndex`, `reason`, `eventName`, and
 
 A correction is not complete until the new image is the one that will restart.
 
+For a missing trade or proposal, verify the parent event's canonical block and projection before releasing the hold.
+This requirement includes dispute, oracle update, and administrator change proposals.
+Check the deployment start block and the affected replay range.
+Restore the parent through a reviewed replay or data recovery procedure.
+Do not create placeholder parent records or resolve quarantine to bypass missing coverage.
+Replay the child event after its parent is available, then reconcile the resulting projection.
+
+An older image can silently skip missing parents.
+Keep the quarantine hold during rollback until a compatible image and replay procedure are approved.
+
 ### 3. Re-pin the contract identity (required outside local)
 
 Update `INDEXER_EXPECTED_CONTRACT_CODEHASH` and `INDEXER_EXPECTED_ABI_FINGERPRINT`

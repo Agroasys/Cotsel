@@ -24,11 +24,6 @@ export async function handleClaimableAccrued(
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for ClaimableAccrued event`);
-    return overviewSnapshot;
-  }
-
   const claimTypeEnum = CLAIM_TYPE_VALUES[Number(claimType)] ?? null;
   overviewSnapshot.lastTradeEventAt = timestamp;
 
