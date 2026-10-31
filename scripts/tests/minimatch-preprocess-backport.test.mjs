@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -7,13 +8,27 @@ import test from 'node:test';
 
 const store = path.resolve('node_modules/.pnpm');
 const require = createRequire(import.meta.url);
+const legacySourceHashes = {
+  '3.1.5': '746849f267c4868a53729225bd85c7dccd387712136fb305fcc0a3eadd4a3d9d',
+  '5.1.9': '1339bca8b70e33847860daa8fc3ccfa62487e143670da01a3b718d40d5fd424f',
+};
 for (const version of ['3.1.5', '5.1.9']) {
   test(`minimatch ${version} has no preprocessing methods`, () => {
     const modulePath = path.join(store, `minimatch@${version}`, 'node_modules/minimatch');
+    const source = fs.readFileSync(path.join(modulePath, 'minimatch.js'));
+    assert.equal(createHash('sha256').update(source).digest('hex'), legacySourceHashes[version]);
+    assert.doesNotMatch(
+      source.toString(),
+      /firstPhasePreProcess|secondPhasePreProcess|optimizationLevel/,
+    );
     const { Minimatch } = require(modulePath);
     assert.equal(Minimatch.prototype.firstPhasePreProcess, undefined);
     assert.equal(Minimatch.prototype.secondPhasePreProcess, undefined);
     assert.equal(new Minimatch('src/**/*.ts').match('src/core/example.ts'), true);
+    assert.equal(
+      new Minimatch(Array(30).fill('**/../a/b').join('/'), { optimizationLevel: 2 }).set.length,
+      1,
+    );
   });
 }
 
