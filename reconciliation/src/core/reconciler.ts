@@ -30,6 +30,7 @@ import {
 } from './coverage';
 import { DEFAULT_SEVERITY_COUNTS, finalizeInconclusiveRun, skippedStats } from './runOutcome';
 import { DriftFinding, ReconcileMode, RunStats } from '../types';
+import { detectDuplicateIndexerTradeIds } from './duplicateCoverage';
 
 export class ReconciliationService {
   private readonly onchainClient = new OnchainClient();
@@ -241,7 +242,6 @@ export class ReconciliationService {
 
       // Independent indexer-side enumeration. Walking the indexer's own id set
       // catches a record the chain never allocated directly, rather than by a
-      // count that a separately-missing id could cancel it out of.
       const enumeration = await this.indexerClient.fetchTradeIds(
         config.indexerEnumerationLimit,
         config.indexerEnumerationPageSize,
@@ -257,11 +257,12 @@ export class ReconciliationService {
           walked: enumeration.tradeIds.length,
         });
       }
-      for (const finding of detectIndexerOnlyTradeIds({
-        indexerTradeIds: enumeration.tradeIds,
-        boundary,
-      })) {
-        stats.totalTrades += 1;
+      const enumerationInput = { indexerTradeIds: enumeration.tradeIds, boundary };
+      for (const finding of [
+        ...detectIndexerOnlyTradeIds(enumerationInput),
+        ...detectDuplicateIndexerTradeIds(enumerationInput),
+      ]) {
+        if (finding.mismatchCode !== 'INDEXER_DUPLICATE_TRADE') stats.totalTrades += 1;
         pendingScope.push(finding.tradeId);
         record(finding);
       }
@@ -331,7 +332,7 @@ export class ReconciliationService {
       const sweepReset = !cursorHeld && window.complete;
 
       const coverageComplete = isCoverageComplete({
-        windowComplete: window.complete,
+        windowComplete: window.complete && !cursorHeld,
         enumerationTruncated: enumeration.truncated,
       });
 

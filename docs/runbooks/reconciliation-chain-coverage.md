@@ -43,10 +43,11 @@ Each run:
    - indexer holds more trades than the chain allocated → `INDEXER_SURPLUS_RECORDS` (critical)
 5. Runs an **independent indexer-side enumeration**: it walks the indexer's own id
    set (offset pagination over `id`) and reports any id the chain never allocated
-   (`> tradeCounter`, non-positive, or non-numeric) as `ONCHAIN_TRADE_MISSING`. This
+   (`>= tradeCounter`, negative, or non-numeric) as `ONCHAIN_TRADE_MISSING`. This
    proves the indexer-only direction directly — `fetchTradesByIds` can only echo ids
    from its own `tradeId_in` filter, and a raw count can hide a surplus id when a
-   separately-missing id cancels it out.
+   separately-missing id cancels it out. Repeated trade IDs produce a critical
+   `INDEXER_DUPLICATE_TRADE` finding, even if the total count matches the chain.
 6. Publishes complete-range accounting on the run row **and** moves the cursor in a
    single transaction. The cursor advances only if the window had no coverage gap
    and no inconclusive read; when a run reaches the counter it **resets to 0** to
@@ -83,7 +84,8 @@ LIMIT 5;
   **not** complete coverage and its cursor is held; raise the limit and re-run.
 - `coverage_complete = false` — the run was budget-bounded. This is normal
   throughput while `uncovered_tail` shrinks run over run; it is **not** a clean
-  sweep and must not be treated as one for close purposes.
+  sweep and must not be treated as one for close purposes. A held cursor also
+  reports incomplete coverage, even when the window reached the chain counter.
 - `next_cursor` is where the following run resumes.
 
 ## Runs skipped as inconclusive
