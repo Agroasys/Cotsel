@@ -59,6 +59,16 @@ const developmentAuditAllowlist = new Map([
 
 const locallyPatchedAdvisories = new Map([
   [
+    'GHSA-3g3m-2fjr-6pw4',
+    {
+      moduleName: 'glob',
+      severity: 'moderate',
+      versions: new Set(['10.5.0', '13.0.6']),
+      patchedVersions: '>=14.0.2',
+      upstreamCommit: '4682e8c9babee1b385202ede36389634e12076d7',
+    },
+  ],
+  [
     'GHSA-vfj7-8cjw-p6xm',
     {
       moduleName: 'braces',

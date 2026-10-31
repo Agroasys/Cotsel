@@ -47,11 +47,17 @@ patchedDependencies:
     hash: b7b54b502476b53a21298d67c7ada85e598c81122c968d7785f7f80caf8b4b88
     path: patches/@subsquid__typeorm-store@1.9.2.patch
   brace-expansion@5.0.12:
-    hash: 113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670
+    hash: 768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0
     path: patches/brace-expansion@5.0.12.patch
   braces@3.0.3:
     hash: 7e75ade1e27447432f36cda3fe73db74ce0d4b84cc2a3ae904b2710807dd8130
     path: patches/braces@3.0.3.patch
+  glob@10.5.0:
+    hash: aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3
+    path: patches/glob@10.5.0.patch
+  glob@13.0.6:
+    hash: aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3
+    path: patches/glob@13.0.6.patch
   stream-json@1.9.1:
     hash: fe64e65732c5c53cc420309600b9b089075436191a85e4101e1024c2ce90b786
     path: patches/stream-json@1.9.1.patch
@@ -11992,7 +11998,7 @@ snapshots:
       chalk: 4.1.2
       collect-v8-coverage: 1.0.3
       exit-x: 0.2.2
-      glob: 13.0.6
+      glob: 13.0.6(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
       graceful-fs: 4.2.11
       istanbul-lib-coverage: 3.2.2
       istanbul-lib-instrument: 6.0.3
@@ -14611,7 +14617,7 @@ snapshots:
       widest-line: 3.1.0
       wrap-ansi: 7.0.0
 
-  brace-expansion@5.0.12(patch_hash=113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670):
+  brace-expansion@5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0):
     dependencies:
       balanced-match: 4.0.4
 
@@ -15747,7 +15753,7 @@ snapshots:
     dependencies:
       is-glob: 4.0.3
 
-  glob@10.5.0:
+  glob@10.5.0(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3):
     dependencies:
       foreground-child: 3.3.1
       jackspeak: 3.4.3
@@ -15756,7 +15762,7 @@ snapshots:
       package-json-from-dist: 1.0.1
       path-scurry: 1.11.1
 
-  glob@13.0.6:
+  glob@13.0.6(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3):
     dependencies:
       minimatch: 10.2.6
       minipass: 7.1.3
@@ -15874,7 +15880,7 @@ snapshots:
       chalk: 4.1.2
       cli-table3: 0.6.5
       ethereum-cryptography: 2.2.1
-      glob: 10.5.0
+      glob: 10.5.0(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
       hardhat: 2.29.1(bufferutil@4.1.0)(ts-node@10.9.2(@types/node@26.6.5)(typescript@6.0.3))(typescript@6.0.3)(utf-8-validate@5.0.10)
       jsonschema: 1.5.0
       lodash: 4.18.1
@@ -16376,7 +16382,7 @@ snapshots:
       chalk: 4.1.2
       ci-info: 4.4.0
       deepmerge: 4.3.1
-      glob: 13.0.6
+      glob: 13.0.6(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
       graceful-fs: 4.2.11
       jest-circus: 30.5.2
       jest-docblock: 30.5.0
@@ -16567,7 +16573,7 @@ snapshots:
       cjs-module-lexer: 2.2.0
       collect-v8-coverage: 1.0.3
       es-module-lexer: 2.3.2
-      glob: 13.0.6
+      glob: 13.0.6(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
       graceful-fs: 4.2.11
       jest-haste-map: 30.5.1
       jest-message-util: 30.5.1
@@ -16916,23 +16922,23 @@ snapshots:
 
   minimatch@10.2.5:
     dependencies:
-      brace-expansion: 5.0.12(patch_hash=113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670)
+      brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
   minimatch@10.2.6:
     dependencies:
-      brace-expansion: 5.0.12(patch_hash=113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670)
+      brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
   minimatch@3.1.5:
     dependencies:
-      brace-expansion: 5.0.12(patch_hash=113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670)
+      brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
   minimatch@5.1.9:
     dependencies:
-      brace-expansion: 5.0.12(patch_hash=113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670)
+      brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
   minimatch@9.0.9:
     dependencies:
-      brace-expansion: 5.0.12(patch_hash=113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670)
+      brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
   minimist@1.2.8: {}
 
@@ -16983,7 +16989,7 @@ snapshots:
       diff: 8.0.3
       escape-string-regexp: 4.0.0
       find-up: 5.0.0
-      glob: 10.5.0
+      glob: 10.5.0(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
       he: 1.2.0
       is-path-inside: 3.0.3
       js-yaml: 4.3.2
@@ -18080,7 +18086,7 @@ snapshots:
   test-exclude@7.0.2:
     dependencies:
       '@istanbuljs/schema': 0.1.6
-      glob: 10.5.0
+      glob: 10.5.0(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
       minimatch: 10.2.6
 
   text-encoding-utf-8@1.0.2: {}
