@@ -62,7 +62,8 @@ export async function settlementAmountHttpFixture(pool: Pool) {
     ),
     consumeNonce: nonceStore.consume,
   });
-  receiver.post('/callbacks', callbackAuth, (req, res) => {
+  receiver.use(callbackAuth);
+  receiver.post('/callbacks', (req, res) => {
     receipts.push({
       body: req.body as Record<string, unknown>,
       rawBody: req.rawBody!.toString('utf8'),
