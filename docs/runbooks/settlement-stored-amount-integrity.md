@@ -30,7 +30,7 @@ Use Node 22, PostgreSQL 16 on loopback port 5432, and the repository's pinned pn
 
 Run `GATEWAY_TEST_USE_LOCAL_POSTGRES=true pnpm --filter gateway exec jest --runInBand tests/settlementAmount.postgres.test.ts`.
 
-The test uses real HTTP listeners and PostgreSQL stores for handoffs, idempotency, authentication nonces and callback delivery. A controlled callback receiver verifies service authentication. It checks exact stored decimal text, transport replay, changed monetary intent, cross-caller rejection, invalid ingress and tampered signatures. Unsupported stored values and an excess-scale JSONB callback exercise containment and controlled fixture recovery.
+The test uses real HTTP listeners and PostgreSQL stores for handoffs, idempotency, authentication nonces and callback delivery. A controlled callback receiver verifies service authentication. Its development-only `express-rate-limit` 8.7.2 dependency provides bounded requests and a CodeQL-recognized guard. The version-specific release-age exception selects the upstream GHSA-j3cq-92fq-qg5f security fix. It checks exact stored decimal text, transport replay, changed monetary intent, cross-caller rejection, invalid ingress and tampered signatures. Unsupported stored values and an excess-scale JSONB callback exercise containment and controlled fixture recovery.
 
 Hosted Gateway CI enables this suite through its existing PostgreSQL service and `SETTLEMENT_ACTIVITY_DATABASE_URL`. Outside those configured environments, the suite is explicitly skipped. Missing database access in an enabled run fails the test.
 

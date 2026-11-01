@@ -3,8 +3,7 @@ import express, { Router } from 'express';
 import { createServer, type Server } from 'http';
 import type { Pool } from 'pg';
 import { createPostgresNonceStore } from '@agroasys/shared-auth';
-import { createHttpRateLimiter } from '@agroasys/shared-edge';
-import { gatewayRateLimitPolicy } from '../../src/httpSecurity';
+import { rateLimit, MemoryStore } from 'express-rate-limit';
 import { createApp } from '../../src/app';
 import { createPostgresIdempotencyStore } from '../../src/core/idempotencyStore';
 import {
@@ -39,13 +38,8 @@ export async function settlementAmountHttpFixture(pool: Pool) {
     query: (sql, values) => pool.query(sql, values),
   });
   const receiver = express();
-  const limiter = await createHttpRateLimiter({
-    enabled: true,
-    nodeEnv: 'test',
-    keyPrefix: 'amount-callback-fixture',
-    classifyRoute: gatewayRateLimitPolicy,
-  });
-  receiver.use(limiter.middleware);
+  const limiterStore = new MemoryStore();
+  receiver.use(rateLimit({ windowMs: 10_000, limit: 20, store: limiterStore }));
   receiver.use(
     express.json({
       verify: (req, _res, body) => {
@@ -79,7 +73,7 @@ export async function settlementAmountHttpFixture(pool: Pool) {
           server.close((error) => (error ? reject(error) : resolve())),
         );
     }
-    await limiter.close();
+    limiterStore.shutdown();
   }
   try {
     const callbackOrigin = await listen(receiverServer);

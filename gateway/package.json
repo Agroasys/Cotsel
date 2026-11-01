@@ -40,6 +40,7 @@
     "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
     "ajv": "^8.20.0",
+    "express-rate-limit": "8.7.2",
     "jest": "^30.5.2",
     "js-yaml": "^5.4.3",
     "ts-jest": "^29.4.14",
