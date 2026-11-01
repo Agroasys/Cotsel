@@ -68,15 +68,11 @@ export function buildQuarantinedLogEntry(input: PoisonLogInput): QuarantinedLogE
   };
 }
 
-/**
- * Quarantine the log, page the owner, and halt.
- *
- * Neither the quarantine write nor the alert can cancel the halt. If the
- * quarantine write fails we have lost the durable evidence, which makes
- * advancing strictly more dangerous, so the halt still happens and the failure
- * is logged for the operator.
- */
-export async function haltOnPoisonLog(deps: PoisonLogDeps, input: PoisonLogInput): Promise<never> {
+/** Attempt independent evidence and alert writes without replacing the batch failure. */
+export async function reportPoisonLog(
+  deps: PoisonLogDeps,
+  input: PoisonLogInput,
+): Promise<QuarantinedLogEntry> {
   const entry = buildQuarantinedLogEntry(input);
 
   deps.logger.error('Quarantining unprojectable escrow log and holding the checkpoint', {
@@ -108,5 +104,10 @@ export async function haltOnPoisonLog(deps: PoisonLogDeps, input: PoisonLogInput
     });
   }
 
-  throw new PoisonLogHaltError(entry);
+  return entry;
+}
+
+/** Evidence and alert failures never permit the processor checkpoint to advance. */
+export async function haltOnPoisonLog(deps: PoisonLogDeps, input: PoisonLogInput): Promise<never> {
+  throw new PoisonLogHaltError(await reportPoisonLog(deps, input));
 }

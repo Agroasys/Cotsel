@@ -46,7 +46,14 @@ import {
 import { loadConfig } from './config';
 import { createIndexerAlerts } from './alerts';
 import { createQuarantinePool, QuarantineStore } from './quarantine';
-import { haltOnPoisonLog, PoisonLogHaltError, type PoisonLogDeps } from './poisonLog';
+import {
+  describeError,
+  haltOnPoisonLog,
+  reportPoisonLog,
+  PoisonLogHaltError,
+  type PoisonLogDeps,
+  type PoisonLogInput,
+} from './poisonLog';
 import { ESCROW_ABI_FINGERPRINT } from './preflight';
 import { readProcessorCheckpoint } from './chainReadiness';
 import { createIndexerProbeOptions, startProbeServer } from './probeServer';
@@ -121,6 +128,7 @@ export async function processBatch(
   const adminChangeProposals: Map<string, AdminChangeProposal> = new Map();
   const adminEvents: AdminEvent[] = [];
   const systemEvents: SystemEvent[] = [];
+  const persistenceLogs: Omit<PoisonLogInput, 'reason' | 'error'>[] = [];
   let overviewSnapshot = await getOrLoadOverviewSnapshot(ctx);
 
   for (const block of ctx.blocks) {
@@ -165,6 +173,8 @@ export async function processBatch(
           error: new Error('Escrow ABI produced no decoding for a matching event topic'),
         });
       }
+
+      persistenceLogs.push({ ...poisonContext, eventName: decoded.name });
 
       try {
         const transaction = log.getTransaction();
@@ -891,19 +901,34 @@ export async function processBatch(
     }
   }
 
-  // save to db
-  await persistIndexerBatch(ctx.store, {
-    trades: trades.values(),
-    tradeEvents,
-    disputeProposals: disputeProposals.values(),
-    disputeEvents,
-    oracleUpdateProposals: oracleUpdateProposals.values(),
-    oracleEvents,
-    adminChangeProposals: adminChangeProposals.values(),
-    adminEvents,
-    systemEvents,
-    overviewSnapshot,
-  });
+  try {
+    await persistIndexerBatch(ctx.store, {
+      trades: trades.values(),
+      tradeEvents,
+      disputeProposals: disputeProposals.values(),
+      disputeEvents,
+      oracleUpdateProposals: oracleUpdateProposals.values(),
+      oracleEvents,
+      adminChangeProposals: adminChangeProposals.values(),
+      adminEvents,
+      systemEvents,
+      overviewSnapshot,
+    });
+  } catch (error) {
+    // No individual log can be blamed when the atomic projection write fails.
+    // Retain every matched log through independent connections before rollback.
+    const persistenceError = new Error(`Batch persistence failed: ${describeError(error)}`);
+    for (const input of persistenceLogs) {
+      await reportPoisonLog(poisonDeps, {
+        ...input,
+        reason: 'HANDLER_FAILURE',
+        error: persistenceError,
+      });
+    }
+    // An empty batch has no raw log to quarantine. Never invent event evidence.
+    // Preserve the database error, including its retry classification, for Subsquid.
+    throw error;
+  }
 
   ctx.log.info(
     `Processed ${trades.size} trades, ${tradeEvents.length} trade events, ${disputeProposals.size} dispute proposals, ${disputeEvents.length} dispute events, ${oracleUpdateProposals.size} oracle proposals, ${oracleEvents.length} oracle events, ${adminChangeProposals.size} admin proposals, ${adminEvents.length} admin events, ${systemEvents.length} system events`,
