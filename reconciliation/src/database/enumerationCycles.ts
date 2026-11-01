@@ -100,7 +100,7 @@ export async function previousIdentityCounts(
 export async function priorCycleHasHoldingFindings(cycleId: string): Promise<boolean> {
   const result = await pool.query<{ mismatch_code: DriftFinding['mismatchCode'] }>(
     `SELECT DISTINCT d.mismatch_code FROM reconcile_drifts d
-    JOIN reconcile_runs r ON r.id=d.run_id WHERE r.coverage_cycle_id=$1 AND r.status='COMPLETED'`,
+    JOIN reconcile_runs r ON r.run_key=d.run_key WHERE r.coverage_cycle_id=$1 AND r.status='COMPLETED'`,
     [cycleId],
   );
   return result.rows.some((row: { mismatch_code: DriftFinding['mismatchCode'] }) =>
@@ -163,7 +163,7 @@ export async function aggregateCycleEvidence(
 ): Promise<void> {
   await client.query(
     `INSERT INTO reconcile_run_trades(run_id,run_key,trade_id)
-    SELECT $2,$3,s.trade_id FROM reconcile_run_trades s JOIN reconcile_runs r ON r.id=s.run_id
+    SELECT $2,$3,s.trade_id FROM reconcile_run_trades s JOIN reconcile_runs r ON r.run_key=s.run_key
     WHERE r.coverage_cycle_id=$1 AND r.status='COMPLETED' GROUP BY s.trade_id
     ON CONFLICT (run_key,trade_id) DO NOTHING`,
     [input.cycleId, input.runId, input.runKey],
@@ -172,18 +172,18 @@ export async function aggregateCycleEvidence(
     `INSERT INTO reconcile_drifts(run_id,run_key,trade_id,severity,mismatch_code,compared_field,onchain_value,indexed_value,details)
     SELECT $2,$3,d.trade_id,d.severity,d.mismatch_code,d.compared_field,d.onchain_value,d.indexed_value,d.details
     FROM (SELECT DISTINCT ON (d.trade_id,d.mismatch_code,d.compared_field) d.* FROM reconcile_drifts d
-      JOIN reconcile_runs r ON r.id=d.run_id WHERE r.coverage_cycle_id=$1 AND r.status='COMPLETED'
+      JOIN reconcile_runs r ON r.run_key=d.run_key WHERE r.coverage_cycle_id=$1 AND r.status='COMPLETED'
       ORDER BY d.trade_id,d.mismatch_code,d.compared_field,r.id DESC) d
     ON CONFLICT (run_key,trade_id,mismatch_code,compared_field) DO NOTHING`,
     [input.cycleId, input.runId, input.runKey],
   );
   const scope = await client.query<{ count: string }>(
-    'SELECT count(*)::text AS count FROM reconcile_run_trades WHERE run_id=$1',
-    [input.runId],
+    'SELECT count(*)::text AS count FROM reconcile_run_trades WHERE run_key=$1',
+    [input.runKey],
   );
   const counts = await client.query<{ severity: keyof RunStats['severityCounts']; count: string }>(
-    'SELECT severity,count(*)::text AS count FROM reconcile_drifts WHERE run_id=$1 GROUP BY severity',
-    [input.runId],
+    'SELECT severity,count(*)::text AS count FROM reconcile_drifts WHERE run_key=$1 GROUP BY severity',
+    [input.runKey],
   );
   input.stats.totalTrades = Number(scope.rows[0].count);
   input.stats.driftCount = 0;
