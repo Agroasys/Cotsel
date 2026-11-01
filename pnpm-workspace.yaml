@@ -119,6 +119,9 @@ patchedDependencies:
   '@subsquid/typeorm-store@1.9.2': patches/@subsquid__typeorm-store@1.9.2.patch
   brace-expansion@5.0.12: patches/brace-expansion@5.0.12.patch
   braces@3.0.3: patches/braces@3.0.3.patch
+  # GHSA-gcqx-w48m-w2h4 and GHSA-848j-6mx2-7j84: tested legacy API repairs.
+  deepmerge@4.3.1: patches/deepmerge@4.3.1.patch
+  elliptic@6.6.1: patches/elliptic@6.6.1.patch
   # Backport GHSA-3g3m-2fjr-6pw4 to the locked glob majors.
   glob@10.5.0: patches/glob@10.5.0.patch
   glob@13.0.6: patches/glob@13.0.6.patch
