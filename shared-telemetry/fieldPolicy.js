@@ -207,6 +207,8 @@ const PUBLIC_FIELDS = [
   'sweepReset',
   'indexerEnumerationTruncated',
   'indexerEnumerationWalked',
+  'enumerationCycleId',
+  'indexerSourceCoherent',
   'indexerProcessed',
   'indexerProcessedBlock',
   'indexerProcessedBlockNumber',
