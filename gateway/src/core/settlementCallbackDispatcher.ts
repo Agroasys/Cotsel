@@ -50,11 +50,15 @@ export class SettlementCallbackDispatcher {
       return;
     }
 
-    this.timer = setInterval(() => {
-      void this.processDueDeliveries();
-    }, this.config.settlementCallbackPollIntervalMs);
-
-    void this.processDueDeliveries();
+    const poll = () => {
+      void this.processDueDeliveries().catch(() => {
+        Logger.error('Settlement callback polling failed', {
+          errorCode: 'SETTLEMENT_CALLBACK_POLL_FAILED',
+        });
+      });
+    };
+    this.timer = setInterval(poll, this.config.settlementCallbackPollIntervalMs);
+    poll();
   }
 
   stop(): void {

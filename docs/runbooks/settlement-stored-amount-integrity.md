@@ -6,7 +6,7 @@ The gateway validates stored amounts before it returns a handoff or builds a cal
 
 The PostgreSQL callback projections return JSONB text. Validation uses the original numeric lexeme, even when the JSON decoder would round it. For example, `9999999999999.9901` must not become `9999999999999.99` and pass validation.
 
-Invalid handoff amounts produce `INTERNAL_ERROR`. An event transaction that encounters such a handoff rolls back without an event or callback. An invalid queued callback stops the callback batch before any delivery lease is acquired. Operators must resolve that record before the batch can resume. This deliberately contains the batch instead of silently skipping financial evidence.
+Invalid handoff amounts produce `INTERNAL_ERROR`. An event transaction that encounters such a handoff rolls back without an event or callback. An invalid queued callback stops the callback batch before any delivery lease is acquired. Scheduled polling logs a sanitized error and retries without terminating Gateway. Operators must resolve that record before the batch can resume. This deliberately contains the batch instead of silently skipping financial evidence.
 
 ## Investigation and recovery
 
