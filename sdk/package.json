@@ -51,7 +51,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "prepack": "npm run build",
-    "test": "jest --runInBand",
+    "test": "npm run build && jest --runInBand && node --test scripts/buyer-lock-payload.check.mjs",
     "test:buyer": "jest tests/buyerSDK.test.ts --runInBand",
     "test:oracle": "jest tests/oracleSDK.test.ts --runInBand",
     "test:admin": "jest tests/adminSDK.test.ts --runInBand",

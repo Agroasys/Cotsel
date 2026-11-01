@@ -50,9 +50,9 @@ export function registerPauseControlTests(getHarness: () => AgroasysEscrowHarnes
       } = getHarness());
     });
     it('Should block createTrade while paused', async function () {
-      const totalAmount = ethers.parseUnits('106004', 6);
+      const totalAmount = ethers.parseUnits('105504', 6);
       const logisticsAmount = ethers.parseUnits('5000', 6);
-      const platformFeesAmount = ethers.parseUnits('1504', 6);
+      const platformFeesAmount = ethers.parseUnits('1004', 6);
       const supplierFirstTranche = ethers.parseUnits('59500', 6);
       const supplierSecondTranche = ethers.parseUnits('40000', 6);
       const ricardianHash = ethers.id('paused-create');

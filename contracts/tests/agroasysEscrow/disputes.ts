@@ -39,8 +39,8 @@ export function registerDisputeTests(getHarness: () => AgroasysEscrowHarness): v
     const supplierSecondTranche = ethers.parseUnits('40000', 6);
     const supplierFirstTranche = ethers.parseUnits('59500', 6);
     const logistics = ethers.parseUnits('5000', 6);
-    const fees = ethers.parseUnits('1504', 6);
-    const totalAmount = ethers.parseUnits('106004', 6);
+    const fees = ethers.parseUnits('1004', 6);
+    const totalAmount = ethers.parseUnits('105504', 6);
 
     beforeEach(async function () {
       const ricardianHash = ethers.id('trade-hash');

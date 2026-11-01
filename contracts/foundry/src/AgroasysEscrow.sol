@@ -122,7 +122,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     uint256 public constant STANDARD_INSPECTION_WINDOW = 72 hours;
     /// @notice Inspection notice window for explicitly classified packaged local deliveries.
     uint256 public constant PACKAGED_LOCAL_INSPECTION_WINDOW = 48 hours;
-    uint256 private constant BUYER_PLATFORM_FEE_BPS = 100;
+    uint256 private constant USDC_BASE_UNITS_PER_CENT = 10_000;
+    uint256 private constant BUYER_PLATFORM_FEE_BPS = 50;
     uint256 private constant SUPPLIER_PLATFORM_FEE_BPS = 50;
     uint256 private constant FIRST_SUPPLIER_TRANCHE_BPS = 6_000;
     uint256 private constant BPS_DENOMINATOR = 10_000;
@@ -942,6 +943,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 totalExpected = logisticsAmount + platformFeesAmount + supplierFirstTranche + supplierSecondTranche;
 
         if (!(totalAmount == totalExpected)) revert EscrowBreakdownMismatch();
+        if (logisticsAmount % USDC_BASE_UNITS_PER_CENT != 0) revert EscrowInvalidLaunchSettlementSchedule();
         if (!(supplierFirstTranche > 0 && supplierSecondTranche > 0)) revert EscrowTranchesMustBeGreaterThan0();
     }
 
@@ -1095,16 +1097,21 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 supplierFirstTranche,
         uint256 supplierSecondTranche
     ) internal pure {
-        uint256 netSupplierPayout = supplierFirstTranche + supplierSecondTranche;
-        uint256 maximumGoodsCandidate =
-            Math.mulDiv(netSupplierPayout, BPS_DENOMINATOR, BPS_DENOMINATOR - SUPPLIER_PLATFORM_FEE_BPS);
-
+        // Agroasys quotes integer USD cents; one cent is 10,000 USDC base units.
+        if (
+            platformFeesAmount % USDC_BASE_UNITS_PER_CENT != 0 || supplierFirstTranche % USDC_BASE_UNITS_PER_CENT != 0
+                || supplierSecondTranche % USDC_BASE_UNITS_PER_CENT != 0
+        ) revert EscrowInvalidLaunchSettlementSchedule();
+        uint256 netSupplierCents = (supplierFirstTranche + supplierSecondTranche) / USDC_BASE_UNITS_PER_CENT;
+        // Half-up supplier fees place the true principal at this candidate or the next cent.
+        uint256 goodsCandidate =
+            Math.mulDiv(netSupplierCents, BPS_DENOMINATOR, BPS_DENOMINATOR - SUPPLIER_PLATFORM_FEE_BPS);
         bool valid = _matchesLaunchSettlementSchedule(
-            maximumGoodsCandidate, platformFeesAmount, supplierFirstTranche, supplierSecondTranche
+            goodsCandidate, platformFeesAmount, supplierFirstTranche, supplierSecondTranche
         );
-        if (!valid && maximumGoodsCandidate > 0) {
+        if (!valid) {
             valid = _matchesLaunchSettlementSchedule(
-                maximumGoodsCandidate - 1, platformFeesAmount, supplierFirstTranche, supplierSecondTranche
+                goodsCandidate + 1, platformFeesAmount, supplierFirstTranche, supplierSecondTranche
             );
         }
 
@@ -1112,14 +1119,17 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function _matchesLaunchSettlementSchedule(
-        uint256 goodsAmount,
+        uint256 goodsCents,
         uint256 platformFeesAmount,
         uint256 supplierFirstTranche,
         uint256 supplierSecondTranche
     ) internal pure returns (bool) {
-        uint256 buyerFee = Math.mulDiv(goodsAmount, BUYER_PLATFORM_FEE_BPS, BPS_DENOMINATOR);
-        uint256 supplierFee = Math.mulDiv(goodsAmount, SUPPLIER_PLATFORM_FEE_BPS, BPS_DENOMINATOR);
-        uint256 firstTrancheGross = Math.mulDiv(goodsAmount, FIRST_SUPPLIER_TRANCHE_BPS, BPS_DENOMINATOR);
+        uint256 buyerFee = ((goodsCents * BUYER_PLATFORM_FEE_BPS + 5_000) / BPS_DENOMINATOR) * USDC_BASE_UNITS_PER_CENT;
+        uint256 supplierFee =
+            ((goodsCents * SUPPLIER_PLATFORM_FEE_BPS + 5_000) / BPS_DENOMINATOR) * USDC_BASE_UNITS_PER_CENT;
+        uint256 firstTrancheGross =
+            ((goodsCents * FIRST_SUPPLIER_TRANCHE_BPS + 5_000) / BPS_DENOMINATOR) * USDC_BASE_UNITS_PER_CENT;
+        uint256 goodsAmount = goodsCents * USDC_BASE_UNITS_PER_CENT;
 
         return firstTrancheGross >= supplierFee && supplierFirstTranche == firstTrancheGross - supplierFee
             && supplierSecondTranche == goodsAmount - firstTrancheGross

@@ -13,8 +13,8 @@ abstract contract AgroasysEscrowValidationFuzzTests is AgroasysEscrowFuzzBase {
         bytes32 ricardianHash
     ) public {
         vm.assume(ricardianHash != bytes32(0));
-        logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6));
+        logistics = uint96(bound(logistics, 1000e6, 10_000e6) / 10_000 * 10_000);
+        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6) / 10_000 * 10_000);
         (fees, tranche1, tranche2) = _launch_schedule(goodsAmount);
 
         uint256 tradeId = _create_trade(logistics, fees, tranche1, tranche2, ricardianHash);
@@ -35,8 +35,8 @@ abstract contract AgroasysEscrowValidationFuzzTests is AgroasysEscrowFuzzBase {
         bytes32 ricardianHash
     ) public {
         vm.assume(ricardianHash != bytes32(0));
-        logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6));
+        logistics = uint96(bound(logistics, 1000e6, 10_000e6) / 10_000 * 10_000);
+        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6) / 10_000 * 10_000);
         (fees, tranche1, tranche2) = _launch_schedule(goodsAmount);
 
         uint256 tradeId = _create_trade(logistics, fees, tranche1, tranche2, ricardianHash);
@@ -62,8 +62,8 @@ abstract contract AgroasysEscrowValidationFuzzTests is AgroasysEscrowFuzzBase {
         bytes32 ricardianHash
     ) public {
         vm.assume(ricardianHash != bytes32(0));
-        logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6));
+        logistics = uint96(bound(logistics, 1000e6, 10_000e6) / 10_000 * 10_000);
+        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6) / 10_000 * 10_000);
         (fees, tranche1, tranche2) = _launch_schedule(goodsAmount);
 
         uint256 tradeId = _create_trade(logistics, fees, tranche1, tranche2, ricardianHash);

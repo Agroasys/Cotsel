@@ -35,10 +35,10 @@ import { BuyerLockPayload } from '@agroasys/sdk';
 
 const payload: BuyerLockPayload = {
   supplier: '0xSupplierAddress...',
-  totalAmount: 1_064_000_000n, // 1,064.00 USDC pulled from the buyer
+  totalAmount: 1_059_000_000n, // 1,059.00 USDC pulled from the buyer
   logisticsAmount: 50_000_000n, // 50.00 USDC order logistics fee
-  // 10.00 buyer fee + 4.00 support fee + 5.00 supplier fee
-  platformFeesAmount: 19_000_000n,
+  // 5.00 buyer fee + 4.00 support fee + 5.00 supplier fee
+  platformFeesAmount: 14_000_000n,
   // 60% of 1,000.00 goods, less the 0.5% supplier fee
   supplierFirstTranche: 595_000_000n,
   // Remaining 40% of the goods value
@@ -55,7 +55,7 @@ const payload: BuyerLockPayload = {
 | `supplier`              | `string` | Yes      | EVM address of the supplier. Must be non-zero.                                                                                                        |
 | `totalAmount`           | `bigint` | Yes      | Total USDC amount the buyer locks. Must equal the sum of the four component fields.                                                                   |
 | `logisticsAmount`       | `bigint` | Yes      | Logistics fee. Routed to `TreasuryWallet` at Stage 1.                                                                                                 |
-| `platformFeesAmount`    | `bigint` | Yes      | Buyer fee (1%), fixed support fee (USD 4), and supplier fee (0.5% of goods). Routed to `TreasuryWallet` at Stage 1.                                   |
+| `platformFeesAmount`    | `bigint` | Yes      | Buyer fee (0.5%), fixed support fee (USD 4), and supplier fee (0.5% of goods). Routed to `TreasuryWallet` at Stage 1.                                 |
 | `supplierFirstTranche`  | `bigint` | Yes      | Supplier's 60% gross first tranche less the 0.5% full-order supplier fee. Released only after independent custody and shipping-document verification. |
 | `supplierSecondTranche` | `bigint` | Yes      | Remaining 40% supplier goods principal. Released after inspection acceptance or the no-dispute notice deadline.                                       |
 | `ricardianHash`         | `string` | Yes      | `0x`-prefixed 32-byte hex SHA-256 of the off-chain legal contract. Immutable after lock.                                                              |
@@ -63,6 +63,10 @@ const payload: BuyerLockPayload = {
 
 > All `bigint` amounts are in the **smallest unit** of USDC (6 decimals).
 > 1 USDC = `1_000_000n`.
+
+All creation amounts must be whole USD cents (multiples of 10,000 base units).
+Both 0.5% fees and the 60% gross first tranche round half up to cents.
+Calculate the buyer and supplier fees independently.
 
 ## Amount Invariant
 
@@ -77,14 +81,14 @@ totalAmount === logisticsAmount
 ```
 
 For the example above, the supplier's gross goods amount is 1,000.00 USDC. The
-buyer pays 1,000.00 + 10.00 + 4.00 + 50.00 = 1,064.00 USDC. The supplier fee is
+buyer pays 1,000.00 + 5.00 + 4.00 + 50.00 = 1,059.00 USDC. The supplier fee is
 not added to that buyer total: it is deducted from the supplier's 600.00 USDC
 gross first tranche, leaving 595.00 USDC. Stage 1 therefore allocates 595.00 to
-the supplier and 69.00 to treasury (10.00 buyer fee + 4.00 support fee + 5.00
+the supplier and 64.00 to treasury (5.00 buyer fee + 4.00 support fee + 5.00
 supplier fee + 50.00 logistics). The remaining 400.00 stays protected for final
 settlement.
 
-Agroasys is the authoritative calculator for the 1%, USD 4, 0.5%, and 60/40
+Agroasys is the authoritative calculator for the 0.5%, USD 4, 0.5%, and 60/40
 commercial policy. The escrow contract independently rejects a trade unless the
 component sum and those exact launch proportions are both correct. This second
 check prevents a malformed or compromised upstream instruction from silently
@@ -93,7 +97,7 @@ the trade is still `LOCKED`; fees become claimable only when Stage 1 is validly
 released.
 
 The launch percentages and fee proportions are contract-enforced policy, not a
-runtime configuration switch. Changing the 60/40 split, the 1% buyer fee, the
+runtime configuration switch. Changing the 60/40 split, the 0.5% buyer fee, the
 0.5% supplier deduction, or the USD 4 support fee requires a coordinated
 Agroasys calculation change, Cotsel contract release, SDK/gateway compatibility
 update, migration or versioning plan for in-flight trades, and a new set of
@@ -174,3 +178,12 @@ If the preferred authorization path is temporarily unavailable, the fallback is
 operational: pause gasless checkout for the affected chain, surface a failed
 payment state, and let support restart the checkout with a fresh quote after the
 incident is cleared. Do not silently switch users back to residual allowances.
+
+## Testnet creation script
+
+`sdk/scripts/create-base-sepolia-trades.mjs` requires `--payload-file` (or
+`BUYER_LOCK_PAYLOAD_FILE`) containing the backend-issued `BuyerLockPayload`.
+Serialize each base-unit amount as a decimal string. The supplier must match
+`--supplier-address`. Amount-only flags and environment values are rejected.
+The script preserves the backend amounts and Ricardian hash; it does not
+calculate percentage fees or generate substitute legal evidence.

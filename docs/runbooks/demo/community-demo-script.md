@@ -15,9 +15,9 @@ All values are illustrative for the demo session:
 | Field                   | Demo Value    |
 | ----------------------- | ------------- |
 | Supplier goods value    | 1,000 USDC    |
-| `totalAmount`           | 1,064 USDC    |
+| `totalAmount`           | 1,059 USDC    |
 | `logisticsAmount`       | 50 USDC       |
-| `platformFeesAmount`    | 19 USDC       |
+| `platformFeesAmount`    | 14 USDC       |
 | `supplierFirstTranche`  | 595 USDC      |
 | `supplierSecondTranche` | 400 USDC      |
 | `tradeId`               | 0             |
@@ -86,10 +86,10 @@ Show the SDK usage pattern:
 // (6 decimals)
 const tradeParams = {
   supplier: 'supplier-address',
-  totalAmount: parseUSDC('1064'),
+  totalAmount: parseUSDC('1059'),
   logisticsAmount: parseUSDC('50'),
-  // Buyer fee 10 + fixed support fee 4 + supplier fee 5
-  platformFeesAmount: parseUSDC('19'),
+  // Buyer fee 5 + fixed support fee 4 + supplier fee 5
+  platformFeesAmount: parseUSDC('14'),
   // Gross first tranche 600 less supplier fee 5
   supplierFirstTranche: parseUSDC('595'),
   supplierSecondTranche: parseUSDC('400'),
@@ -150,13 +150,13 @@ Pre-approval checklist (narrate each item):
 **Show audience events emitted:**
 
 - `FundsReleasedStage1(tradeId, supplier, 595 USDC, treasury, 50 USDC)`
-- `PlatformFeesPaidStage1(tradeId, treasury, 19 USDC)`
+- `PlatformFeesPaidStage1(tradeId, treasury, 14 USDC)`
 
 **Show audience state:**
 
 - Trade status: `IN_TRANSIT`
 - Supplier received: 595 USDC (60% gross less the 0.5% full-order supplier fee)
-- Treasury claimable: 69 USDC (50 logistics + 10 buyer fee + 4 support + 5 supplier fee)
+- Treasury claimable: 64 USDC (50 logistics + 5 buyer fee + 4 support + 5 supplier fee)
 - Escrow still protects: 400 USDC (the remaining 40% supplier principal)
 
 ## Act 5 — Goods Available For Inspection

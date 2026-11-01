@@ -36,14 +36,14 @@ export function registerInspectionTests(getHarness: () => AgroasysEscrowHarness)
     let tradeId: bigint;
 
     beforeEach(async function () {
-      const totalAmount = ethers.parseUnits('106004', 6);
+      const totalAmount = ethers.parseUnits('105504', 6);
       const ricardianHash = ethers.id('trade-hash');
 
       await createTradeWithAuthorizationForTest(
         supplier.address,
         totalAmount,
         ethers.parseUnits('5000', 6),
-        ethers.parseUnits('1504', 6),
+        ethers.parseUnits('1004', 6),
         ethers.parseUnits('59500', 6),
         ethers.parseUnits('40000', 6),
         ricardianHash,
@@ -184,9 +184,9 @@ export function registerInspectionTests(getHarness: () => AgroasysEscrowHarness)
       await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
       await createTradeWithAuthorizationForTest(
         supplier.address,
-        ethers.parseUnits('106004', 6),
+        ethers.parseUnits('105504', 6),
         ethers.parseUnits('5000', 6),
-        ethers.parseUnits('1504', 6),
+        ethers.parseUnits('1004', 6),
         ethers.parseUnits('59500', 6),
         ethers.parseUnits('40000', 6),
         ethers.id('second-trade-hash'),
