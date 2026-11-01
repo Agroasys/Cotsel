@@ -11,7 +11,13 @@ import { RunLease, createLeaseOwner } from './runLease';
 import { RunAlerts } from './runAlerts';
 import { dispatchPendingAlerts } from './alertDispatch';
 import { publishRunOutcome, resolveContainmentDecisions, sweepAbandonedRuns } from './runControls';
-import { generateRunKey, getErrorMessage, mapWithConcurrency, sleep } from './runHelpers';
+import {
+  generateRunKey,
+  getErrorMessage,
+  mapWithConcurrency,
+  sleep,
+  logReconciliationCompleted,
+} from './runHelpers';
 import {
   batchTradeIds,
   checkIndexerSurplus,
@@ -30,7 +36,12 @@ import {
 } from './coverage';
 import { DEFAULT_SEVERITY_COUNTS, finalizeInconclusiveRun, skippedStats } from './runOutcome';
 import { DriftFinding, ReconcileMode, RunStats } from '../types';
-import { detectDuplicateIndexerTradeIds } from './duplicateCoverage';
+import { prepareEnumeration, enumerateIndexer, verifyCycleBoundary } from './enumeration';
+import {
+  publishEnumerationPage,
+  priorCycleHasHoldingFindings,
+  aggregateCycleEvidence,
+} from '../database/enumerationCycles';
 
 export class ReconciliationService {
   private readonly onchainClient = new OnchainClient();
@@ -97,13 +108,8 @@ export class ReconciliationService {
     try {
       const cursor = await readCoverageCursor();
 
-      // The indexer only reports its current projection, so the one height both
-      // sides can describe is the block it has processed. Anchor every chain
-      // read in this run to that block. Without a checkpoint there is nothing to
-      // anchor to, so the run stops here rather than resolving a boundary: a
-      // substituted finality block is a real block number, and the end-of-run
-      // snapshot check would accept it whenever the final height read happens to
-      // land on the same height.
+      // Both sources must describe the indexer's observed height. Missing
+      // checkpoints are incomplete evidence; never substitute a finality head.
       const anchor = evaluateIndexerAnchor(await this.indexerClient.fetchProcessedBlock());
       if (!anchor.usable) {
         return finalizeInconclusiveRun({
@@ -129,8 +135,9 @@ export class ReconciliationService {
         );
       }
 
+      const discovery = await prepareEnumeration(this.indexerClient, boundary, cursor.lastTradeId);
       const window = planCoverageWindow({
-        cursor: cursor.lastTradeId,
+        cursor: discovery.chainCursor,
         chainTradeCounter: boundary.chainTradeCounter,
         budget: config.maxTradesPerRun,
       });
@@ -146,10 +153,6 @@ export class ReconciliationService {
       });
 
       const windowIds = tradeIdsInWindow(window);
-      // Any finding that proves a range has not been reconciled — a projection
-      // gap, an indexer surplus, or an inconclusive chain read — holds the
-      // cursor. A transient RPC failure must never retire the ids it could not
-      // check.
       let coverageHold = 0;
       // Findings are buffered rather than written as they are found: the run
       // cannot know its comparisons were valid until it has re-read the
@@ -240,17 +243,10 @@ export class ReconciliationService {
         }
       }
 
-      // Independent indexer-side enumeration. Walking the indexer's own id set
-      // catches a record the chain never allocated directly, rather than by a
-      const enumeration = await this.indexerClient.fetchTradeIds(
-        config.indexerEnumerationLimit,
-        config.indexerEnumerationPageSize,
-      );
+      const enumeration = await enumerateIndexer(this.indexerClient, discovery.cycle);
       if (enumeration.truncated) {
-        // Ids beyond the bound were never checked, so the indexer-only
-        // direction is unproven over the rest of the range. The hold below
-        // keeps them in scope for the next run instead of retiring them behind
-        // a run that claims a complete sweep.
+        // Discovery resumes from its persisted physical key after publication.
+        // Financial coverage remains incomplete until the cycle is exhausted.
         Logger.error('Indexer id enumeration reached its bound before completing', {
           runKey,
           limit: config.indexerEnumerationLimit,
@@ -260,7 +256,7 @@ export class ReconciliationService {
       const enumerationInput = { indexerTradeIds: enumeration.tradeIds, boundary };
       for (const finding of [
         ...detectIndexerOnlyTradeIds(enumerationInput),
-        ...detectDuplicateIndexerTradeIds(enumerationInput),
+        ...enumeration.duplicates,
       ]) {
         if (finding.mismatchCode !== 'INDEXER_DUPLICATE_TRADE') stats.totalTrades += 1;
         pendingScope.push(finding.tradeId);
@@ -282,10 +278,6 @@ export class ReconciliationService {
         record(surplus);
       }
 
-      // Every indexer read for this run is now done. If the projection moved
-      // while they ran, the batches, the enumeration and the count each saw a
-      // different height than the chain reads were anchored to, and any
-      // difference between them is an artefact. Publish nothing and hold.
       const snapshot = evaluateIndexerSnapshot({
         anchorBlock: boundary.indexerProcessedBlock,
         endBlock: await this.indexerClient.fetchProcessedBlock(),
@@ -305,6 +297,7 @@ export class ReconciliationService {
         });
       }
 
+      await verifyCycleBoundary(this.onchainClient, boundary);
       const now = new Date();
       const tailFirstSeenAt = window.uncoveredTail === 0n ? null : (cursor.tailFirstSeenAt ?? now);
       const sla = evaluateCoverageSla({
@@ -314,11 +307,8 @@ export class ReconciliationService {
         maxAgeMs: config.coverageMaxAgeMs,
       });
 
-      // A gap parks the cursor: advancing past an unreconciled range would
-      // retire the evidence and let the next run report clean. Otherwise a run
-      // that reached the counter resets to a fresh epoch (cursor 0) so existing
-      // trades are swept again — without the reset, once the cursor reaches the
-      // counter every later run plans an empty window forever.
+      // Financial gaps hold the chain cursor while independent discovery can
+      // continue. A completed cycle starts the next validation epoch at zero.
       const hold = evaluateCursorHold({
         holdingFindingCount: coverageHold,
         enumerationTruncated: enumeration.truncated,
@@ -327,14 +317,24 @@ export class ReconciliationService {
       const nextCursor = planNextCursor({
         window,
         cursorHeld,
-        previousCursor: cursor.lastTradeId,
+        previousCursor: discovery.chainCursor,
       });
       const sweepReset = !cursorHeld && window.complete;
 
-      const coverageComplete = isCoverageComplete({
-        windowComplete: window.complete && !cursorHeld,
-        enumerationTruncated: enumeration.truncated,
-      });
+      const cumulativeWalked = Number(discovery.cycle.walked) + enumeration.tradeIds.length;
+      const coherent =
+        discovery.coherent && indexerTradeCount === Number(discovery.cycle.expected_count);
+      const cycleFinished =
+        enumeration.page.exhausted && ((window.complete && !cursorHeld) || !coherent);
+      const priorHold = await priorCycleHasHoldingFindings(discovery.cycle.id);
+      const coverageComplete =
+        coherent &&
+        !priorHold &&
+        cumulativeWalked === indexerTradeCount &&
+        isCoverageComplete({
+          windowComplete: window.complete && !cursorHeld,
+          enumerationTruncated: enumeration.truncated,
+        });
 
       stats.coverage = {
         boundary,
@@ -346,7 +346,10 @@ export class ReconciliationService {
         nextCursor,
         sweepReset,
         indexerEnumerationTruncated: enumeration.truncated,
-        indexerEnumerationWalked: enumeration.tradeIds.length,
+        indexerEnumerationWalked: cumulativeWalked,
+        enumerationCycleId: discovery.cycle.id,
+        indexerSourceCoherent: coherent,
+        indexerEnumerationExpected: Number(discovery.cycle.expected_count),
         complete: coverageComplete,
         indexerProcessedBlock: boundary.indexerProcessedBlock,
       };
@@ -361,17 +364,22 @@ export class ReconciliationService {
         boundaryBlock: boundary.blockNumber,
       });
 
-      // Everything this run has to say lands in one fenced transaction: the
-      // findings, the trade scope, the containments they open, the alerts they
-      // owe, the run's own accounting, and the cursor move. A worker displaced
-      // after its last batch publishes none of it — previously the fence sat
-      // only in front of the cursor, so stale evidence and a stale containment
-      // could already be committed by the time the run was refused.
       await finalizeRun({
         stats,
         lease,
-        publish: (client) =>
-          publishRunOutcome(
+        publish: async (client) => {
+          await publishEnumerationPage(
+            {
+              cycle: discovery.cycle,
+              page: enumeration.page,
+              coherent,
+              finished: cycleFinished,
+              nextChainCursor: cursorHeld ? discovery.chainCursor : window.nextCursor,
+              runId: row.id,
+            },
+            client,
+          );
+          await publishRunOutcome(
             {
               runId: row.id,
               runKey,
@@ -384,7 +392,18 @@ export class ReconciliationService {
               ...containment,
             },
             client,
-          ),
+          );
+          if (cycleFinished) {
+            await aggregateCycleEvidence(
+              { cycleId: discovery.cycle.id, runId: row.id, runKey, stats },
+              client,
+            );
+            if (stats.coverage && coherent) {
+              stats.coverage.window = { ...window, fromTradeId: 0n };
+              stats.coverage.fromBlock = 0;
+            }
+          }
+        },
         cursor: cursorHeld
           ? { advance: false, tailFirstSeenAt }
           : {
@@ -404,27 +423,7 @@ export class ReconciliationService {
         });
       }
 
-      Logger.info('Reconciliation run completed', {
-        runKey,
-        mode,
-        totalTrades: stats.totalTrades,
-        driftCount: stats.driftCount,
-        critical: stats.severityCounts.CRITICAL,
-        high: stats.severityCounts.HIGH,
-        coveredFromTradeId: window.fromTradeId.toString(),
-        coveredToTradeId: window.toTradeId.toString(),
-        blockInterval: `${cursor.boundaryBlockNumber}..${boundary.blockNumber}`,
-        nextCursor: nextCursor.toString(),
-        uncoveredTail: window.uncoveredTail.toString(),
-        coverageComplete,
-        windowComplete: window.complete,
-        indexerEnumerationTruncated: enumeration.truncated,
-        indexerEnumerationWalked: enumeration.tradeIds.length,
-        indexerProcessedBlock: boundary.indexerProcessedBlock,
-        cursorAdvanced: !cursorHeld,
-        sweepReset,
-        slaBreached: sla.breached,
-      });
+      logReconciliationCompleted(stats);
 
       return stats;
     } catch (error: unknown) {

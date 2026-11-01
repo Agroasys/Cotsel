@@ -127,6 +127,9 @@ export interface RunStats {
     indexerEnumerationTruncated: boolean;
     /** How many indexer ids the enumeration actually walked. */
     indexerEnumerationWalked: number;
+    enumerationCycleId?: string;
+    indexerSourceCoherent?: boolean;
+    indexerEnumerationExpected?: number;
     /**
      * Window swept *and* indexer enumeration exhausted. A truncated walk leaves
      * the indexer-only direction unproven beyond the bound, so it is not a

@@ -43,6 +43,13 @@
       "file": "006_completed_evidence.sql",
       "sha256": "da79ca952c4fd79adc89f8a880af170352e6d8ac4541d12d1b37eb23d9b486c6",
       "schema_sha256": "d2a9e62e09ac7ba6ee27fef65f6dc1b2404f6471ed5fe11da6b9abd0f7e68138"
+    },
+    {
+      "version": "202611010002",
+      "name": "enumeration_cycles",
+      "file": "007_enumeration_cycles.sql",
+      "sha256": "22254eaa77851b56e4eae91174aa07bc2e4dbc5eb3814393a499552ac5631864",
+      "schema_sha256": "9e5b848c4e9bb2b88f84f109a2617e859053fd23048171c1a33c4aead1128ca0"
     }
   ]
 }

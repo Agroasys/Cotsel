@@ -67,9 +67,15 @@ test(
           indexerAhead: false,
         }));
         t.mock.method(IndexerClient.prototype, 'fetchProcessedBlock', async () => 4242);
-        t.mock.method(IndexerClient.prototype, 'fetchTradeIds', async () => ({
-          tradeIds: ['0', '0', '2'],
-          truncated: false,
+        t.mock.method(IndexerClient.prototype, 'fetchTradeIdUpperBound', async () => 'c');
+        t.mock.method(IndexerClient.prototype, 'fetchTradeIdsPage', async () => ({
+          records: [
+            { id: 'a', tradeId: '0' },
+            { id: 'b', tradeId: '0' },
+            { id: 'c', tradeId: '2' },
+          ],
+          nextId: 'c',
+          exhausted: true,
         }));
         t.mock.method(IndexerClient.prototype, 'fetchTradeCount', async () => 3);
         const { ReconciliationService } = await import('../core/reconciler');
