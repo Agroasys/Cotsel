@@ -5,8 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@babel/core@<=7.29.0': 7.29.6
   '@graphql-tools/utils@<12.0.4': 12.0.4
+  '@babel/core@<=7.29.0': 7.29.6
   '@humanfs/node': 0.16.8
   '@protobufjs/utf8': 1.1.1
   adm-zip: 0.6.1
@@ -29,16 +29,16 @@ overrides:
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
   lodash: 4.18.1
   pbkdf2@<=3.1.6: 3.1.7
-  proxy-addr@<2.0.8: 2.0.8
   qs: 6.16.1
+  proxy-addr@<2.0.8: 2.0.8
   serialize-javascript: 7.1.3
   socket.io-parser: 4.2.7
   tmp: 0.2.7
   undici@<7: 6.29.1
   uuid@<11.1.1: 11.1.1
+  zod@>=4 <4.6.6: 4.6.6
   ws@>=7 <7.5.11: 7.5.11
   ws@>=8 <8.20.1: 8.21.0
-  zod@>=4 <4.6.6: 4.6.6
 
 pnpmfileChecksum: sha256-BhxFwSptmovUgoqsKcWJ2d1iP0uNM098rsXQIS5OaDQ=
 
@@ -52,6 +52,12 @@ patchedDependencies:
   braces@3.0.3:
     hash: 7e75ade1e27447432f36cda3fe73db74ce0d4b84cc2a3ae904b2710807dd8130
     path: patches/braces@3.0.3.patch
+  deepmerge@4.3.1:
+    hash: 75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281
+    path: patches/deepmerge@4.3.1.patch
+  elliptic@6.6.1:
+    hash: 2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a
+    path: patches/elliptic@6.6.1.patch
   glob@10.5.0:
     hash: aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3
     path: patches/glob@10.5.0.patch
@@ -11755,7 +11761,7 @@ snapshots:
       '@ethersproject/logger': 5.8.0
       '@ethersproject/properties': 5.8.0
       bn.js: 4.12.3
-      elliptic: 6.6.1
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       hash.js: 1.1.7
 
   '@ethersproject/strings@5.8.0':
@@ -13282,7 +13288,7 @@ snapshots:
       '@toruslabs/torus.js': 16.0.0(@babel/runtime@7.28.6)(@sentry/core@9.47.1)
       base64url: 3.0.1
       bowser: 2.14.1
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       events: 3.3.0
       loglevel: 1.9.2
     optionalDependencies:
@@ -13294,7 +13300,7 @@ snapshots:
 
   '@toruslabs/eccrypto@6.2.0':
     dependencies:
-      elliptic: 6.6.1
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
 
   '@toruslabs/ethereum-controllers@8.17.1(@babel/runtime@7.28.6)(@sentry/core@9.47.1)(bufferutil@4.1.0)(color@5.0.3)(typescript@6.0.3)(utf-8-validate@6.0.6)(viem@2.57.4(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@6.0.6)(zod@4.6.6))(zod@4.6.6)':
     dependencies:
@@ -13310,7 +13316,7 @@ snapshots:
       async-mutex: 0.5.0
       bignumber.js: 9.3.1
       bn.js: 4.12.3
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       ethereum-cryptography: 3.2.0
       ethers: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       fast-json-patch: 3.1.1
@@ -13349,7 +13355,7 @@ snapshots:
   '@toruslabs/http-helpers@8.1.1(@babel/runtime@7.28.6)(@sentry/core@9.47.1)':
     dependencies:
       '@babel/runtime': 7.28.6
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       loglevel: 1.9.2
     optionalDependencies:
       '@sentry/core': 9.47.1
@@ -13365,7 +13371,7 @@ snapshots:
       '@babel/runtime': 7.28.6
       '@toruslabs/eccrypto': 6.2.0
       '@toruslabs/http-helpers': 8.1.1(@babel/runtime@7.28.6)(@sentry/core@9.47.1)
-      elliptic: 6.6.1
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       ethereum-cryptography: 3.2.0
       json-stable-stringify: 1.3.0
     transitivePeerDependencies:
@@ -13404,7 +13410,7 @@ snapshots:
       assert: 2.1.0
       bip39: 3.1.0
       bn.js: 4.12.3
-      elliptic: 6.6.1
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       enc-utils: 3.0.0
       ethereum-cryptography: 3.2.0
       hash.js: 1.1.7
@@ -13417,7 +13423,7 @@ snapshots:
       '@toruslabs/eccrypto': 6.2.0
       '@toruslabs/http-helpers': 8.1.1(@babel/runtime@7.28.6)(@sentry/core@9.47.1)
       bn.js: 4.12.3
-      elliptic: 6.6.1
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       ethereum-cryptography: 3.2.0
       json-stable-stringify: 1.3.0
       loglevel: 1.9.2
@@ -14087,7 +14093,7 @@ snapshots:
       bip39: 3.1.0
       bn.js: 4.12.3
       color: 5.0.3
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       enc-utils: 3.0.0
       end-of-stream: 1.4.5
       events: 3.3.0
@@ -14121,7 +14127,7 @@ snapshots:
       clsx: 2.1.1
       color: 5.0.3
       copy-to-clipboard: 3.3.3
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       i18next: 25.8.12(typescript@6.0.3)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
@@ -14188,7 +14194,7 @@ snapshots:
       bignumber.js: 9.3.1
       bn.js: 4.12.3
       bowser: 2.14.1
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       ethers: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       json-rpc-random-id: 1.0.1
       jsonschema: 1.5.0
@@ -14238,7 +14244,7 @@ snapshots:
       '@toruslabs/constants': 15.0.0(@babel/runtime@7.28.6)
       '@toruslabs/http-helpers': 8.1.1(@babel/runtime@7.28.6)(@sentry/core@9.47.1)
       '@web3auth/auth': 10.8.0(@babel/runtime@7.28.6)(@sentry/core@9.47.1)(bufferutil@4.1.0)(color@5.0.3)(utf-8-validate@6.0.6)
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       fast-deep-equal: 3.1.3
       loglevel: 1.9.2
       pump: 3.0.4
@@ -15049,7 +15055,7 @@ snapshots:
 
   deep-is@0.1.4: {}
 
-  deepmerge@4.3.1: {}
+  deepmerge@4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281): {}
 
   define-data-property@1.1.4:
     dependencies:
@@ -15122,7 +15128,7 @@ snapshots:
 
   electron-to-chromium@1.5.420: {}
 
-  elliptic@6.6.1:
+  elliptic@6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a):
     dependencies:
       bn.js: 4.12.3
       brorand: 1.1.0
@@ -16390,7 +16396,7 @@ snapshots:
       babel-jest: 30.5.2(@babel/core@7.29.6)
       chalk: 4.1.2
       ci-info: 4.4.0
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       glob: 13.0.6(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
       graceful-fs: 4.2.11
       jest-circus: 30.5.2
@@ -17644,7 +17650,7 @@ snapshots:
     dependencies:
       bn.js: 4.12.3
       brorand: 1.1.0
-      elliptic: 6.6.1
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       hash.js: 1.1.7
       ripple-address-codec: 4.3.1
 
@@ -17730,7 +17736,7 @@ snapshots:
 
   secp256k1@4.0.4:
     dependencies:
-      elliptic: 6.6.1
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       node-addon-api: 5.1.0
       node-gyp-build: 4.8.4
 
@@ -18113,7 +18119,7 @@ snapshots:
       bindings: 1.5.0
       bn.js: 4.12.3
       create-hmac: 1.1.7
-      elliptic: 6.6.1
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       nan: 2.26.2
 
   tinyexec@1.3.1: {}
