@@ -60,6 +60,7 @@ test(
               ['202609120001', 'run_leases'],
               ['202610150004', 'financial_coverage_evidence'],
               ['202610220001', 'notification_outbox'],
+              ['202611010001', 'completed_evidence'],
             ],
           );
         });
@@ -98,9 +99,11 @@ test(
             pool,
           );
 
-          // Even with the lease long gone, a completed window must not be
-          // redone under the same key and republished.
-          await expireLease(pool, 'daemon-1');
+          // Completion releases the lease and freezes the recorded evidence.
+          await assert.rejects(
+            expireLease(pool, 'daemon-1'),
+            /reconcile_published_evidence_is_immutable/,
+          );
           const second = await claim(pool, 'worker-b');
 
           assert.equal(second.claimed, false);
