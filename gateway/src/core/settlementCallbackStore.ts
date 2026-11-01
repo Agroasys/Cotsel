@@ -3,13 +3,20 @@
  */
 import type { Pool } from 'pg';
 import type { SettlementCallbackDeliveryRecord, SettlementStore } from './settlementStoreTypes';
+import { GatewayError } from '../errors';
+import {
+  DISPLAY_AMOUNT_SPEC,
+  jsonSettlementAmountInput,
+  parseSettlementAmount,
+  readTopLevelJsonNumberLexemes,
+} from './settlementAmount';
 
 export interface SettlementCallbackDeliveryRow {
   deliveryId: string;
   handoffId: string;
   eventId: string;
   targetUrl: string;
-  requestBody: Record<string, unknown>;
+  requestBody: string | Record<string, unknown>;
   status: 'pending' | 'delivering' | 'delivered' | 'failed' | 'dead_letter' | 'disabled';
   attemptCount: number;
   nextAttemptAt: Date;
@@ -32,7 +39,7 @@ export function mapSettlementCallbackDeliveryRow(
     handoffId: row.handoffId,
     eventId: row.eventId,
     targetUrl: row.targetUrl,
-    requestBody: row.requestBody || {},
+    requestBody: parseStoredCallbackBody(row.requestBody),
     status: row.status,
     attemptCount: row.attemptCount,
     nextAttemptAt: row.nextAttemptAt.toISOString(),
@@ -46,6 +53,32 @@ export function mapSettlementCallbackDeliveryRow(
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+function parseStoredCallbackBody(
+  value: SettlementCallbackDeliveryRow['requestBody'],
+): Record<string, unknown> {
+  try {
+    const body: unknown = typeof value === 'string' ? JSON.parse(value) : value;
+    if (!body || typeof body !== 'object' || Array.isArray(body))
+      throw new Error('Invalid callback body');
+    const payload = body as Record<string, unknown>;
+    if (Object.prototype.hasOwnProperty.call(payload, 'displayAmount')) {
+      const amount =
+        typeof value === 'string'
+          ? jsonSettlementAmountInput(
+              payload.displayAmount,
+              readTopLevelJsonNumberLexemes(Buffer.from(value)),
+              'displayAmount',
+              DISPLAY_AMOUNT_SPEC,
+            )
+          : payload.displayAmount;
+      parseSettlementAmount(amount, 'displayAmount', DISPLAY_AMOUNT_SPEC);
+    }
+    return payload;
+  } catch {
+    throw new GatewayError(500, 'INTERNAL_ERROR', 'Stored settlement callback amount is invalid');
+  }
 }
 
 type SettlementCallbackStore = Pick<
@@ -63,7 +96,7 @@ const deliveryProjection = `
   handoff_id AS "handoffId",
   event_id AS "eventId",
   target_url AS "targetUrl",
-  request_body AS "requestBody",
+  request_body::text AS "requestBody",
   status,
   attempt_count AS "attemptCount",
   next_attempt_at AS "nextAttemptAt",
