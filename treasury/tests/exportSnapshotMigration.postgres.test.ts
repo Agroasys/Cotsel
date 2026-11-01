@@ -281,6 +281,7 @@ describePostgres('treasury export snapshot migration', () => {
           }
           return result;
         },
+        verifyPublicationContext: async () => {},
         verifySnapshotContext: async () => {
           if (mutateBeforePublish) {
             mutateBeforePublish = false;

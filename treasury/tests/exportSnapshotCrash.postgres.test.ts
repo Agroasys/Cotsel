@@ -185,7 +185,8 @@ describePostgres('treasury export crash recovery', () => {
             for (const e of entries) { context.reconciliationByTradeId.set(e.trade_id, { runKey: 'run-1', freshness: 'FRESH', coverageComplete: true, coverageToBlock: 110 }); result.set(e.id, { entryId: e.id, canonicalityState: 'ORPHANED', eligibleForExport: false, eligibleForPayout: false, blockedReasons: ['orphaned'] }); }
             return result;
           },
-          verifySnapshotContext: async () => {},
+          verifyPublicationContext: async () => {},
+        verifySnapshotContext: async () => {},
         };
         new ExportSnapshotBuilder(undefined, fake).build(process.env.TEST_JOB, 6000)
           .then(() => process.exit(0)).catch(() => process.exit(1));
@@ -262,6 +263,7 @@ describePostgres('treasury export crash recovery', () => {
           }
           return verdicts;
         },
+        verifyPublicationContext: async () => {},
         verifySnapshotContext: async () => {},
       } as unknown as TreasuryEligibilityService;
       const { ExportSnapshotBuilder } = await import('../src/core/exportSnapshotBuilder');

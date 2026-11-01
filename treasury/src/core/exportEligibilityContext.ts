@@ -1,6 +1,23 @@
 /** SPDX-License-Identifier: Apache-2.0 */
+import type { PoolClient } from 'pg';
+import type { SnapshotRunSelection } from './reconciliationSnapshot';
 import type { IngestionFreshnessAssessment } from './ingestionFreshness';
 import type { ReconciliationRunAnchor, TradeReconciliationGate } from './reconciliationGate';
+
+export interface ReconciliationGateReader {
+  assessTrades(
+    tradeIds: string[],
+    selection?: SnapshotRunSelection,
+  ): Promise<Map<string, TradeReconciliationGate>>;
+  snapshotRunAnchor?(selection?: SnapshotRunSelection): Promise<ReconciliationRunAnchor>;
+}
+
+export interface IngestionFreshnessReader {
+  assess(options?: {
+    stableBlockNumber?: number | null;
+    executor?: PoolClient;
+  }): Promise<IngestionFreshnessAssessment>;
+}
 
 export interface SettlementHeadProvider {
   getBlock(
@@ -15,10 +32,11 @@ export interface SnapshotEligibilityContext {
     finalizedBlockNumber: number;
   };
   finalizedBlockHash: string;
+  chainVerifiedAt?: Date;
   ingestion: IngestionFreshnessAssessment;
   reconciliationRunKey: string | null;
   reconciliationByTradeId: Map<string, TradeReconciliationGate>;
-  emptyRunAnchor?: ReconciliationRunAnchor;
+  reconciliationRunAnchor?: ReconciliationRunAnchor;
 }
 
 function stableEvidence(value: unknown): unknown {
@@ -59,8 +77,11 @@ export async function verifySnapshotEvidence(input: {
     assess(options: { stableBlockNumber: number }): Promise<IngestionFreshnessAssessment>;
   };
   reconciliation: {
-    assessTrades(tradeIds: string[]): Promise<Map<string, TradeReconciliationGate>>;
-    snapshotRunAnchor?(): Promise<ReconciliationRunAnchor>;
+    assessTrades(
+      tradeIds: string[],
+      selection?: SnapshotRunSelection,
+    ): Promise<Map<string, TradeReconciliationGate>>;
+    snapshotRunAnchor?(selection?: SnapshotRunSelection): Promise<ReconciliationRunAnchor>;
   };
 }): Promise<void> {
   const { context, provider } = input;
@@ -81,6 +102,7 @@ export async function verifySnapshotEvidence(input: {
   ) {
     throw new Error('Finalized chain anchor changed or is unavailable');
   }
+  context.chainVerifiedAt = new Date();
   if (
     ingestion.status !== 'FRESH' ||
     ingestion.blockedReasons.length > 0 ||
@@ -88,13 +110,16 @@ export async function verifySnapshotEvidence(input: {
   ) {
     throw new Error('Ingestion evidence changed or became stale');
   }
-  if (context.emptyRunAnchor) {
+  if (context.reconciliationRunAnchor) {
     if (!input.reconciliation.snapshotRunAnchor)
       throw new Error('Reconciliation evidence is unavailable or incomplete');
-    const current = await input.reconciliation.snapshotRunAnchor();
+    const current = await input.reconciliation.snapshotRunAnchor({
+      runKey: context.reconciliationRunKey,
+      requireImmutable: true,
+    });
     if (
       JSON.stringify(stableEvidence(current)) !==
-      JSON.stringify(stableEvidence(context.emptyRunAnchor))
+      JSON.stringify(stableEvidence(context.reconciliationRunAnchor))
     ) {
       throw new Error('Reconciliation evidence changed or became unavailable');
     }
@@ -102,7 +127,10 @@ export async function verifySnapshotEvidence(input: {
   const tradeIds = [...context.reconciliationByTradeId.keys()];
   for (let offset = 0; offset < tradeIds.length; offset += 1000) {
     const batch = tradeIds.slice(offset, offset + 1000);
-    const current = await input.reconciliation.assessTrades(batch);
+    const current = await input.reconciliation.assessTrades(batch, {
+      runKey: context.reconciliationRunKey,
+      requireImmutable: true,
+    });
     for (const tradeId of batch) {
       const original = context.reconciliationByTradeId.get(tradeId);
       const observed = current.get(tradeId);
@@ -192,4 +220,45 @@ export async function createEligibilitySnapshotContext(
     reconciliationRunKey: null,
     reconciliationByTradeId: new Map(),
   };
+}
+
+/** SQL-only final check after local source locks. Never performs an RPC call. */
+export async function verifyPublicationEvidence(
+  context: SnapshotEligibilityContext,
+  client: PoolClient,
+  ingestionReader: {
+    assess(options: {
+      stableBlockNumber: number;
+      executor?: PoolClient;
+    }): Promise<IngestionFreshnessAssessment>;
+  },
+  reconciliation: {
+    snapshotRunAnchor?(selection?: SnapshotRunSelection): Promise<ReconciliationRunAnchor>;
+  },
+): Promise<void> {
+  if (!context.reconciliationRunAnchor || !reconciliation.snapshotRunAnchor)
+    throw new Error('Reconciliation evidence is unavailable or incomplete');
+  const [ingestion, anchor] = await Promise.all([
+    ingestionReader.assess({
+      stableBlockNumber: context.heads.finalizedBlockNumber,
+      executor: client,
+    }),
+    reconciliation.snapshotRunAnchor({
+      runKey: context.reconciliationRunKey ?? undefined,
+      requireImmutable: true,
+    }),
+  ]);
+  if (ingestion.status !== 'FRESH' || !sameIngestionEvidence(context.ingestion, ingestion))
+    throw new Error('Ingestion evidence changed or became stale');
+  if (!context.chainVerifiedAt || Date.now() - context.chainVerifiedAt.getTime() > 30_000)
+    throw new Error('Finalized chain verification expired before publication');
+  if (!sameReconciliationGateAnchor(context.reconciliationRunAnchor, anchor))
+    throw new Error('Reconciliation evidence changed or became unavailable');
+}
+
+function sameReconciliationGateAnchor(
+  a: ReconciliationRunAnchor,
+  b: ReconciliationRunAnchor,
+): boolean {
+  return JSON.stringify(stableEvidence(a)) === JSON.stringify(stableEvidence(b));
 }

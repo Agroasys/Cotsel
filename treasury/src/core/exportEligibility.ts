@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg';
 import {
   isTreasuryConfirmationStage,
   resolveSettlementConfirmationStage,
@@ -5,20 +6,13 @@ import {
 } from '@agroasys/sdk';
 import { PayoutState, TreasuryEntryEligibility } from '../types';
 import type { LedgerEntryForExport } from '../database/queries/ledger';
-import {
-  ReconciliationGateService,
-  type ReconciliationRunAnchor,
-  type TradeReconciliationGate,
-} from './reconciliationGate';
+import { ReconciliationGateService, type TradeReconciliationGate } from './reconciliationGate';
 import {
   ChainCanonicalityVerifier,
   type ChainCanonicalityState,
   type ChainCanonicalityVerdict,
 } from './chainCanonicality';
-import {
-  TreasuryIngestionFreshnessService,
-  type IngestionFreshnessAssessment,
-} from './ingestionFreshness';
+import { TreasuryIngestionFreshnessService } from './ingestionFreshness';
 import { canTransition } from './payout';
 import { createSettlementProvider } from './settlementProvider';
 import {
@@ -33,8 +27,11 @@ import {
   createEligibilitySnapshotContext,
   sameReconciliationGate,
   verifySnapshotEvidence,
+  verifyPublicationEvidence,
   type SettlementHeadProvider,
   type SnapshotEligibilityContext,
+  type ReconciliationGateReader,
+  type IngestionFreshnessReader,
 } from './exportEligibilityContext';
 
 const EXPORTABLE_STATES: ReadonlySet<PayoutState> = new Set([
@@ -44,15 +41,6 @@ const EXPORTABLE_STATES: ReadonlySet<PayoutState> = new Set([
 ]);
 
 const REVOCATION_ACTOR = 'system:chain-canonicality';
-
-interface ReconciliationGateReader {
-  assessTrades(tradeIds: string[]): Promise<Map<string, TradeReconciliationGate>>;
-  snapshotRunAnchor?(): Promise<ReconciliationRunAnchor>;
-}
-
-interface IngestionFreshnessReader {
-  assess(options?: { stableBlockNumber?: number | null }): Promise<IngestionFreshnessAssessment>;
-}
 
 interface BankConfirmationReader {
   getLatestConfirmation(
@@ -190,7 +178,9 @@ export class TreasuryEligibilityService {
   }
 
   async createSnapshotContext(): Promise<SnapshotEligibilityContext> {
-    return createEligibilitySnapshotContext(this.provider, this.ingestionFreshness);
+    const context = await createEligibilitySnapshotContext(this.provider, this.ingestionFreshness);
+    await this.establishSnapshotRunAnchor(context);
+    return context;
   }
 
   async verifySnapshotContext(context: SnapshotEligibilityContext): Promise<void> {
@@ -202,12 +192,26 @@ export class TreasuryEligibilityService {
     });
   }
 
-  async establishEmptySnapshotContext(context: SnapshotEligibilityContext): Promise<void> {
+  async establishSnapshotRunAnchor(context: SnapshotEligibilityContext): Promise<void> {
     if (!this.reconciliationGate.snapshotRunAnchor)
       throw new Error('Reconciliation evidence is unavailable or incomplete');
-    const anchor = await this.reconciliationGate.snapshotRunAnchor();
+    const anchor = await this.reconciliationGate.snapshotRunAnchor({ requireImmutable: true });
+    if (anchor.evidenceVersion !== 1)
+      throw new Error('Reconciliation evidence is unavailable or incomplete');
     context.reconciliationRunKey = anchor.runKey;
-    context.emptyRunAnchor = anchor;
+    context.reconciliationRunAnchor = anchor;
+  }
+
+  async verifyPublicationContext(
+    context: SnapshotEligibilityContext,
+    client: PoolClient,
+  ): Promise<void> {
+    await verifyPublicationEvidence(
+      context,
+      client,
+      this.ingestionFreshness,
+      this.reconciliationGate,
+    );
   }
 
   /**
@@ -391,6 +395,9 @@ export class TreasuryEligibilityService {
 
     const reconciliationByTradeId = await this.reconciliationGate.assessTrades(
       entries.map((entry) => entry.trade_id),
+      context
+        ? { runKey: context.reconciliationRunKey ?? undefined, requireImmutable: true }
+        : undefined,
     );
 
     if (context) {

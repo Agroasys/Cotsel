@@ -14,6 +14,7 @@ const LEASE_SECONDS = 300;
 const FAILURE_CODES: Record<string, string> = {
   'Captured ledger sources changed': 'SOURCE_CHANGED',
   'Finalized chain anchor changed or is unavailable': 'CHAIN_ANCHOR_CHANGED',
+  'Finalized chain verification expired before publication': 'CHAIN_ANCHOR_EXPIRED',
   'Finalized chain anchor is unavailable': 'CHAIN_ANCHOR_UNAVAILABLE',
   'Canonical chain evidence is unavailable': 'CANONICALITY_UNAVAILABLE',
   'Reconciliation evidence changed or became unavailable': 'RECONCILIATION_CHANGED',
@@ -88,7 +89,7 @@ export class ExportSnapshotBuilder {
         position = Number(page.rows[page.rows.length - 1].position) + 1;
       }
       if (!context.reconciliationRunKey) {
-        await this.eligibility.establishEmptySnapshotContext(context);
+        await this.eligibility.establishSnapshotRunAnchor(context);
         await this.eligibility.verifySnapshotContext(context);
       }
       position = 0;
@@ -117,10 +118,13 @@ export class ExportSnapshotBuilder {
         await this.eligibility.verifySnapshotContext(context);
         position = Number(evidence.rows[evidence.rows.length - 1].position) + 1;
       }
+      await this.eligibility.verifySnapshotContext(context);
       await this.renew(jobId, owner);
       const client = await this.db.connect();
       try {
         await client.query('BEGIN');
+        await client.query("SET LOCAL lock_timeout = '5s'");
+        await client.query("SET LOCAL statement_timeout = '30s'");
         const locked = await client.query(
           `SELECT id FROM treasury_export_jobs WHERE id=$1 AND status='BUILDING' AND attempt=$2
            AND lease_owner=$3 AND lease_expires_at > clock_timestamp() FOR UPDATE`,
@@ -129,6 +133,7 @@ export class ExportSnapshotBuilder {
         if (locked.rowCount !== 1) throw new Error('Export build lease was lost');
         if (!(await capturedSourcesMatch(client, jobId, job.attempt, job.cutoff)))
           throw new Error('Captured ledger sources changed');
+        await this.eligibility.verifyPublicationContext(context, client);
         const completed = await client.query(
           `UPDATE treasury_export_jobs SET status='COMPLETE', completed_at=clock_timestamp(), lease_owner=NULL,
            lease_expires_at=NULL, chain_context=$3::jsonb, reconciliation_context=$4::jsonb,
@@ -137,10 +142,14 @@ export class ExportSnapshotBuilder {
           [
             jobId,
             owner,
-            JSON.stringify({ ...context.heads, finalizedBlockHash: context.finalizedBlockHash }),
+            JSON.stringify({
+              ...context.heads,
+              finalizedBlockHash: context.finalizedBlockHash,
+              verifiedAt: context.chainVerifiedAt ?? null,
+            }),
             JSON.stringify({
               runKey: context.reconciliationRunKey,
-              emptyRunAnchor: context.emptyRunAnchor ?? null,
+              reconciliationRunAnchor: context.reconciliationRunAnchor ?? null,
             }),
             JSON.stringify(context.ingestion),
           ],

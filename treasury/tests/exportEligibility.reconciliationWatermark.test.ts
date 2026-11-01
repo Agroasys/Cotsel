@@ -9,7 +9,10 @@ process.env.INDEXER_GRAPHQL_URL =
 
 import { LedgerEntryWithState } from '../src/types';
 import { TreasuryEligibilityService } from '../src/core/exportEligibility';
-import type { TradeReconciliationGate } from '../src/core/reconciliationGate';
+import type {
+  ReconciliationRunAnchor,
+  TradeReconciliationGate,
+} from '../src/core/reconciliationGate';
 import {
   alwaysCanonicalVerifier,
   recordingCanonicalityWriter,
@@ -21,6 +24,7 @@ import { freshIngestion } from './helpers/ingestionFreshness';
 
 function gateWith(overrides: Partial<TradeReconciliationGate>): {
   assessTrades: () => Promise<Map<string, TradeReconciliationGate>>;
+  snapshotRunAnchor: () => Promise<ReconciliationRunAnchor>;
 } {
   const gate: TradeReconciliationGate = {
     tradeId: 'trade-1',
@@ -37,7 +41,18 @@ function gateWith(overrides: Partial<TradeReconciliationGate>): {
     ...overrides,
   };
 
-  return { assessTrades: async () => new Map([['trade-1', gate]]) };
+  return {
+    assessTrades: async () => new Map([['trade-1', gate]]),
+    snapshotRunAnchor: async () => ({
+      runKey: 'run-1',
+      completedAt: new Date('2026-03-31T00:05:00.000Z'),
+      coverageFromBlock: 0,
+      coverageToBlock: 1_000_000,
+      coverageComplete: true,
+      staleRunningRunCount: 0,
+      evidenceVersion: 1,
+    }),
+  };
 }
 
 function makeEntry(): LedgerEntryWithState {
@@ -105,7 +120,7 @@ describe('TreasuryEligibilityService reconciliation watermark', () => {
       ingestionFreshness: freshIngestion(),
       canonicalityVerifier: alwaysCanonicalVerifier(),
       canonicalityWriter: recordingCanonicalityWriter().writer,
-      reconciliationGate: { assessTrades },
+      reconciliationGate: { ...gateWith({}), assessTrades },
     });
     const context = await service.createSnapshotContext();
     expect(context.finalizedBlockHash).toBe(`0x${'ab'.repeat(32)}`);

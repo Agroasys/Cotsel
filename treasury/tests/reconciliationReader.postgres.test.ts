@@ -44,10 +44,13 @@ describePostgres('reconciliation reader row security', () => {
       );
       const run =
         await db.query(`INSERT INTO reconcile_runs (run_key, mode, status, completed_at, coverage_from_block, coverage_to_block, coverage_complete)
-        VALUES ('run-1', 'ONCE', 'COMPLETED', NOW() AT TIME ZONE 'UTC', 0, 110, true) RETURNING id`);
+        VALUES ('run-1', 'ONCE', 'RUNNING', NULL, 0, 110, true) RETURNING id`);
       await db.query(
         "INSERT INTO reconcile_run_trades (run_id, run_key, trade_id) VALUES ($1, 'run-1', 'trade-1')",
         [run.rows[0].id],
+      );
+      await db.query(
+        "UPDATE reconcile_runs SET status='COMPLETED', completed_at=NOW() AT TIME ZONE 'UTC' WHERE run_key='run-1'",
       );
       noContext = new Pool({
         host: connection.host,
@@ -78,10 +81,16 @@ describePostgres('reconciliation reader row security', () => {
         coverageToBlock: 110,
         coverageComplete: true,
       });
-      expect(await service.snapshotRunAnchor()).toMatchObject({
+      expect(await service.snapshotRunAnchor({ requireImmutable: true })).toMatchObject({
+        evidenceVersion: 1,
         runKey: 'run-1',
         coverageToBlock: 110,
       });
+      expect(
+        (await service.assessTrades(['trade-1'], { runKey: 'run-1', requireImmutable: true })).get(
+          'trade-1',
+        )?.status,
+      ).toBe('CLEAR');
       await expect(
         noContext.query("UPDATE reconcile_runs SET status='FAILED' WHERE run_key='run-1'"),
       ).rejects.toThrow(/permission denied/);

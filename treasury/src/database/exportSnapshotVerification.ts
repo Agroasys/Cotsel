@@ -12,7 +12,7 @@ export async function capturedSourcesMatch(
   cutoff: Date,
 ): Promise<boolean> {
   await client.query(
-    'LOCK TABLE treasury_ledger_entries, payout_lifecycle_events, bank_payout_confirmations IN SHARE MODE',
+    'LOCK TABLE treasury_ledger_entries, payout_lifecycle_events, bank_payout_confirmations, treasury_ingestion_state IN SHARE MODE',
   );
   const result = await client.query<{ mismatches: string }>(
     `WITH captured AS (

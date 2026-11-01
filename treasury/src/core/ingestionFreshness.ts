@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg';
 /**
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -72,12 +73,15 @@ export class TreasuryIngestionFreshnessService {
 
   async assess(options?: {
     stableBlockNumber?: number | null;
+    executor?: PoolClient;
   }): Promise<IngestionFreshnessAssessment> {
     const stableBlockNumber = options?.stableBlockNumber ?? null;
     let states: IngestionCursorState[];
 
     try {
-      states = await this.reader.listStates(INGESTION_CURSORS);
+      states = options?.executor
+        ? await listIngestionCursorStates(INGESTION_CURSORS, options.executor)
+        : await this.reader.listStates(INGESTION_CURSORS);
     } catch {
       // The store that holds the answer is unreachable, so the honest verdict
       // is that freshness is unknown -- and unknown blocks, like every other

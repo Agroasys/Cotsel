@@ -14,6 +14,7 @@ export function snapshotReconciliationFixture(): {
     coverageToBlock: 110,
     coverageComplete: true,
     staleRunningRunCount: 0,
+    evidenceVersion: 1,
   };
   return {
     snapshotRunAnchor: async () => anchor,

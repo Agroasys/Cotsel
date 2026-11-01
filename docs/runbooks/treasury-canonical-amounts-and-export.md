@@ -89,6 +89,23 @@ compatibility change before promotion.
 The legacy endpoint reads its count and rows separately. Use the snapshot
 workflow when the report requires stable row identity and retained evidence.
 
+## Publication evidence
+
+Snapshots require reconciliation migration `006_completed_evidence.sql` and a fresh published run with `export_evidence_version=1`.
+Existing completed runs are not certified by that migration. Missing or disabled publication guards fail construction.
+The builder pins one immutable run identity across all assessment and verification batches.
+New reconciliation runs do not change that retained historical evidence. Live financial actions continue to select current evidence.
+
+The final Treasury transaction locks ledger, payout, bank confirmation, and ingestion cursor sources.
+After obtaining those locks, the builder rechecks ingestion evidence and reconciliation freshness with the dedicated reader.
+No RPC call occurs inside the publication transaction. Lock waits are limited to five seconds.
+Each statement is limited to thirty seconds. The last finalized-anchor verification must be at most thirty seconds old.
+A failed check leaves a visible failed job. Retry captures a fresh source snapshot under the same idempotency record.
+
+The recorded chain context includes the finalized number, hash, and last verification timestamp.
+This is historical evidence at the recorded observation. A database transaction cannot prevent a later external chain reorganization.
+Consumer compatibility review, staging evidence, and independent acceptance remain required before promotion.
+
 ## Retention and cleanup
 
 Completed jobs and their rows are retained. The runtime role has no delete grant
@@ -169,9 +186,12 @@ node --test shared-db/schema-fingerprint.manifests.postgres.test.js
 
 ## Residual risk
 
-The export's eligibility filter still evaluates the RPC head and the
-reconciliation gate per page, so two pages of one export can disagree about a
-row's eligibility if the chain head advances between them. The cutoff bounds
-which rows are _candidates_, not how they were judged. Consumers that need a
-single eligibility verdict across a whole export should compare
-`exportedRowCount` totals against a repeat run at the same cutoff.
+A completed `/exports` job retains captured rows, eligibility decisions, and evidence contexts.
+Continuation reads those retained records without reassessing eligibility. The cutoff bounds the candidate rows.
+It does not freeze live financial state or authorize a later payout, sweep, or close.
+
+The legacy `/export` endpoint reads candidate totals and rows separately. It refuses reports that require continuation.
+Matching totals or repeat-run counts cannot prove identical rows or eligibility decisions.
+Use `/exports` when the report requires retained row identity and eligibility evidence.
+
+Independent evidence custody and consumer migration remain release gates. Local snapshot checks do not establish deployed or external acceptance.

@@ -2,6 +2,10 @@ import { Pool } from 'pg';
 import { resolvePostgresSslConfig } from '@agroasys/shared-db';
 import { config } from '../config';
 import { ReconciliationGateStatus } from '../types';
+import {
+  requireReconciliationSnapshotProtocol,
+  type SnapshotRunSelection,
+} from './reconciliationSnapshot';
 
 export interface TradeReconciliationGate {
   tradeId: string;
@@ -31,6 +35,7 @@ export interface ReconciliationRunAnchor {
   coverageToBlock: number;
   coverageComplete: true;
   staleRunningRunCount: number;
+  evidenceVersion?: 1;
 }
 
 export interface ReconciliationControlSummary {
@@ -155,15 +160,22 @@ export class ReconciliationGateService {
   }
 
   /** Evidence for an empty export, which has no trade on which to hang a gate. */
-  async snapshotRunAnchor(): Promise<ReconciliationRunAnchor> {
+  async snapshotRunAnchor(selection?: SnapshotRunSelection): Promise<ReconciliationRunAnchor> {
     if (!this.pool) throw new Error('Reconciliation evidence is unavailable or incomplete');
-    return this.consistentRead((reader) => this.readSnapshotRunAnchor(reader));
+    return this.consistentRead((reader) => this.readSnapshotRunAnchor(reader, selection));
   }
 
-  private async readSnapshotRunAnchor(reader: QueryReader): Promise<ReconciliationRunAnchor> {
+  private async readSnapshotRunAnchor(
+    reader: QueryReader,
+    selection?: SnapshotRunSelection,
+  ): Promise<ReconciliationRunAnchor> {
+    if (selection?.requireImmutable) await requireReconciliationSnapshotProtocol(reader);
     const latest = await reader.query<LatestCompletedRunRow>(
       `SELECT run_key, completed_at AT TIME ZONE 'UTC' AS completed_at, coverage_from_block, coverage_to_block, coverage_complete
-       FROM reconcile_runs WHERE status='COMPLETED' ORDER BY completed_at DESC, id DESC LIMIT 1`,
+       FROM reconcile_runs WHERE status='COMPLETED' AND ($1::text IS NULL OR run_key=$1)
+       ${selection?.requireImmutable ? 'AND export_evidence_version=1' : ''}
+       ORDER BY completed_at DESC, id DESC LIMIT 1`,
+      [selection?.runKey ?? null],
     );
     const staleCutoff = new Date(this.now().getTime() - this.maxRunningRunAgeSeconds * 1000);
     const running = await reader.query<CountRow>(
@@ -193,17 +205,24 @@ export class ReconciliationGateService {
       coverageToBlock,
       coverageComplete: true,
       staleRunningRunCount,
+      ...(selection?.requireImmutable ? { evidenceVersion: 1 as const } : {}),
     };
   }
 
-  async assessTrades(tradeIds: string[]): Promise<Map<string, TradeReconciliationGate>> {
+  async assessTrades(
+    tradeIds: string[],
+    selection?: SnapshotRunSelection,
+  ): Promise<Map<string, TradeReconciliationGate>> {
     if (!this.pool) return this.assessTradesFromReader(tradeIds, null);
-    return this.consistentRead((reader) => this.assessTradesFromReader(tradeIds, reader));
+    return this.consistentRead((reader) =>
+      this.assessTradesFromReader(tradeIds, reader, selection),
+    );
   }
 
   private async assessTradesFromReader(
     tradeIds: string[],
     reader: QueryReader | null,
+    selection?: SnapshotRunSelection,
   ): Promise<Map<string, TradeReconciliationGate>> {
     const uniqueTradeIds = [...new Set(tradeIds.filter((tradeId) => tradeId.trim().length > 0))];
     const result = new Map<string, TradeReconciliationGate>();
@@ -231,6 +250,7 @@ export class ReconciliationGateService {
       return result;
     }
 
+    if (selection?.requireImmutable) await requireReconciliationSnapshotProtocol(reader);
     const latestRun = await reader.query<LatestCompletedRunRow>(
       `SELECT run_key
               , completed_at AT TIME ZONE 'UTC' AS completed_at
@@ -238,9 +258,11 @@ export class ReconciliationGateService {
               , coverage_to_block
               , coverage_complete
        FROM reconcile_runs
-       WHERE status = 'COMPLETED'
+       WHERE status = 'COMPLETED' AND ($1::text IS NULL OR run_key=$1)
+         ${selection?.requireImmutable ? 'AND export_evidence_version=1' : ''}
        ORDER BY completed_at DESC, id DESC
        LIMIT 1`,
+      [selection?.runKey ?? null],
     );
     const staleRunningCutoff = new Date(this.now().getTime() - this.maxRunningRunAgeSeconds * 1000);
     const staleRunningRuns = await reader.query<CountRow>(
