@@ -3,6 +3,8 @@ import express, { Router } from 'express';
 import { createServer, type Server } from 'http';
 import type { Pool } from 'pg';
 import { createPostgresNonceStore } from '@agroasys/shared-auth';
+import { createHttpRateLimiter } from '@agroasys/shared-edge';
+import { gatewayRateLimitPolicy } from '../../src/httpSecurity';
 import { createApp } from '../../src/app';
 import { createPostgresIdempotencyStore } from '../../src/core/idempotencyStore';
 import {
@@ -37,6 +39,13 @@ export async function settlementAmountHttpFixture(pool: Pool) {
     query: (sql, values) => pool.query(sql, values),
   });
   const receiver = express();
+  const limiter = await createHttpRateLimiter({
+    enabled: true,
+    nodeEnv: 'test',
+    keyPrefix: 'amount-callback-fixture',
+    classifyRoute: gatewayRateLimitPolicy,
+  });
+  receiver.use(limiter.middleware);
   receiver.use(
     express.json({
       verify: (req, _res, body) => {
@@ -44,25 +53,22 @@ export async function settlementAmountHttpFixture(pool: Pool) {
       },
     }),
   );
-  receiver.post(
-    '/callbacks',
-    createServiceAuthMiddleware({
-      enabled: true,
-      maxSkewSeconds: 300,
-      nonceTtlSeconds: 600,
-      lookupApiKey: createServiceApiKeyLookup(
-        JSON.stringify([{ id: 'callback-key', secret: 'callback-secret', active: true }]),
-      ),
-      consumeNonce: nonceStore.consume,
-    }),
-    (req, res) => {
-      receipts.push({
-        body: req.body as Record<string, unknown>,
-        rawBody: req.rawBody!.toString('utf8'),
-      });
-      res.status(202).end();
-    },
-  );
+  const callbackAuth = createServiceAuthMiddleware({
+    enabled: true,
+    maxSkewSeconds: 300,
+    nonceTtlSeconds: 600,
+    lookupApiKey: createServiceApiKeyLookup(
+      JSON.stringify([{ id: 'callback-key', secret: 'callback-secret', active: true }]),
+    ),
+    consumeNonce: nonceStore.consume,
+  });
+  receiver.post('/callbacks', callbackAuth, (req, res) => {
+    receipts.push({
+      body: req.body as Record<string, unknown>,
+      rawBody: req.rawBody!.toString('utf8'),
+    });
+    res.status(202).end();
+  });
   const receiverServer = createServer(receiver);
   let gatewayServer: Server | undefined;
   async function close() {
@@ -72,6 +78,7 @@ export async function settlementAmountHttpFixture(pool: Pool) {
           server.close((error) => (error ? reject(error) : resolve())),
         );
     }
+    await limiter.close();
   }
   try {
     const callbackOrigin = await listen(receiverServer);
