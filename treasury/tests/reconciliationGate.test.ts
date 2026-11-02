@@ -33,6 +33,62 @@ function createPoolMock(
 }
 
 describe('ReconciliationGateService', () => {
+  test('reads a fresh reconciliation anchor for an export with no trades', async () => {
+    const pool = createPoolMock({
+      "status='COMPLETED'": () => ({
+        rows: [
+          {
+            run_key: 'run-1',
+            completed_at: new Date('2026-03-31T00:10:00Z'),
+            coverage_from_block: '0',
+            coverage_to_block: '110',
+            coverage_complete: true,
+          },
+        ],
+      }),
+      "status='RUNNING'": () => ({ rows: [{ count: '0' }] }),
+    });
+    const service = new ReconciliationGateService({
+      pool,
+      now: () => new Date('2026-03-31T00:15:00Z'),
+    });
+    expect(await service.snapshotRunAnchor()).toMatchObject({
+      runKey: 'run-1',
+      coverageToBlock: 110,
+      coverageComplete: true,
+    });
+  });
+
+  test('refuses a reconciliation run with a future completion timestamp', async () => {
+    const pool = createPoolMock({
+      "WHERE status = 'COMPLETED'": () => ({
+        rows: [
+          {
+            run_key: 'run-1',
+            completed_at: new Date('2026-03-31T00:30:00Z'),
+            coverage_from_block: 0,
+            coverage_to_block: 110,
+            coverage_complete: true,
+          },
+        ],
+      }),
+      "WHERE status = 'RUNNING'": () => ({ rows: [{ count: '0' }] }),
+      'FROM reconcile_run_trades': () => ({ rows: [{ trade_id: 'trade-1' }] }),
+      'FROM reconcile_drifts': () => ({ rows: [] }),
+    });
+    const gate = (
+      await new ReconciliationGateService({
+        pool,
+        now: () => new Date('2026-03-31T00:15:00Z'),
+      }).assessTrades(['trade-1'])
+    ).get('trade-1');
+    expect(gate?.status).toBe('BLOCKED');
+    expect(gate?.freshness).toBe('STALE');
+    expect(gate?.blockedReasons).toContain(
+      'Latest completed reconciliation run has a future completion timestamp',
+    );
+  });
+
   test('blocks trades when no completed reconciliation run exists', async () => {
     const pool = createPoolMock({
       "WHERE status = 'COMPLETED'": () => ({ rows: [] }),

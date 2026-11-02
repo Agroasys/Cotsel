@@ -48,6 +48,17 @@ function loadConfigModule(): typeof import('../src/config') {
 }
 
 describe('treasury nonce store config', () => {
+  test.each(['5000', '1e5', '6000x', '1000001'])('rejects invalid export job limit %s', (limit) => {
+    withEnv({ TREASURY_EXPORT_MAX_ROWS: limit }, () => {
+      expect(() => loadConfigModule()).toThrow('TREASURY_EXPORT_MAX_ROWS');
+    });
+  });
+
+  test('accepts a bounded export job limit greater than 5000', () => {
+    withEnv({ TREASURY_EXPORT_MAX_ROWS: '5001' }, () => {
+      expect(loadConfigModule().loadConfig().exportMaxRows).toBe(5001);
+    });
+  });
   test('production refuses to start without a named delegating caller', () => {
     withEnv({ NODE_ENV: 'production', TREASURY_OPERATOR_DELEGATION_API_KEYS: undefined }, () => {
       expect(() => loadConfigModule()).toThrow(

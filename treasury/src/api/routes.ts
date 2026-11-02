@@ -190,6 +190,22 @@ export function createRouter(
     controller.getSweepBatchTrace.bind(controller),
   );
   router.get('/export', ...protectedMiddlewares, controller.exportEntries.bind(controller));
+  let exportsController: Promise<import('./exportSnapshots').ExportSnapshotsController> | undefined;
+  const snapshotHandler =
+    (method: 'create' | 'status' | 'entries'): RequestHandler =>
+    async (req, res, next) => {
+      try {
+        exportsController ??= import('./exportSnapshots').then(
+          ({ ExportSnapshotsController }) => new ExportSnapshotsController(),
+        );
+        await (await exportsController)[method](req, res);
+      } catch (error) {
+        next(error);
+      }
+    };
+  router.post('/exports', ...protectedMiddlewares, snapshotHandler('create'));
+  router.get('/exports/:id', ...protectedMiddlewares, snapshotHandler('status'));
+  router.get('/exports/:id/entries', ...protectedMiddlewares, snapshotHandler('entries'));
   router.post(
     '/internal/ingest',
     ...internalMutationMiddlewares,

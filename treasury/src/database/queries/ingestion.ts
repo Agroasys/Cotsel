@@ -1,3 +1,4 @@
+import type { Pool, PoolClient } from 'pg';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -106,8 +107,9 @@ type IngestionCursorStateRow = {
 
 export async function listIngestionCursorStates(
   cursorNames: string[],
+  executor: Pick<Pool | PoolClient, 'query'> = pool,
 ): Promise<IngestionCursorState[]> {
-  const result = await pool.query<IngestionCursorStateRow>(
+  const result = await executor.query<IngestionCursorStateRow>(
     `SELECT cursor_name,
             next_block_number,
             last_ingested_through_block_number,

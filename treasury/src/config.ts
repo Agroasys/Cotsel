@@ -26,6 +26,7 @@ export interface TreasuryConfig {
   indexerGraphqlRequestTimeoutMs: number;
   ingestBatchSize: number;
   ingestMaxEvents: number;
+  exportMaxRows: number;
   ingestionWorkerEnabled: boolean;
   ingestionIntervalMs: number;
   ingestionMaxAgeSeconds: number;
@@ -215,6 +216,16 @@ export function loadConfig(): TreasuryConfig {
     ? envNumber('NONCE_TTL_SECONDS')
     : authNonceTtlSeconds;
   const indexerGraphqlRequestTimeoutMs = envNumber('INDEXER_GQL_TIMEOUT_MS', 10000);
+  const rawExportMaxRows = process.env.TREASURY_EXPORT_MAX_ROWS || '100000';
+  assert(
+    /^[1-9][0-9]*$/.test(rawExportMaxRows),
+    'TREASURY_EXPORT_MAX_ROWS must be a canonical positive integer',
+  );
+  const exportMaxRows = Number(rawExportMaxRows);
+  assert(
+    Number.isSafeInteger(exportMaxRows) && exportMaxRows > 5000 && exportMaxRows <= 1000000,
+    'TREASURY_EXPORT_MAX_ROWS must be between 5001 and 1000000',
+  );
   // The worker is the only thing that advances chain evidence on a schedule, so
   // turning it off in production would reinstate exactly the silent-stall this
   // control removes: freshness would decay, and export would fail closed
@@ -312,6 +323,7 @@ export function loadConfig(): TreasuryConfig {
     indexerGraphqlRequestTimeoutMs,
     ingestBatchSize: envNumber('TREASURY_INGEST_BATCH_SIZE', 100),
     ingestMaxEvents: envNumber('TREASURY_INGEST_MAX_EVENTS', 2000),
+    exportMaxRows,
     ingestionWorkerEnabled,
     ingestionIntervalMs: envNumber('TREASURY_INGEST_INTERVAL_MS', 60000),
     ingestionMaxAgeSeconds: envNumber('TREASURY_INGEST_MAX_AGE_SECONDS', 900),

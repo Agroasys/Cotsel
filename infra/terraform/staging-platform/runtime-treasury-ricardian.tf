@@ -103,6 +103,7 @@ locals {
       { name = "TREASURY_INGEST_INTERVAL_MS", value = "60000" },
       { name = "TREASURY_INGEST_MAX_AGE_SECONDS", value = "900" },
       { name = "TREASURY_INGEST_MAX_EVENTS", value = "2000" },
+      { name = "TREASURY_EXPORT_MAX_ROWS", value = "100000" },
       { name = "TREASURY_INGEST_MAX_LAG_BLOCKS", value = "300" },
       # WP-4 H-16 and PRES-05. Treasury's operator traffic arrives from the
       # dashboard gateway under its own service key, so that one caller may name

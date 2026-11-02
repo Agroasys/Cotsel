@@ -155,6 +155,15 @@ describe('treasury router auth scope', () => {
     expect(response.status).toBe(401);
   });
 
+  test.each([
+    ['POST', '/exports'],
+    ['GET', '/exports/8f8b1320-e081-4887-8c3b-87497d39c483'],
+    ['GET', '/exports/8f8b1320-e081-4887-8c3b-87497d39c483/entries'],
+  ])('snapshot route %s %s rejects unauthenticated requests', async (method, route) => {
+    const response = await fetch(`${baseUrl}/api/treasury/v1${route}`, { method });
+    expect(response.status).toBe(401);
+  });
+
   test('authenticated read route succeeds', async () => {
     const response = await fetch(`${baseUrl}/api/treasury/v1/entries`, {
       headers: {
