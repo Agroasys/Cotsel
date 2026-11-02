@@ -134,7 +134,9 @@ describe('treasury read service', () => {
   test('returns a degraded snapshot when the chain read is unavailable', async () => {
     const governanceReader: GovernanceMutationPreflightReader = {
       checkReadiness: jest.fn(),
-      getGovernanceStatus: jest.fn().mockRejectedValue(new Error('chain rpc unavailable')),
+      getGovernanceStatus: jest
+        .fn()
+        .mockRejectedValue(new Error('RPC https://provider.example/key-secret failed')),
       getUnpauseProposalState: jest.fn(),
       getOracleProposalState: jest.fn(),
       getTreasuryPayoutReceiverProposalState: jest.fn(),
@@ -157,7 +159,8 @@ describe('treasury read service', () => {
       sourceFreshAt: null,
       queriedAt: '2026-03-14T11:00:00.000Z',
       available: false,
-      degradedReason: 'chain rpc unavailable',
+      degradedReason: 'Treasury source is unavailable',
     });
+    expect(JSON.stringify(snapshot)).not.toMatch(/provider\.example|key-secret/u);
   });
 });

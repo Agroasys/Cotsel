@@ -74,8 +74,8 @@ function maxTimestamp(values: Array<string | null | undefined>): string | null {
 }
 
 function degradedReason(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
+  if (error instanceof GatewayError && error.details?.reason === 'ricardian_tenant_unresolved') {
+    return 'Ricardian document owner is unresolved for this trade';
   }
 
   return fallback;
