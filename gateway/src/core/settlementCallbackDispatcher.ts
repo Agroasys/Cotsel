@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomUUID } from 'crypto';
+import { GatewayError } from '../errors';
 import { GatewayConfig } from '../config/env';
 import { Logger } from '../logging/logger';
 import { SettlementStore } from './settlementStore';
@@ -32,6 +33,8 @@ export class SettlementCallbackDispatcher {
   private readonly leaseDurationMs: number;
   private timer: NodeJS.Timeout | null = null;
   private running = false;
+  private consecutivePollFailures = 0;
+  private pollStallReported = false;
 
   constructor(
     private readonly config: GatewayConfig,
@@ -51,10 +54,25 @@ export class SettlementCallbackDispatcher {
     }
 
     const poll = () => {
-      void this.processDueDeliveries().catch(() => {
+      void this.processDueDeliveries().catch((error: unknown) => {
+        this.consecutivePollFailures = Math.min(this.consecutivePollFailures + 1, 3);
+        const identity = error instanceof GatewayError ? error.details : undefined;
+        const metadata = {
+          ...(typeof identity?.deliveryId === 'string' ? { deliveryId: identity.deliveryId } : {}),
+          ...(typeof identity?.handoffId === 'string' ? { handoffId: identity.handoffId } : {}),
+          consecutiveFailureCount: this.consecutivePollFailures,
+        };
         Logger.error('Settlement callback polling failed', {
           errorCode: 'SETTLEMENT_CALLBACK_POLL_FAILED',
+          ...metadata,
         });
+        if (this.consecutivePollFailures === 3 && !this.pollStallReported) {
+          this.pollStallReported = true;
+          Logger.error('Settlement callback polling stalled', {
+            errorCode: 'SETTLEMENT_CALLBACK_POLL_STALLED',
+            ...metadata,
+          });
+        }
       });
     };
     this.timer = setInterval(poll, this.config.settlementCallbackPollIntervalMs);
@@ -78,6 +96,8 @@ export class SettlementCallbackDispatcher {
     this.running = true;
     try {
       const due = await this.store.getDueCallbackDeliveries(limit, this.now().toISOString());
+      this.consecutivePollFailures = 0;
+      this.pollStallReported = false;
       for (const delivery of due) {
         await this.processDelivery(delivery.deliveryId);
       }

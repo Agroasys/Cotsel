@@ -233,6 +233,10 @@ describePostgres('settlement amounts through PostgreSQL', () => {
       await expect(dispatcher.processDueDeliveries()).rejects.toMatchObject({
         statusCode: 500,
         code: 'INTERNAL_ERROR',
+        details: {
+          deliveryId: queued.callbackDelivery.deliveryId,
+          handoffId: payload.data.handoffId,
+        },
       });
       expect(http.receipts).toHaveLength(before);
       const state = await db.runtime.query(

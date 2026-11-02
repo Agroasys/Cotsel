@@ -39,7 +39,7 @@ export function mapSettlementCallbackDeliveryRow(
     handoffId: row.handoffId,
     eventId: row.eventId,
     targetUrl: row.targetUrl,
-    requestBody: parseStoredCallbackBody(row.requestBody),
+    requestBody: parseStoredCallbackBody(row.requestBody, row),
     status: row.status,
     attemptCount: row.attemptCount,
     nextAttemptAt: row.nextAttemptAt.toISOString(),
@@ -57,6 +57,7 @@ export function mapSettlementCallbackDeliveryRow(
 
 function parseStoredCallbackBody(
   value: SettlementCallbackDeliveryRow['requestBody'],
+  identity: Pick<SettlementCallbackDeliveryRow, 'deliveryId' | 'handoffId'>,
 ): Record<string, unknown> {
   try {
     const body: unknown = typeof value === 'string' ? JSON.parse(value) : value;
@@ -77,7 +78,10 @@ function parseStoredCallbackBody(
     }
     return payload;
   } catch {
-    throw new GatewayError(500, 'INTERNAL_ERROR', 'Stored settlement callback amount is invalid');
+    throw new GatewayError(500, 'INTERNAL_ERROR', 'Stored settlement callback amount is invalid', {
+      deliveryId: identity.deliveryId,
+      handoffId: identity.handoffId,
+    });
   }
 }
 

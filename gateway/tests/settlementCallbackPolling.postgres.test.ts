@@ -82,7 +82,7 @@ describePostgres('scheduled callback failure containment', () => {
           stderr += data.toString();
           if (
             !verificationSent &&
-            (stderr.match(/Settlement callback polling failed/g) ?? []).length >= 2
+            (stderr.match(/Settlement callback polling failed/g) ?? []).length >= 4
           ) {
             verificationSent = true;
             child.send('verify-health');
@@ -101,8 +101,23 @@ describePostgres('scheduled callback failure containment', () => {
       expect(result.stdout).toContain('POLL_PROCESS_SURVIVED');
       expect(
         (result.stderr.match(/Settlement callback polling failed/g) ?? []).length,
-      ).toBeGreaterThanOrEqual(2);
+      ).toBeGreaterThanOrEqual(4);
       expect(result.stderr).not.toContain('9999999999999.9901');
+      expect(result.stderr).toContain(queued.callbackDelivery.deliveryId);
+      expect(result.stderr).toContain(handoff.handoffId);
+      const records = result.stderr
+        .split('\n')
+        .filter((line) => line.startsWith('{'))
+        .map((line) => JSON.parse(line));
+      const stalled = records.filter(
+        (record) => record.errorCode === 'SETTLEMENT_CALLBACK_POLL_STALLED',
+      );
+      expect(stalled).toHaveLength(1);
+      expect(stalled[0]).toMatchObject({
+        deliveryId: queued.callbackDelivery.deliveryId,
+        handoffId: handoff.handoffId,
+        consecutiveFailureCount: 3,
+      });
       const persisted = await db.runtime.query(
         'SELECT status, attempt_count, lease_owner FROM settlement_callback_deliveries WHERE delivery_id=$1',
         [queued.callbackDelivery.deliveryId],
