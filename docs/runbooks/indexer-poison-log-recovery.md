@@ -19,7 +19,7 @@ Three cases are treated as poison and are never skipped:
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `UNDECODABLE`     | `parseLog` threw or returned nothing for a log matching an escrow event topic. Usually ABI drift or a contract redeploy at the same address. |
 | `UNKNOWN_EVENT`   | The log decoded but no projection handler exists for the event. An event was added to the ABI without a handler.                             |
-| `HANDLER_FAILURE` | The projection handler threw.                                                                                                                |
+| `HANDLER_FAILURE` | The projection handler or atomic projection persistence threw. A `Batch persistence failed:` prefix identifies persistence containment.      |
 
 On any of them the indexer:
 
@@ -63,9 +63,19 @@ Record `blockNumber`, `txHash`, `logIndex`, `reason`, `eventName`, and
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `UNDECODABLE`     | Confirm `CONTRACT_ADDRESS` and the deployed codehash against the reviewed deployment report, regenerate `indexer/src/abi/AgroasysEscrow.json` from the deployed contract, and release a new indexer image. |
 | `UNKNOWN_EVENT`   | Add the projection handler for the event and release a new indexer image.                                                                                                                                  |
-| `HANDLER_FAILURE` | Fix the handler and release a new indexer image.                                                                                                                                                           |
+| `HANDLER_FAILURE` | Correct the handler or persistence cause. For `Batch persistence failed:`, review every quarantined log in the failed batch before resolving and replaying it.                                             |
 
 A correction is not complete until the new image is the one that will restart.
+
+For a missing trade or proposal, verify the parent event's canonical block and projection before releasing the hold.
+This requirement includes dispute, oracle update, and administrator change proposals.
+Check the deployment start block and the affected replay range.
+Restore the parent through a reviewed replay or data recovery procedure.
+Do not create placeholder parent records or resolve quarantine to bypass missing coverage.
+Replay the child event after its parent is available, then reconcile the resulting projection.
+
+An older image can silently skip missing parents.
+Keep the quarantine hold during rollback until a compatible image and replay procedure are approved.
 
 ### 3. Re-pin the contract identity (required outside local)
 
@@ -135,3 +145,16 @@ an idempotent upsert, so the same range reproduces the same projection.
 - `notifications.md` — alert routing for `INDEXER_POISON_LOG`
 - `monitoring-alerting-baseline.md`
 - `chain-event-parity-retirement.md`
+
+### Atomic projection persistence failures
+
+Only PostgreSQL data (`22xxx`) and constraint (`23xxx`) failures create persistence quarantine records.
+Connection loss, serialization failures, deadlocks, shutdowns, and unclassified failures preserve automatic Subsquid retries without quarantine or per-log pages.
+
+If a projection upsert fails, the indexer quarantines every matching escrow log in that batch.
+The reason remains `HANDLER_FAILURE`; the error starts with `Batch persistence failed:`.
+Each log uses the existing critical alert route. Independent writes retain evidence after the batch rolls back.
+A failed quarantine or alert write does not permit checkpoint advancement or cancel attempts for later logs.
+
+A batch without matching logs has no raw event to quarantine. Its persistence error still holds the checkpoint.
+This control covers projection upserts. It does not capture transaction commit failures after the handler returns.
