@@ -4,6 +4,7 @@ import type { Pool } from 'pg';
 import { pool as defaultPool } from '../database/connection';
 import { ExportSnapshotStore } from '../database/exportSnapshotStore';
 import {
+  captureQuiescentSourceGeneration,
   compareCapturedSourcesWithTimeout,
   readSourceGeneration,
 } from '../database/exportSnapshotVerification';
@@ -124,7 +125,7 @@ export class ExportSnapshotBuilder {
       }
       await this.eligibility.verifySnapshotContext(context);
       await this.renew(jobId, owner);
-      const generation = await readSourceGeneration(this.db);
+      const generation = await captureQuiescentSourceGeneration(this.db);
       if (!(await compareCapturedSourcesWithTimeout(this.db, jobId, job.attempt, job.cutoff)))
         throw new Error('Captured ledger sources changed');
       // Cross-database evidence verification never holds financial table locks.

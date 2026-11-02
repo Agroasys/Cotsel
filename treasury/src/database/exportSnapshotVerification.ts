@@ -68,3 +68,24 @@ export async function compareCapturedSourcesWithTimeout(
     client.release();
   }
 }
+
+/** Fence starts only after all earlier source writers have completed. */
+export async function captureQuiescentSourceGeneration(pool: Pool): Promise<string> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SET LOCAL statement_timeout='500ms'");
+    await client.query("SET LOCAL idle_in_transaction_session_timeout='500ms'");
+    await client.query(
+      'LOCK TABLE treasury_ledger_entries, payout_lifecycle_events, bank_payout_confirmations, treasury_ingestion_state IN SHARE MODE NOWAIT',
+    );
+    const generation = await readSourceGeneration(client);
+    await client.query('COMMIT');
+    return generation;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}

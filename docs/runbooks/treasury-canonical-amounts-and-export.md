@@ -96,7 +96,7 @@ Existing completed runs are not certified by that migration. Missing or disabled
 The builder pins one immutable run identity across all assessment and verification batches.
 New reconciliation runs do not change that retained historical evidence. Live financial actions continue to select current evidence.
 
-The full source comparison runs without financial write locks. The builder records nontransactional sequence fences before that comparison.
+The full source comparison runs without financial write locks. Before that comparison, the builder captures nontransactional sequence fences under brief source SHARE locks. It uses `NOWAIT`, so an in-flight source writer aborts the attempt.
 Every ledger, payout, bank-confirmation, and ingestion statement advances its fence. Rollbacks also advance the fence conservatively.
 Missing or disabled generation guards fail construction. The runtime can read these sequences but cannot reset them.
 

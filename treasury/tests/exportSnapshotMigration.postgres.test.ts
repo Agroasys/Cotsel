@@ -540,6 +540,22 @@ describePostgres('treasury export snapshot migration', () => {
     ).rejects.toThrow(/attempt_budget/);
   });
 
+  test('initial fence rejects a writer that has changed a source but not committed', async () => {
+    const { captureQuiescentSourceGeneration } =
+      await import('../src/database/exportSnapshotVerification');
+    const writer = await pool.connect();
+    try {
+      await writer.query('BEGIN');
+      await writer.query('UPDATE treasury_ingestion_state SET next_block_number=next_block_number');
+      await expect(captureQuiescentSourceGeneration(pool)).rejects.toThrow(/could not obtain lock/);
+      await writer.query('COMMIT');
+      await expect(captureQuiescentSourceGeneration(pool)).resolves.toEqual(expect.any(String));
+    } finally {
+      await writer.query('ROLLBACK');
+      writer.release();
+    }
+  });
+
   test('generation guards fail closed and runtime cannot reset the fence', async () => {
     const { readSourceGeneration } = await import('../src/database/exportSnapshotVerification');
     const first = await readSourceGeneration(runtime);
