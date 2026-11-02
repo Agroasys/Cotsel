@@ -43,10 +43,11 @@ Each run:
    - indexer holds more trades than the chain allocated → `INDEXER_SURPLUS_RECORDS` (critical)
 5. Runs an **independent indexer-side enumeration**: it walks the indexer's own id
    set (offset pagination over `id`) and reports any id the chain never allocated
-   (`> tradeCounter`, non-positive, or non-numeric) as `ONCHAIN_TRADE_MISSING`. This
+   (`>= tradeCounter`, negative, or non-numeric) as `ONCHAIN_TRADE_MISSING`. This
    proves the indexer-only direction directly — `fetchTradesByIds` can only echo ids
    from its own `tradeId_in` filter, and a raw count can hide a surplus id when a
-   separately-missing id cancels it out.
+   separately-missing id cancels it out. Repeated trade IDs produce a critical
+   `INDEXER_DUPLICATE_TRADE` finding, even if the total count matches the chain.
 6. Publishes complete-range accounting on the run row **and** moves the cursor in a
    single transaction. The cursor advances only if the window had no coverage gap
    and no inconclusive read; when a run reaches the counter it **resets to 0** to
@@ -83,7 +84,8 @@ LIMIT 5;
   **not** complete coverage and its cursor is held; raise the limit and re-run.
 - `coverage_complete = false` — the run was budget-bounded. This is normal
   throughput while `uncovered_tail` shrinks run over run; it is **not** a clean
-  sweep and must not be treated as one for close purposes.
+  sweep and must not be treated as one for close purposes. A held cursor also
+  reports incomplete coverage, even when the window reached the chain counter.
 - `next_cursor` is where the following run resumes.
 
 ## Runs skipped as inconclusive
@@ -208,3 +210,50 @@ tail returns to zero, so ordinary bursts do not page anyone.
 - `notifications.md` — alert routing
 - `indexer-poison-log-recovery.md` — the usual upstream cause of a coverage gap
 - `monitoring-alerting-baseline.md`
+
+## Independent identity continuation
+
+Migration `007_enumeration_cycles.sql` stores the independent indexer walk separately from the financial coverage cursor.
+Each cycle records the source URL digest, chain block and hash, counter, expected count, and fixed upper physical identity.
+Pages use physical `id` keysets. Logical `tradeId` values remain separate, so duplicate identities survive across pages.
+`RECONCILIATION_INDEXER_ENUMERATION_LIMIT` bounds each invocation. It does not truncate the cycle permanently.
+
+Page membership, cycle generation, run evidence, alerts, and financial cursor publication share one lease-fenced transaction.
+A crash before commit leaves the page uncommitted. Retry reads the same persisted continuation.
+A competing worker must match the current generation. A failed comparison rolls back all its page writes.
+
+Incomplete enumeration holds financial coverage while independent discovery continues toward its fixed upper identity.
+The terminal run includes all prior trade scope and findings from the cycle. It does not clear earlier drift findings.
+This conservative aggregation requires a new clean cycle after a repaired discrepancy.
+Existing cursors have no cumulative evidence. Their first discovery cycle remains unproven before a fresh validation cycle starts at zero.
+
+A complete cycle requires matching source anchors, exact count accounting, full chain coverage, and no unresolved coverage-holding findings.
+The service verifies the chain block hash again before publishing a page. Missing or changed sources cannot produce complete coverage.
+
+The GraphQL source exposes its current projection. It does not provide historical snapshot queries.
+A checkpoint change between invocations makes the cycle incoherent. Discovery continues, but financial coverage remains incomplete.
+After discovery finishes, the next cycle captures a fresh boundary and starts validation again.
+Continuous source movement can prevent clean completion. Use a reviewed source snapshot or a controlled stable checkpoint for acceptance testing.
+Do not ignore anchor changes to obtain a green result.
+
+## Cycle retention and rollback
+
+Cycle members are append-only. Finished cycles and their identities are retained.
+Do not remove an active cycle or accepted cycle evidence during cleanup.
+Use the approved archive and destruction process for any separate storage maintenance.
+
+Pause reconciliation before an application rollback. Keep migrations `006` and `007` installed.
+An older writer cannot maintain cycle progress. Keep financial progression blocked until a fresh compatible full cycle is verified.
+Do not use a completed tail window from an older image as proof of a full cycle.
+
+Run the source checks before engineer review:
+
+```bash
+pnpm --filter reconciliation typecheck
+pnpm --filter reconciliation lint
+RECONCILIATION_LOCAL_POSTGRES_TESTS=true pnpm --filter reconciliation test
+```
+
+The local PostgreSQL option requires a disposable-database administrator at `127.0.0.1:5432`.
+The default suite uses isolated Docker PostgreSQL databases when Docker is available.
+Controlled chain and indexer readers establish source behavior. Deployed providers, load, recovery, alert receipt, and independent acceptance remain candidate gates.
