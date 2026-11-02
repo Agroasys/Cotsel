@@ -1,5 +1,5 @@
 diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
-index 48cf0d3dabc885249c65909c4912712c834786f5..6ffc7aa662eb33dca6b874be1f6a0af959f40aa2 100644
+index 48cf0d3dabc885249c65909c4912712c834786f5..a2d433e6e7a5ef146dd7561ac1fab1d76ff3beb1 100644
 --- a/dist/commonjs/index.js
 +++ b/dist/commonjs/index.js
 @@ -330,4 +330,7 @@ function expand_(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
@@ -9,4 +9,16 @@ index 48cf0d3dabc885249c65909c4912712c834786f5..6ffc7aa662eb33dca6b874be1f6a0af9
 +// Preserve the callable CommonJS export used by brace-expansion 1.x and 2.x
 +// consumers while retaining the named exports introduced in 5.x.
 +module.exports = Object.assign(exports.expand, exports);
+ //# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 0e0cc962307eb697dc8139ef4c1f86b82380e5cc..e7166906854e56524f12bb3892dc4d50cd1d5ecc 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -326,4 +326,6 @@ function expand_(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
+     }
+     return acc;
+ }
++// Preserve the default ESM API required by legacy minimatch consumers.
++export default expand;
  //# sourceMappingURL=index.js.map

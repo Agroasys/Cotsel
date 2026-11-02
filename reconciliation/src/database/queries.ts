@@ -211,6 +211,9 @@ export async function completeRun(stats: RunStats, executor: Executor = pool): P
       coverage
         ? JSON.stringify({
             version: 'cotsel.reconciliation-coverage.v1',
+            enumerationCycleId: coverage.enumerationCycleId ?? null,
+            indexerSourceCoherent: coverage.indexerSourceCoherent ?? null,
+            indexerEnumerationExpected: coverage.indexerEnumerationExpected ?? null,
             chainId: String(config.chainId),
             escrowAddress: config.escrowAddress.toLowerCase(),
             blockNumber: String(coverage.boundary.blockNumber),
