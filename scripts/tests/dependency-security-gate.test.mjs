@@ -61,6 +61,7 @@ test('clean audits and verified installed artifacts pass', () => assert.equal(ru
 test('exact patched advisory passes only with compatibility proof', () =>
   assert.equal(run({ all: report(finding()) }).status, 0));
 for (const [label, changes] of [
+  ['production informational finding', { prod: report(finding({ severity: 'info' })) }],
   ['unknown advisory', { all: report(finding({ github_advisory_id: 'GHSA-unknown' })) }],
   ['unverified version', { all: report(finding({ findings: [{ version: '6.6.2' }] })) }],
   ['changed severity', { all: report(finding({ severity: 'high' })) }],

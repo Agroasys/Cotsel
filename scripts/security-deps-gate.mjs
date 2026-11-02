@@ -141,9 +141,14 @@ function vulnerabilities(report) {
     high: summary.high ?? 0,
     moderate: summary.moderate ?? 0,
     low: summary.low ?? 0,
+    info: summary.info ?? 0,
     total:
       summary.total ??
-      (summary.critical ?? 0) + (summary.high ?? 0) + (summary.moderate ?? 0) + (summary.low ?? 0),
+      (summary.critical ?? 0) +
+        (summary.high ?? 0) +
+        (summary.moderate ?? 0) +
+        (summary.low ?? 0) +
+        (summary.info ?? 0),
   };
 }
 
@@ -208,7 +213,9 @@ if (
   prodSummary.critical > 0 ||
   prodSummary.high > 0 ||
   prodSummary.moderate > 0 ||
-  prodSummary.low > 0
+  prodSummary.low > 0 ||
+  prodSummary.info > 0 ||
+  advisories(auditProdReport).length > 0
 ) {
   console.error('Release gate failed: production dependency audit has findings.');
   failed = true;
