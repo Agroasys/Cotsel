@@ -2,7 +2,9 @@ import { registerLifecycleRaceTests } from './agroasysEscrow/lifecycle-races';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { ethers } from 'hardhat';
+import hre, { ethers, artifacts } from 'hardhat';
+import { expect } from 'chai';
+import { AgroasysEscrow__factory as SdkEscrowFactory } from '@agroasys/sdk';
 import { AgroasysEscrow, MockUSDC } from '../typechain-types';
 import { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers';
 import { time } from '@nomicfoundation/hardhat-network-helpers';
@@ -430,9 +432,13 @@ describe('AgroasysEscrow', function () {
 
     await usdc.mint(buyer.address, ethers.parseUnits('1000000', 6));
 
-    const EscrowFactory = await ethers.getContractFactory('AgroasysEscrow');
+    // Coverage deploys instrumented source; ordinary runs exercise the public SDK artifact.
+    const coverageRunning = '__SOLIDITY_COVERAGE_RUNNING' in hre && hre.__SOLIDITY_COVERAGE_RUNNING;
+    const EscrowFactory = coverageRunning
+      ? await ethers.getContractFactory('AgroasysEscrow')
+      : new SdkEscrowFactory(buyer);
     const admins = [admin1.address, admin2.address, admin3.address];
-    escrow = await EscrowFactory.deploy(
+    const deployed = await EscrowFactory.deploy(
       await usdc.getAddress(),
       oracle.address,
       treasury.address,
@@ -440,7 +446,14 @@ describe('AgroasysEscrow', function () {
       admins,
       2,
     );
-    await escrow.waitForDeployment();
+    await deployed.waitForDeployment();
+    escrow = await ethers.getContractAt('AgroasysEscrow', await deployed.getAddress());
+  });
+
+  it('SDK deployment bytecode matches the current compiled escrow @skip-on-coverage', async function () {
+    expect(SdkEscrowFactory.bytecode).to.equal(
+      (await artifacts.readArtifact('AgroasysEscrow')).bytecode,
+    );
   });
 
   registerDeploymentTests(getAgroasysEscrowHarness);
