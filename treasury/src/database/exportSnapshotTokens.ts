@@ -21,7 +21,7 @@ export class ExportSnapshotTokens {
     if (!seed || BigInt(nextPosition) > BigInt(seed.candidate_count))
       throw new ExportTokenUnavailable('Completed export is unavailable');
     const token = createHmac('sha256', Buffer.from(seed.continuation_secret, 'hex'))
-      .update(JSON.stringify([jobId, caller, nextPosition]))
+      .update(JSON.stringify([jobId, nextPosition]))
       .digest('base64url');
     const digest = createHash('sha256').update(token).digest('hex');
     await this.db.query(
