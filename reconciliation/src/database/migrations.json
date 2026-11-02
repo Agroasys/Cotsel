@@ -36,6 +36,20 @@
       "file": "005_notification_outbox.sql",
       "sha256": "acea7b49b7705082a21562f3c8618d0ee249c39ec583f3b137295c069d3f0cc0",
       "schema_sha256": "8de3f344b2b4ab7fc172ca14a5333505096e5f123d33a8e36b3aea0c8ba573cc"
+    },
+    {
+      "version": "202611010001",
+      "name": "completed_evidence",
+      "file": "006_completed_evidence.sql",
+      "sha256": "da79ca952c4fd79adc89f8a880af170352e6d8ac4541d12d1b37eb23d9b486c6",
+      "schema_sha256": "d2a9e62e09ac7ba6ee27fef65f6dc1b2404f6471ed5fe11da6b9abd0f7e68138"
+    },
+    {
+      "version": "202611010002",
+      "name": "enumeration_cycles",
+      "file": "007_enumeration_cycles.sql",
+      "sha256": "22254eaa77851b56e4eae91174aa07bc2e4dbc5eb3814393a499552ac5631864",
+      "schema_sha256": "9e5b848c4e9bb2b88f84f109a2617e859053fd23048171c1a33c4aead1128ca0"
     }
   ]
 }

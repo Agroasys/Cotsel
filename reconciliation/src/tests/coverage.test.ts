@@ -5,12 +5,14 @@ import {
   batchTradeIds,
   checkIndexerSurplus,
   compareCoverage,
+  holdsCursor,
   evaluateCoverageSla,
   planCoverageWindow,
   tradeIdsInWindow,
   type ChainTradeRecord,
 } from '../core/coverage';
 import type { CoverageBoundary, IndexedTradeRecord } from '../types';
+import { detectDuplicateIndexerTradeIds } from '../core/duplicateCoverage';
 
 const BOUNDARY: CoverageBoundary = {
   blockNumber: 1_000_000,
@@ -25,6 +27,18 @@ const BOUNDARY: CoverageBoundary = {
 function boundary(chainTradeCounter: bigint): CoverageBoundary {
   return { ...BOUNDARY, chainTradeCounter };
 }
+
+test('a duplicate that cancels a missing trade in the count holds the cursor', () => {
+  const findings = detectDuplicateIndexerTradeIds({
+    indexerTradeIds: ['0', '0', '2'],
+    boundary: boundary(3n),
+  });
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].tradeId, '0');
+  assert.equal(findings[0].indexedValue, '2');
+  assert.equal(findings[0].severity, 'CRITICAL');
+  assert.equal(holdsCursor(findings[0].mismatchCode), true);
+});
 
 function chainTrade(tradeId: string): Trade {
   return {
