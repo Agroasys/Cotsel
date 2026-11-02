@@ -651,8 +651,8 @@ importers:
         specifier: ^6.17.0
         version: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       ox:
-        specifier: ^1.8.6
-        version: 1.8.8(typescript@6.0.3)
+        specifier: ^1.8.10
+        version: 1.8.10(typescript@6.0.3)
     devDependencies:
       '@types/jest':
         specifier: ^30.0.0
@@ -8733,10 +8733,10 @@ packages:
       typescript:
         optional: true
 
-  ox@1.8.8:
+  ox@1.8.10:
     resolution:
       {
-        integrity: sha512-zPWwnOSwzWO6vmNPp02GYLbz5OwfQ0nAUyh5whRNyH4l65y9GAXFG3Jrcn5lZU3E2S0PBXIMnCgsm+P9Mj+10Q==,
+        integrity: sha512-f/Xy/QcrZZYrDgLyLI7fK0aaBE2F5xyu1ycKM1A1Jb4owg7F/vGrXyjJBFHMlKUIF9kV7OmUv3S+/B0V7OUyfA==,
       }
     peerDependencies:
       typescript: '>=5.4.0'
@@ -17249,7 +17249,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  ox@1.8.8(typescript@6.0.3):
+  ox@1.8.10(typescript@6.0.3):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 2.4.0
