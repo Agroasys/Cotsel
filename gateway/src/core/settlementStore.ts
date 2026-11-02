@@ -18,6 +18,7 @@ import {
   assertSameMonetaryIntent,
   parseOptionalSettlementAmount,
   parseSettlementAmount,
+  storedSettlementAmountToNumber,
 } from './settlementAmount';
 
 export * from './settlementStoreTypes';
@@ -83,21 +84,6 @@ interface SettlementExecutionEventRow {
   createdAt: Date;
 }
 
-function parseDecimal(value: string | null): number | null {
-  if (value === null) {
-    return null;
-  }
-
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new GatewayError(500, 'INTERNAL_ERROR', 'Stored settlement numeric value is invalid', {
-      value,
-    });
-  }
-
-  return parsed;
-}
-
 function mapHandoffRow(row: SettlementHandoffRow): SettlementHandoffRecord {
   return {
     executionBinding: row.executionBinding ?? null,
@@ -108,9 +94,16 @@ function mapHandoffRow(row: SettlementHandoffRow): SettlementHandoffRecord {
     phase: row.phase,
     settlementChannel: row.settlementChannel,
     displayCurrency: row.displayCurrency,
-    displayAmount: parseDecimal(row.displayAmount) ?? 0,
+    displayAmount: storedSettlementAmountToNumber(
+      row.displayAmount,
+      'displayAmount',
+      DISPLAY_AMOUNT_SPEC,
+    ),
     assetSymbol: row.assetSymbol,
-    assetAmount: parseDecimal(row.assetAmount),
+    assetAmount:
+      row.assetAmount === null
+        ? null
+        : storedSettlementAmountToNumber(row.assetAmount, 'assetAmount', ASSET_AMOUNT_SPEC),
     ricardianHash: row.ricardianHash,
     externalReference: row.externalReference,
     metadata: row.metadata || {},
@@ -335,7 +328,7 @@ async function createCallbackDeliveryWithClient(
        handoff_id AS "handoffId",
        event_id AS "eventId",
        target_url AS "targetUrl",
-       request_body AS "requestBody",
+       request_body::text AS "requestBody",
        status,
        attempt_count AS "attemptCount",
        next_attempt_at AS "nextAttemptAt",
@@ -707,7 +700,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
                handoff_id AS "handoffId",
                event_id AS "eventId",
                target_url AS "targetUrl",
-               request_body AS "requestBody",
+               request_body::text AS "requestBody",
                status,
                attempt_count AS "attemptCount",
                next_attempt_at AS "nextAttemptAt",

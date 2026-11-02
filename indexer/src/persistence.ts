@@ -50,3 +50,21 @@ export async function persistIndexerBatch(
   await upsertIfPresent(store, state.systemEvents);
   await store.upsert([state.overviewSnapshot]);
 }
+
+/** Only PostgreSQL data/constraint failures identify a durable poison batch.
+ * Transport, retryable, and unclassified failures retain Subsquid retry behavior.
+ */
+export function isNonRetryablePersistenceError(error: unknown): boolean {
+  const pending: unknown[] = [error];
+  const seen = new Set<unknown>();
+  while (pending.length > 0 && seen.size < 16) {
+    const current = pending.shift();
+    if (!current || typeof current !== 'object' || seen.has(current)) continue;
+    seen.add(current);
+    const value = current as { code?: unknown; driverError?: unknown; cause?: unknown };
+    if (typeof value.code === 'string' && /^[0-9A-Z]{5}$/.test(value.code))
+      return value.code.startsWith('22') || value.code.startsWith('23');
+    pending.push(value.driverError, value.cause);
+  }
+  return false;
+}
