@@ -1,5 +1,5 @@
 /** SPDX-License-Identifier: Apache-2.0 */
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import type { Pool } from 'pg';
 import { pool as defaultPool } from './connection';
 
@@ -12,15 +12,27 @@ export class ExportSnapshotTokens {
   async issue(caller: string, jobId: string, nextPosition: number): Promise<string> {
     if (!Number.isSafeInteger(nextPosition) || nextPosition < 0)
       throw new Error('Invalid export position');
-    const token = randomBytes(32).toString('base64url');
+    const job = await this.db.query<{ continuation_secret: string; candidate_count: string }>(
+      `SELECT continuation_secret,candidate_count::text FROM treasury_export_jobs
+       WHERE id=$1 AND caller_id=$2 AND status='COMPLETE' AND access_expires_at>clock_timestamp()`,
+      [jobId, caller],
+    );
+    const seed = job.rows[0];
+    if (!seed || BigInt(nextPosition) > BigInt(seed.candidate_count))
+      throw new ExportTokenUnavailable('Completed export is unavailable');
+    const token = createHmac('sha256', Buffer.from(seed.continuation_secret, 'hex'))
+      .update(JSON.stringify([jobId, caller, nextPosition]))
+      .digest('base64url');
     const digest = createHash('sha256').update(token).digest('hex');
-    const result = await this.db.query(
-      `INSERT INTO treasury_export_tokens (token_hash, job_id, caller_id, next_position, expires_at)
-       SELECT $1, id, caller_id, $4, access_expires_at FROM treasury_export_jobs
-       WHERE id=$2 AND caller_id=$3 AND status='COMPLETE' AND access_expires_at > NOW()`,
+    await this.db.query(
+      `INSERT INTO treasury_export_tokens (token_hash, job_id, caller_id, next_position, expires_at, token_version)
+       SELECT $1, id, caller_id, $4, access_expires_at, 1 FROM treasury_export_jobs
+       WHERE id=$2 AND caller_id=$3 AND status='COMPLETE' AND access_expires_at > NOW()
+       ON CONFLICT DO NOTHING`,
       [digest, jobId, caller, nextPosition],
     );
-    if (result.rowCount !== 1) throw new ExportTokenUnavailable('Completed export is unavailable');
+    if ((await this.resolve(caller, jobId, token)) !== nextPosition)
+      throw new ExportTokenUnavailable('Completed export is unavailable');
     return token;
   }
 

@@ -1,19 +1,30 @@
 /** SPDX-License-Identifier: Apache-2.0 */
-import type { PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
+
+export async function readSourceGeneration(client: Pool | PoolClient): Promise<string> {
+  const guards = await client.query<{ count: string }>(`SELECT count(*)::text AS count
+    FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='public' AND c.relname IN ('treasury_ledger_entries','payout_lifecycle_events','bank_payout_confirmations','treasury_ingestion_state')
+      AND t.tgname='treasury_export_source_generation' AND t.tgenabled IN ('O','A') AND NOT t.tgisinternal`);
+  if (guards.rows[0]?.count !== '4') throw new Error('Export source guard unavailable');
+  const result = await client.query<{ generation: string }>(`SELECT concat_ws(':',
+    (SELECT last_value::text || '/' || is_called::text FROM treasury_export_ledger_generation),
+    (SELECT last_value::text || '/' || is_called::text FROM treasury_export_payout_generation),
+    (SELECT last_value::text || '/' || is_called::text FROM treasury_export_bank_generation),
+    (SELECT last_value::text || '/' || is_called::text FROM treasury_export_ingestion_generation)) AS generation`);
+  return result.rows[0].generation;
+}
 
 /**
- * Call inside the final publication transaction, after external evidence is
- * rechecked. SHARE locks keep ledger, payout and bank writers out until commit.
+ * Compare captured rows without blocking financial writers. The publication
+ * transaction must subsequently lock sources and check the generation fence.
  */
 export async function capturedSourcesMatch(
-  client: PoolClient,
+  client: Pool | PoolClient,
   jobId: string,
   attempt: number,
   cutoff: Date,
 ): Promise<boolean> {
-  await client.query(
-    'LOCK TABLE treasury_ledger_entries, payout_lifecycle_events, bank_payout_confirmations, treasury_ingestion_state IN SHARE MODE',
-  );
   const result = await client.query<{ mismatches: string }>(
     `WITH captured AS (
        SELECT * FROM treasury_export_rows WHERE job_id=$1 AND attempt=$2
@@ -34,4 +45,26 @@ export async function capturedSourcesMatch(
     [jobId, attempt, cutoff],
   );
   return result.rows[0]?.mismatches === '0';
+}
+
+/** Run the expensive read with a local deadline and no financial write locks. */
+export async function compareCapturedSourcesWithTimeout(
+  pool: Pool,
+  jobId: string,
+  attempt: number,
+  cutoff: Date,
+): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN READ ONLY');
+    await client.query("SET LOCAL statement_timeout='30s'");
+    const matches = await capturedSourcesMatch(client, jobId, attempt, cutoff);
+    await client.query('COMMIT');
+    return matches;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }

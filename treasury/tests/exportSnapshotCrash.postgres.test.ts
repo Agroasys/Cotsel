@@ -177,7 +177,8 @@ describePostgres('treasury export crash recovery', () => {
         const { ExportSnapshotBuilder } = require('./src/core/exportSnapshotBuilder');
         let calls = 0;
         const fake = {
-          createSnapshotContext: async () => ({ heads: { latestBlockNumber: 120, safeBlockNumber: 115, finalizedBlockNumber: 110 },
+          createSnapshotContext: async () => ({ chainVerifiedAt: new Date(),
+          heads: { latestBlockNumber: 120, safeBlockNumber: 115, finalizedBlockNumber: 110 },
             finalizedBlockHash: '0x' + 'ab'.repeat(32), ingestion: { status: 'FRESH' }, reconciliationRunKey: 'run-1', reconciliationByTradeId: new Map() }),
           assessEntries: async (entries, context) => {
             if (++calls === 2) { process.stdout.write('paused\\n'); return await new Promise(() => {}); }
@@ -235,6 +236,7 @@ describePostgres('treasury export crash recovery', () => {
       const fake = {
         createSnapshotContext: async () =>
           ({
+            chainVerifiedAt: new Date(),
             heads: { latestBlockNumber: 120, safeBlockNumber: 115, finalizedBlockNumber: 110 },
             finalizedBlockHash: `0x${'ab'.repeat(32)}`,
             ingestion: { status: 'FRESH' },

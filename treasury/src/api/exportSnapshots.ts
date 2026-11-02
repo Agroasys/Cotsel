@@ -9,7 +9,11 @@ import {
 } from '@agroasys/shared-http';
 import { config } from '../config';
 import { pool } from '../database/connection';
-import { ExportJobConflict, ExportSnapshotStore } from '../database/exportSnapshotStore';
+import {
+  ExportJobConflict,
+  ExportJobLimit,
+  ExportSnapshotStore,
+} from '../database/exportSnapshotStore';
 import { ExportSnapshotTokens, ExportTokenUnavailable } from '../database/exportSnapshotTokens';
 import { ExportSnapshotBuilder } from '../core/exportSnapshotBuilder';
 import type { AuthenticatedRequest } from '../core/actorIdentity';
@@ -56,6 +60,10 @@ function sendError(req: Request, res: Response, error: unknown): void {
   }
   if (error instanceof HttpError) {
     res.status(error.statusCode).json(failure(error.code, error.message));
+    return;
+  }
+  if (error instanceof ExportJobLimit) {
+    res.status(429).json(failure('ExportStorageBudgetExceeded', error.message));
     return;
   }
   if (error instanceof ExportJobConflict) {

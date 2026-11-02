@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { pool as defaultPool } from '../database/connection';
 import { ExportSnapshotStore } from '../database/exportSnapshotStore';
-import { capturedSourcesMatch } from '../database/exportSnapshotVerification';
+import {
+  compareCapturedSourcesWithTimeout,
+  readSourceGeneration,
+} from '../database/exportSnapshotVerification';
 import type { LedgerEntryForExport } from '../database/queries/ledger';
 import { TreasuryEligibilityService } from './exportEligibility';
 import { sameReconciliationGate } from './exportEligibilityContext';
@@ -12,6 +15,7 @@ import type { TradeReconciliationGate } from './reconciliationGate';
 const BATCH_SIZE = 500;
 const LEASE_SECONDS = 300;
 const FAILURE_CODES: Record<string, string> = {
+  'Export source guard unavailable': 'SOURCE_GUARD_UNAVAILABLE',
   'Captured ledger sources changed': 'SOURCE_CHANGED',
   'Finalized chain anchor changed or is unavailable': 'CHAIN_ANCHOR_CHANGED',
   'Finalized chain verification expired before publication': 'CHAIN_ANCHOR_EXPIRED',
@@ -120,10 +124,15 @@ export class ExportSnapshotBuilder {
       }
       await this.eligibility.verifySnapshotContext(context);
       await this.renew(jobId, owner);
+      const generation = await readSourceGeneration(this.db);
+      if (!(await compareCapturedSourcesWithTimeout(this.db, jobId, job.attempt, job.cutoff)))
+        throw new Error('Captured ledger sources changed');
+      // Cross-database evidence verification never holds financial table locks.
       const client = await this.db.connect();
       try {
+        await this.eligibility.verifyPublicationContext(context, client);
         await client.query('BEGIN');
-        await client.query("SET LOCAL lock_timeout = '5s'");
+        await client.query("SET LOCAL lock_timeout = '250ms'");
         await client.query("SET LOCAL statement_timeout = '30s'");
         const locked = await client.query(
           `SELECT id FROM treasury_export_jobs WHERE id=$1 AND status='BUILDING' AND attempt=$2
@@ -131,9 +140,6 @@ export class ExportSnapshotBuilder {
           [jobId, job.attempt, owner],
         );
         if (locked.rowCount !== 1) throw new Error('Export build lease was lost');
-        if (!(await capturedSourcesMatch(client, jobId, job.attempt, job.cutoff)))
-          throw new Error('Captured ledger sources changed');
-        await this.eligibility.verifyPublicationContext(context, client);
         const completed = await client.query(
           `UPDATE treasury_export_jobs SET status='COMPLETE', completed_at=clock_timestamp(), lease_owner=NULL,
            lease_expires_at=NULL, chain_context=$3::jsonb, reconciliation_context=$4::jsonb,
@@ -155,6 +161,17 @@ export class ExportSnapshotBuilder {
           ],
         );
         if (completed.rowCount !== 1) throw new Error('Export build lease was lost');
+        // All expensive retained-row validation has finished. Completion remains
+        // uncommitted until the source fence succeeds.
+        await client.query("SET LOCAL statement_timeout = '500ms'");
+        await client.query("SET LOCAL idle_in_transaction_session_timeout = '500ms'");
+        await client.query(
+          'LOCK TABLE treasury_ledger_entries, payout_lifecycle_events, bank_payout_confirmations, treasury_ingestion_state IN SHARE MODE NOWAIT',
+        );
+        if (generation !== (await readSourceGeneration(client)))
+          throw new Error('Captured ledger sources changed');
+        if (!context.chainVerifiedAt || Date.now() - context.chainVerifiedAt.getTime() > 30_000)
+          throw new Error('Finalized chain verification expired before publication');
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');

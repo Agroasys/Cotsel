@@ -23,6 +23,7 @@ interface JobRow {
 }
 
 export class ExportJobConflict extends Error {}
+export class ExportJobLimit extends Error {}
 
 /** Durable candidate capture. RPC and reconciliation reads never run in this transaction. */
 export class ExportSnapshotStore {
@@ -42,13 +43,19 @@ export class ExportSnapshotStore {
     const requestHash = createHash('sha256')
       .update(`treasury-export-v1|${cutoff.toISOString()}`)
       .digest('hex');
-    const inserted = await this.db.query<JobRow>(
-      `INSERT INTO treasury_export_jobs
+    const inserted = await this.db
+      .query<JobRow>(
+        `INSERT INTO treasury_export_jobs
        (id, caller_id, idempotency_key_hash, request_hash, cutoff, status, attempt, access_expires_at)
        VALUES ($1, $2, $3, $4, $5, 'BUILDING', 1, NOW() + interval '24 hours')
        ON CONFLICT (caller_id, idempotency_key_hash) DO NOTHING RETURNING *`,
-      [randomUUID(), caller, keyHash, requestHash, cutoff],
-    );
+        [randomUUID(), caller, keyHash, requestHash, cutoff],
+      )
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.message === 'treasury_export_storage_budget_exceeded')
+          throw new ExportJobLimit('Export storage budget reached; contact the retention owner');
+        throw error;
+      });
     const existing =
       inserted.rows[0] ??
       (
@@ -81,9 +88,19 @@ export class ExportSnapshotStore {
          status = 'BUILDING', lease_owner = $2, lease_expires_at = NOW() + ($3 * interval '1 second'),
          candidate_count = NULL, candidate_amount_raw = NULL, failure_code = NULL, updated_at = NOW()
        WHERE id = $1 AND access_expires_at > NOW() AND status <> 'COMPLETE'
-         AND (lease_owner IS NULL OR lease_expires_at <= NOW()) RETURNING *`,
+         AND (lease_owner IS NULL OR lease_expires_at <= NOW())
+         AND (attempt < 3 OR (status='BUILDING' AND lease_owner IS NULL)) RETURNING *`,
       [jobId, owner, leaseSeconds],
     );
+    if (!result.rows[0]) {
+      await this.db.query(
+        `UPDATE treasury_export_jobs SET status='FAILED', failure_code='ATTEMPT_BUDGET_EXCEEDED',
+        lease_owner=NULL, lease_expires_at=NULL, updated_at=clock_timestamp()
+        WHERE id=$1 AND attempt>=3 AND status<>'COMPLETE'
+          AND (lease_owner IS NULL OR lease_expires_at <= clock_timestamp())`,
+        [jobId],
+      );
+    }
     return result.rows[0] ?? null;
   }
 

@@ -96,17 +96,46 @@ Existing completed runs are not certified by that migration. Missing or disabled
 The builder pins one immutable run identity across all assessment and verification batches.
 New reconciliation runs do not change that retained historical evidence. Live financial actions continue to select current evidence.
 
-The final Treasury transaction locks ledger, payout, bank confirmation, and ingestion cursor sources.
-After obtaining those locks, the builder rechecks ingestion evidence and reconciliation freshness with the dedicated reader.
-No RPC call occurs inside the publication transaction. Lock waits are limited to five seconds.
-Each statement is limited to thirty seconds. The last finalized-anchor verification must be at most thirty seconds old.
-A failed check leaves a visible failed job. Retry captures a fresh source snapshot under the same idempotency record.
+The full source comparison runs without financial write locks. The builder records nontransactional sequence fences before that comparison.
+Every ledger, payout, bank-confirmation, and ingestion statement advances its fence. Rollbacks also advance the fence conservatively.
+Missing or disabled generation guards fail construction. The runtime can read these sequences but cannot reset them.
+
+The final transaction locks the export job and validates retained rows before it locks financial sources.
+Completion remains uncommitted during validation. The builder then acquires source SHARE locks with `NOWAIT` and compares the fences.
+An active financial writer or a changed fence aborts publication. No RPC or reconciliation call occurs under financial source locks.
+Source comparison and retained-row validation have thirty-second statement limits. Final fence statements have 500-millisecond limits.
+The final phase also has a 500-millisecond idle-transaction limit. These are statement and idle limits, not a total transaction deadline.
+The last finalized-anchor verification must be at most thirty seconds old when the final fence succeeds.
+A failed check leaves a visible failed job and rolls back provisional completion.
 
 The recorded chain context includes the finalized number, hash, and last verification timestamp.
 This is historical evidence at the recorded observation. A database transaction cannot prevent a later external chain reorganization.
 Consumer compatibility review, staging evidence, and independent acceptance remain required before promotion.
 
 ## Retention and cleanup
+
+Storage admission is bounded in PostgreSQL, including concurrent requests:
+
+- Retain at most ten jobs per authenticated caller identity.
+- Retain at most one hundred jobs across the service.
+- Allow at most three capture attempts per job, including expired leases and failed attempts.
+- Keep failed, expired, and completed jobs in these lifetime budgets.
+- Return HTTP 429 `ExportStorageBudgetExceeded` for a new job after admission is exhausted.
+- Preserve exact idempotent replay for existing unexpired jobs at the admission limit.
+- Mark an exhausted abandoned build `FAILED` with `ATTEMPT_BUDGET_EXCEEDED`.
+
+Expired access does not reset storage admission. Do not retry with new caller identities or idempotency keys to evade the budget.
+Contact the retention owner when admission is exhausted. Increasing limits requires reviewed capacity and custody evidence.
+
+Stop new export requests before applying migration `010_export_bounds.sql`. Deploy the matching writer before resuming export requests.
+The migration retains earlier token hashes, including repeated positions. Earlier tokens remain readable until expiry.
+An older writer fails closed after migration; it cannot bypass storage bounds.
+
+Opaque continuations use a per-job cryptographic seed and reuse one token for each valid position.
+Repeated requests and concurrent retries do not allocate more rows for the same position.
+Tokens remain caller-bound and expire with the job. Position bounds preserve all supported page sizes, including `limit=1`.
+The token-row bound is the captured candidate count plus one, rather than a fixed traversal allowance.
+The runtime cannot delete completed evidence to recover quota. This change does not authorize evidence destruction.
 
 Completed jobs and their rows are retained. The runtime role has no delete grant
 for export tables. Do not delete accepted evidence. Archive accepted evidence

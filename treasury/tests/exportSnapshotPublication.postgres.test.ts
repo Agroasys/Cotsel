@@ -16,7 +16,16 @@ describePostgres('snapshot evidence publication across databases', () => {
   let reader: Pool;
   let closeService: () => Promise<void>;
   let service: import('../src/core/reconciliationGate').ReconciliationGateService;
-  let build: (key: string, mode?: 'drift' | 'disabled' | 'ingestion') => Promise<boolean>;
+  let build: (
+    key: string,
+    mode?:
+      | 'drift'
+      | 'disabled'
+      | 'ingestion'
+      | 'ingestion-expiry'
+      | 'reconciliation-expiry'
+      | 'source-race',
+  ) => Promise<boolean>;
   let nowOffset = 0;
   let reconciliationOffset = 0;
   const ingestionMaxAge = 900;
@@ -144,6 +153,14 @@ describePostgres('snapshot evidence publication across databases', () => {
           maxAgeSeconds: ingestionMaxAge,
         }),
       });
+      const verifyPublication = eligibility.verifyPublicationContext.bind(eligibility);
+      eligibility.verifyPublicationContext = async (context, client) => {
+        if (mode === 'ingestion-expiry') nowOffset = 901000;
+        if (mode === 'reconciliation-expiry') reconciliationOffset = 901000;
+        if (mode === 'source-race')
+          await treasury.query('UPDATE treasury_ledger_entries SET trade_id=trade_id');
+        await verifyPublication(context, client);
+      };
       const store = new ExportSnapshotStore(treasury);
       const job = await store.create('publication-review', key, new Date('2001-01-01'));
       try {
@@ -198,49 +215,38 @@ describePostgres('snapshot evidence publication across databases', () => {
     }
   });
 
-  async function expireWhileLocked(key: string, expire: () => void): Promise<void> {
-    // A separate operator connection holds the writer lock; source reads remain available.
-    const blocker = new Pool({ ...connection, database: treasuryName });
-    const client = await blocker.connect();
+  test('never waits on a financial writer during publication', async () => {
+    const writerPool = new Pool({ ...connection, database: treasuryName });
+    const blocker = await writerPool.connect();
     try {
-      await client.query('BEGIN');
-      await client.query('LOCK TABLE treasury_ledger_entries IN ROW EXCLUSIVE MODE');
-      const pid = (await client.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
-      const result = build(key);
-      const rejection = expect(result).rejects.toThrow(/stale|unavailable or incomplete/);
-      let blocked = false;
-      for (let attempt = 0; attempt < 200; attempt++) {
-        const waiting = await blocker.query(
-          'SELECT count(*) FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))',
-          [pid],
-        );
-        if (Number(waiting.rows[0].count) > 0) {
-          blocked = true;
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 5));
-      }
-      expect(blocked).toBe(true);
-      expire();
-      await client.query('COMMIT');
-      await rejection;
+      await blocker.query('BEGIN');
+      await blocker.query('LOCK TABLE treasury_ledger_entries IN ROW EXCLUSIVE MODE');
+      await expect(build('busy-writer')).rejects.toThrow(/could not obtain lock/);
     } finally {
-      await client.query('ROLLBACK');
-      client.release();
-      await blocker.end();
+      await blocker.query('ROLLBACK');
+      blocker.release();
+      await writerPool.end();
+    }
+  });
+  test('rechecks ingestion age after the full source comparison', async () => {
+    try {
+      await expect(build('ingestion-expiry', 'ingestion-expiry')).rejects.toThrow(/stale/);
+    } finally {
       nowOffset = 0;
+    }
+  });
+  test('rechecks reconciliation age after the full source comparison', async () => {
+    try {
+      await expect(build('reconciliation-expiry', 'reconciliation-expiry')).rejects.toThrow(
+        /stale|unavailable or incomplete/,
+      );
+    } finally {
       reconciliationOffset = 0;
     }
-  }
-
-  test('rechecks ingestion age after the final source-lock wait', async () => {
-    await expireWhileLocked('ingestion-expiry', () => {
-      nowOffset = 901000;
-    });
   });
-  test('rechecks reconciliation age after the final source-lock wait', async () => {
-    await expireWhileLocked('reconciliation-expiry', () => {
-      reconciliationOffset = 901000;
-    });
+  test('rejects a source write between the comparison and publication locks', async () => {
+    await expect(build('source-race', 'source-race')).rejects.toThrow(
+      'Captured ledger sources changed',
+    );
   });
 });
