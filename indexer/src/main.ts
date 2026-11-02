@@ -25,7 +25,7 @@ import {
 } from './overviewAggregate';
 import { buildEvmEventId, compareOrderedEvmEvents } from './eventIdentity';
 import { markGovernanceProposalExecuted } from './governanceProjection';
-import { persistIndexerBatch } from './persistence';
+import { isNonRetryablePersistenceError, persistIndexerBatch } from './persistence';
 import {
   CLAIM_TYPE_VALUES,
   getOrLoadTrade,
@@ -915,6 +915,7 @@ export async function processBatch(
       overviewSnapshot,
     });
   } catch (error) {
+    if (!isNonRetryablePersistenceError(error)) throw error;
     // No individual log can be blamed when the atomic projection write fails.
     // Retain every matched log through independent connections before rollback.
     const persistenceError = new Error(`Batch persistence failed: ${describeError(error)}`);

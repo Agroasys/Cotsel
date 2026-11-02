@@ -148,6 +148,9 @@ an idempotent upsert, so the same range reproduces the same projection.
 
 ### Atomic projection persistence failures
 
+Only PostgreSQL data (`22xxx`) and constraint (`23xxx`) failures create persistence quarantine records.
+Connection loss, serialization failures, deadlocks, shutdowns, and unclassified failures preserve automatic Subsquid retries without quarantine or per-log pages.
+
 If a projection upsert fails, the indexer quarantines every matching escrow log in that batch.
 The reason remains `HANDLER_FAILURE`; the error starts with `Batch persistence failed:`.
 Each log uses the existing critical alert route. Independent writes retain evidence after the batch rolls back.

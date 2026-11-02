@@ -42,7 +42,7 @@ function persistenceFixture(upsert) {
 }
 
 test('late persistence failure quarantines every matched log and preserves the original error', async () => {
-  const original = new Error('event upsert rejected');
+  const original = Object.assign(new Error('event upsert rejected'), { code: '23503' });
   let upserts = 0;
   const { ctx, logs } = persistenceFixture(async () => {
     if (++upserts === 2) throw original;
@@ -79,7 +79,9 @@ test('late persistence failure quarantines every matched log and preserves the o
 });
 
 test('failed evidence and alert writes do not cancel later logs or replace the persistence error', async () => {
-  const original = new Error('projection rejected');
+  const original = Object.assign(new Error('projection rejected'), {
+    driverError: { code: '22003' },
+  });
   const { ctx } = persistenceFixture(async () => {
     throw original;
   });
@@ -274,3 +276,23 @@ test(
     });
   },
 );
+
+for (const code of ['40001', '40P01', '57P01', '08006', 'ECONNRESET', undefined]) {
+  test(`persistence ${code ?? 'unclassified'} failure retries without quarantine or critical pages`, async () => {
+    const original = Object.assign(new Error('temporary persistence failure'), { code });
+    let fail = true;
+    const { ctx } = persistenceFixture(async () => {
+      if (fail) throw original;
+    });
+    const deps = {
+      quarantine: {
+        recordPoisonLog: async () => assert.fail('retryable failure must not quarantine'),
+      },
+      alerts: { poisonLogDetected: async () => assert.fail('retryable failure must not page') },
+      logger: { error() {} },
+    };
+    await assert.rejects(processBatch(ctx, deps), (error) => error === original);
+    fail = false;
+    await processBatch(ctx, deps);
+  });
+}
