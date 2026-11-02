@@ -25,7 +25,7 @@ import {
 } from './overviewAggregate';
 import { buildEvmEventId, compareOrderedEvmEvents } from './eventIdentity';
 import { markGovernanceProposalExecuted } from './governanceProjection';
-import { persistIndexerBatch } from './persistence';
+import { isNonRetryablePersistenceError, persistIndexerBatch } from './persistence';
 import {
   CLAIM_TYPE_VALUES,
   getOrLoadTrade,
@@ -46,7 +46,14 @@ import {
 import { loadConfig } from './config';
 import { createIndexerAlerts } from './alerts';
 import { createQuarantinePool, QuarantineStore } from './quarantine';
-import { haltOnPoisonLog, PoisonLogHaltError, type PoisonLogDeps } from './poisonLog';
+import {
+  describeError,
+  haltOnPoisonLog,
+  reportPoisonLog,
+  PoisonLogHaltError,
+  type PoisonLogDeps,
+  type PoisonLogInput,
+} from './poisonLog';
 import { ESCROW_ABI_FINGERPRINT } from './preflight';
 import { readProcessorCheckpoint } from './chainReadiness';
 import { createIndexerProbeOptions, startProbeServer } from './probeServer';
@@ -108,7 +115,10 @@ function splitPlatformFeeComponents(platformFeesAmount: bigint): {
   };
 }
 
-async function processBatch(ctx: IndexerContext): Promise<void> {
+export async function processBatch(
+  ctx: IndexerContext,
+  poisonDeps: PoisonLogDeps = poisonLogDeps(ctx),
+): Promise<void> {
   const trades: Map<string, Trade> = new Map();
   const tradeEvents: TradeEvent[] = [];
   const disputeProposals: Map<string, DisputeProposal> = new Map();
@@ -118,6 +128,7 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
   const adminChangeProposals: Map<string, AdminChangeProposal> = new Map();
   const adminEvents: AdminEvent[] = [];
   const systemEvents: SystemEvent[] = [];
+  const persistenceLogs: Omit<PoisonLogInput, 'reason' | 'error'>[] = [];
   let overviewSnapshot = await getOrLoadOverviewSnapshot(ctx);
 
   for (const block of ctx.blocks) {
@@ -148,7 +159,7 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
       try {
         decoded = contractInterface.parseLog({ topics: log.topics, data: log.data });
       } catch (error) {
-        return haltOnPoisonLog(poisonLogDeps(ctx), {
+        return haltOnPoisonLog(poisonDeps, {
           ...poisonContext,
           reason: 'UNDECODABLE',
           error,
@@ -156,12 +167,14 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
       }
 
       if (!decoded) {
-        return haltOnPoisonLog(poisonLogDeps(ctx), {
+        return haltOnPoisonLog(poisonDeps, {
           ...poisonContext,
           reason: 'UNDECODABLE',
           error: new Error('Escrow ABI produced no decoding for a matching event topic'),
         });
       }
+
+      persistenceLogs.push({ ...poisonContext, eventName: decoded.name });
 
       try {
         const transaction = log.getTransaction();
@@ -866,7 +879,7 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
             break;
 
           default:
-            return haltOnPoisonLog(poisonLogDeps(ctx), {
+            return haltOnPoisonLog(poisonDeps, {
               ...poisonContext,
               reason: 'UNKNOWN_EVENT',
               eventName: decoded.name,
@@ -878,7 +891,7 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
           throw error;
         }
 
-        return haltOnPoisonLog(poisonLogDeps(ctx), {
+        return haltOnPoisonLog(poisonDeps, {
           ...poisonContext,
           reason: 'HANDLER_FAILURE',
           eventName: decoded.name,
@@ -888,19 +901,35 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
     }
   }
 
-  // save to db
-  await persistIndexerBatch(ctx.store, {
-    trades: trades.values(),
-    tradeEvents,
-    disputeProposals: disputeProposals.values(),
-    disputeEvents,
-    oracleUpdateProposals: oracleUpdateProposals.values(),
-    oracleEvents,
-    adminChangeProposals: adminChangeProposals.values(),
-    adminEvents,
-    systemEvents,
-    overviewSnapshot,
-  });
+  try {
+    await persistIndexerBatch(ctx.store, {
+      trades: trades.values(),
+      tradeEvents,
+      disputeProposals: disputeProposals.values(),
+      disputeEvents,
+      oracleUpdateProposals: oracleUpdateProposals.values(),
+      oracleEvents,
+      adminChangeProposals: adminChangeProposals.values(),
+      adminEvents,
+      systemEvents,
+      overviewSnapshot,
+    });
+  } catch (error) {
+    if (!isNonRetryablePersistenceError(error)) throw error;
+    // No individual log can be blamed when the atomic projection write fails.
+    // Retain every matched log through independent connections before rollback.
+    const persistenceError = new Error(`Batch persistence failed: ${describeError(error)}`);
+    for (const input of persistenceLogs) {
+      await reportPoisonLog(poisonDeps, {
+        ...input,
+        reason: 'HANDLER_FAILURE',
+        error: persistenceError,
+      });
+    }
+    // An empty batch has no raw log to quarantine. Never invent event evidence.
+    // Preserve the database error, including its retry classification, for Subsquid.
+    throw error;
+  }
 
   ctx.log.info(
     `Processed ${trades.size} trades, ${tradeEvents.length} trade events, ${disputeProposals.size} dispute proposals, ${disputeEvents.length} dispute events, ${oracleUpdateProposals.size} oracle proposals, ${oracleEvents.length} oracle events, ${adminChangeProposals.size} admin proposals, ${adminEvents.length} admin events, ${systemEvents.length} system events`,
@@ -1056,11 +1085,6 @@ async function handleFundsReleasedStage1(
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for FundsReleasedStage1 event`);
-    return overviewSnapshot;
-  }
-
   const counters = applyTradeTransition(
     trade.status,
     TradeStatus.IN_TRANSIT,
@@ -1110,11 +1134,6 @@ async function handlePlatformFeesPaidStage1(
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for PlatformFeesPaidStage1 event`);
-    return overviewSnapshot;
-  }
-
   overviewSnapshot.lastTradeEventAt = timestamp;
   const fallbackSplit = splitPlatformFeeComponents(platformFeesAmount);
   const platformFeeNetAmount = eventPlatformFeeNet ?? fallbackSplit.platformFeeNetAmount;
@@ -1157,11 +1176,6 @@ async function handleInspectionAvailable(
 ) {
   const [tradeId, inspectionAvailableAt, inspectionWindowSeconds, noticeDeadline] = log.args;
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
-
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for InspectionAvailable event`);
-    return overviewSnapshot;
-  }
 
   const counters = applyTradeTransition(
     trade.status,
@@ -1213,11 +1227,6 @@ async function handleInspectionAcceptedForFinalRelease(
   const [tradeId, acceptedAt] = log.args;
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for InspectionAcceptedForFinalRelease event`);
-    return overviewSnapshot;
-  }
-
   overviewSnapshot.lastTradeEventAt = timestamp;
   events.push(
     new TradeEvent({
@@ -1253,11 +1262,6 @@ async function handleFinalTrancheReleased(
   const [tradeId, supplier, supplierSecondTranche] = log.args;
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
-
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for FinalTrancheReleased event`);
-    return overviewSnapshot;
-  }
 
   const counters = applyTradeTransition(
     trade.status,
@@ -1306,11 +1310,6 @@ async function handleDisputeOpenedByBuyer(
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for DisputeOpenedByBuyer event`);
-    return overviewSnapshot;
-  }
-
   const counters = applyTradeTransition(
     trade.status,
     TradeStatus.FROZEN,
@@ -1356,11 +1355,6 @@ async function handleTradePaused(
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for TradePaused event`);
-    return overviewSnapshot;
-  }
-
   // Per-trade pause is orthogonal to the LOCKED→…→CLOSED lifecycle, so the
   // trade status and overview counters are intentionally left unchanged.
   trade.paused = true;
@@ -1402,11 +1396,6 @@ async function handleTradeUnpaused(
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for TradeUnpaused event`);
-    return overviewSnapshot;
-  }
-
   trade.paused = false;
   trades.set(tradeId.toString(), trade);
   overviewSnapshot.lastTradeEventAt = timestamp;
@@ -1445,11 +1434,6 @@ async function handleTradeCancelledAfterLockTimeout(
   const [tradeId, buyer, refundedAmount] = log.args;
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
-
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for TradeCancelledAfterLockTimeout event`);
-    return overviewSnapshot;
-  }
 
   const counters = applyTradeCancelled(trade.status, snapshotCounters(overviewSnapshot));
   applySnapshotCounters(overviewSnapshot, counters);
@@ -1496,11 +1480,6 @@ async function handleInTransitTimeoutRefunded(
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for InTransitTimeoutRefunded event`);
-    return overviewSnapshot;
-  }
-
   const counters = applyTradeCancelled(trade.status, snapshotCounters(overviewSnapshot));
   applySnapshotCounters(overviewSnapshot, counters);
   overviewSnapshot.lastTradeEventAt = timestamp;
@@ -1544,11 +1523,6 @@ async function handleRelayedActionExecuted(
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for RelayedActionExecuted event`);
-    return overviewSnapshot;
-  }
-
   overviewSnapshot.lastTradeEventAt = timestamp;
 
   events.push(
@@ -1588,11 +1562,6 @@ async function handleGaslessTradeFunded(
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for GaslessTradeFunded event`);
-    return overviewSnapshot;
-  }
-
   overviewSnapshot.lastTradeEventAt = timestamp;
 
   events.push(
@@ -1631,11 +1600,6 @@ async function handleSupplierPayoutTransferred(
   const [tradeId, supplier, amount, claimType, triggeredBy] = log.args;
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
-
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for SupplierPayoutTransferred event`);
-    return overviewSnapshot;
-  }
 
   const claimTypeEnum = CLAIM_TYPE_VALUES[Number(claimType)] ?? null;
   overviewSnapshot.lastTradeEventAt = timestamp;
@@ -1679,11 +1643,6 @@ async function handleBuyerRefundTransferred(
   const [tradeId, buyer, amount, claimType, triggeredBy] = log.args;
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
-
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for BuyerRefundTransferred event`);
-    return overviewSnapshot;
-  }
 
   const claimTypeEnum = CLAIM_TYPE_VALUES[Number(claimType)] ?? null;
   overviewSnapshot.lastTradeEventAt = timestamp;
@@ -1793,11 +1752,6 @@ async function handleDisputeSolutionProposed(
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for DisputeSolutionProposed event`);
-    return;
-  }
-
   const disputeStatusEnum = disputeStatus === 0n ? DisputeStatus.REFUND : DisputeStatus.RESOLVE;
 
   const expiresAt = new Date(timestamp.getTime() + PROPOSAL_TTL_MS);
@@ -1855,8 +1809,9 @@ async function handleDisputeApproved(
   if (!proposal) {
     proposal = await ctx.store.get(DisputeProposal, proposalId.toString());
     if (!proposal) {
-      ctx.log.error(`Dispute proposal ${proposalId} not found for DisputeApproved event`);
-      return;
+      throw new Error(
+        `Required parent dispute proposal ${proposalId} is missing for DisputeApproved event`,
+      );
     }
     disputeProposals.set(proposalId.toString(), proposal);
   }
@@ -1903,8 +1858,9 @@ async function handleDisputeFinalized(
   if (!proposal) {
     proposal = await ctx.store.get(DisputeProposal, proposalId.toString());
     if (!proposal) {
-      ctx.log.error(`Dispute proposal ${proposalId} not found for DisputeFinalized event`);
-      return;
+      throw new Error(
+        `Required parent dispute proposal ${proposalId} is missing for DisputeFinalized event`,
+      );
     }
     disputeProposals.set(proposalId.toString(), proposal);
   }
@@ -1951,8 +1907,9 @@ async function handleDisputeProposalExpiredCancelled(
   if (!proposal) {
     proposal = await ctx.store.get(DisputeProposal, proposalId.toString());
     if (!proposal) {
-      ctx.log.error(`Dispute proposal ${proposalId} not found for ExpiredCancelled event`);
-      return;
+      throw new Error(
+        `Required parent dispute proposal ${proposalId} is missing for ExpiredCancelled event`,
+      );
     }
     disputeProposals.set(proposalId.toString(), proposal);
   }
@@ -1995,11 +1952,6 @@ async function handleDisputePayout(
   const [tradeId, proposalId, recipient, amount, payoutType] = log.args;
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
-
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for DisputePayout event`);
-    return overviewSnapshot;
-  }
 
   const payoutTypeEnum = payoutType === 0n ? DisputeStatus.REFUND : DisputeStatus.RESOLVE;
   const counters =
@@ -2108,8 +2060,7 @@ async function handleOracleUpdateApproved(
   if (!proposal) {
     proposal = await ctx.store.get(OracleUpdateProposal, proposalId.toString());
     if (!proposal) {
-      ctx.log.error(`Oracle update proposal ${proposalId} not found`);
-      return;
+      throw new Error(`Required parent Oracle update proposal ${proposalId} is missing`);
     }
     proposals.set(proposalId.toString(), proposal);
   }
@@ -2185,8 +2136,7 @@ async function handleOracleUpdateProposalExpiredCancelled(
   if (!proposal) {
     proposal = await ctx.store.get(OracleUpdateProposal, proposalId.toString());
     if (!proposal) {
-      ctx.log.error(`Oracle update proposal ${proposalId} not found`);
-      return;
+      throw new Error(`Required parent Oracle update proposal ${proposalId} is missing`);
     }
     proposals.set(proposalId.toString(), proposal);
   }
@@ -2322,8 +2272,7 @@ async function handleAdminChangeApproved(
   if (!proposal) {
     proposal = await ctx.store.get(AdminChangeProposal, proposalId.toString());
     if (!proposal) {
-      ctx.log.error(`Admin change proposal ${proposalId} not found`);
-      return;
+      throw new Error(`Required parent Admin change proposal ${proposalId} is missing`);
     }
     proposals.set(proposalId.toString(), proposal);
   }
@@ -2499,8 +2448,7 @@ async function handleAdminChangeProposalCancelled(
   if (!proposal) {
     proposal = await ctx.store.get(AdminChangeProposal, proposalId.toString());
     if (!proposal) {
-      ctx.log.error(`Admin change proposal ${proposalId} not found`);
-      return;
+      throw new Error(`Required parent Admin change proposal ${proposalId} is missing`);
     }
     proposals.set(proposalId.toString(), proposal);
   }
