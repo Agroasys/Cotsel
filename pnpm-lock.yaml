@@ -5,7 +5,6 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@nomicfoundation/hardhat-network-helpers>ethereumjs-util': npm:@ethereumjs/util@9.1.0
   '@graphql-tools/utils@<12.0.4': 12.0.4
   '@babel/core@<=7.29.0': 7.29.6
   '@humanfs/node': 0.16.8
@@ -48,31 +47,31 @@ patchedDependencies:
     hash: b7b54b502476b53a21298d67c7ada85e598c81122c968d7785f7f80caf8b4b88
     path: patches/@subsquid__typeorm-store@1.9.2.patch
   brace-expansion@5.0.12:
-    hash: a032f9421598ab3675a2d82edcb25085edbc3cc6c80adedb528edba3e70b58e2
+    hash: 768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0
     path: patches/brace-expansion@5.0.12.patch
   braces@3.0.3:
     hash: 7e75ade1e27447432f36cda3fe73db74ce0d4b84cc2a3ae904b2710807dd8130
     path: patches/braces@3.0.3.patch
   deepmerge@4.3.1:
-    hash: b2e445b65b85efa74f1c34aab227f009f54871378933788cd5526aaf016c4a63
+    hash: 75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281
     path: patches/deepmerge@4.3.1.patch
   elliptic@6.6.1:
-    hash: 6487cd6ebc71c0e26bc65e40ed6ae495c2f17aea11631e9d22b9ccc69e21a07b
+    hash: 2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a
     path: patches/elliptic@6.6.1.patch
   glob@10.5.0:
-    hash: caa2d6f44182762c09bb8aadc4c4d9e9fdaa32b5e57b3af4ead854d3b33a3cb6
+    hash: aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3
     path: patches/glob@10.5.0.patch
   glob@13.0.6:
-    hash: e4ad61336a82ee4bdc92586d3023ed5869391fd38598ed7cab37516896323472
+    hash: 3eae7d01c361a7acda6b682a963c3b6ceb254da74e5007e8e4ee57ba82616154
     path: patches/glob@13.0.6.patch
   minimatch@10.2.5:
-    hash: ff46281cffc7261cd4ae4bb27cef7e415e4e51ca3b2e272de1659d025f1539a9
+    hash: 22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1
     path: patches/minimatch@10.2.5.patch
   minimatch@10.2.6:
-    hash: ff46281cffc7261cd4ae4bb27cef7e415e4e51ca3b2e272de1659d025f1539a9
+    hash: 22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1
     path: patches/minimatch@10.2.6.patch
   minimatch@9.0.9:
-    hash: 247ca512b77080a96da354f42cdf66a3bfcc6e08d819a0943343daac305e0f60
+    hash: 0c6f52c82276fb3f067779b9c3a176d0b80884b4d92ba949488b4bb0e7f35ec6
     path: patches/minimatch@9.0.9.patch
   stream-json@1.9.1:
     hash: fe64e65732c5c53cc420309600b9b089075436191a85e4101e1024c2ce90b786
@@ -3610,6 +3609,12 @@ packages:
         integrity: sha512-8PvcXf70gTDZBgt9ptxJ8elBeBjcLOAcOtoO/mPJjtji1+CdGbHgm77om1GrsPxsiE+uXIpNSK64UYaIwQXd4Q==,
       }
 
+  '@types/bn.js@5.2.0':
+    resolution:
+      {
+        integrity: sha512-DLbJ1BPqxvQhIGbeu8VbUC1DiAiahHtAYvA0ZEAa4P31F7IaArc8z3C3BRQdWX4mtLQuABG4yzp76ZrS02Ui1Q==,
+      }
+
   '@types/body-parser@1.19.2':
     resolution:
       {
@@ -3803,6 +3808,12 @@ packages:
         integrity: sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg==,
       }
 
+  '@types/pbkdf2@3.1.2':
+    resolution:
+      {
+        integrity: sha512-uRwJqmiXmh9++aSu1VNEn3iIxWOhd8AHXNSdlaLfdAAdSTY9jYVeGWnzejM3dvrkbqE3/hyQkQQ29IFATEGlew==,
+      }
+
   '@types/pg@8.23.1':
     resolution:
       {
@@ -3831,6 +3842,12 @@ packages:
     resolution:
       {
         integrity: sha512-hKormJbkJqzQGhziax5PItDUTMAM9uE2XXQmM37dyd4hVM+5aVl7oVxMVUiVQn2oCQFN/LKCZdvSM0pFRqbSmQ==,
+      }
+
+  '@types/secp256k1@4.0.7':
+    resolution:
+      {
+        integrity: sha512-Rcvjl6vARGAKRO6jHeKMatGrvOMGrR/AR11N1x2LqintPCyDZ7NBhrh238Z2VZc7aM7KIwnFpFQ7fnfK4H/9Qw==,
       }
 
   '@types/send@1.2.1':
@@ -4982,6 +4999,12 @@ packages:
         integrity: sha512-qhAVI1+Av2X7qelOfAIYwXONood6XlZE/fXaBSmW/T5SzLAmCgzi+eiWE7fUvbHaeNBQH13UftjpXxsfLkMpgw==,
       }
 
+  browserify-aes@1.2.0:
+    resolution:
+      {
+        integrity: sha512-+7CHXqGuspUn/Sl5aO7Ea0xWGAtETPXNSAjHo48JfLdPWcMng33Xe4znFvQweqc/uzk5zSOI3H52CYnjCfb5hA==,
+      }
+
   browserslist@4.28.7:
     resolution:
       {
@@ -5019,6 +5042,12 @@ packages:
     resolution:
       {
         integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==,
+      }
+
+  buffer-xor@1.0.3:
+    resolution:
+      {
+        integrity: sha512-571s0T7nZWK6vB67HI5dyUF7wXiNcfaPPPTl6zYCNApANjIvYJTg7hlud/+cJpdAhS7dVzqMLmfhfHR3rAcOjQ==,
       }
 
   buffer@6.0.3:
@@ -6180,6 +6209,12 @@ packages:
         integrity: sha512-28hyiE7HVsWubqhpVLVmZXFd4ITeHi+BUu05o9isf0GUpMtzBUi+8/gFrGaGYzvGAJQmJ3JKj77Mk9G98T84rA==,
       }
 
+  ethereum-cryptography@0.1.3:
+    resolution:
+      {
+        integrity: sha512-w8/4x1SGGzc+tO97TASLja6SLd3fRIK2tLVcV2Gx4IB21hE19atll5Cq9o3d0ZmAYC/8aw0ipieTSiekAea4SQ==,
+      }
+
   ethereum-cryptography@1.2.0:
     resolution:
       {
@@ -6198,6 +6233,13 @@ packages:
         integrity: sha512-Urr5YVsalH+Jo0sYkTkv1MyI9bLYZwW8BENZCeE1QYaTHETEYx0Nv/SVsWkSqpYrzweg6d8KMY1wTjH/1m/BIg==,
       }
     engines: { node: ^14.21.3 || >=16, npm: '>=9' }
+
+  ethereumjs-util@7.1.5:
+    resolution:
+      {
+        integrity: sha512-SDl5kKrQAudFBUe5OJM9Ac6WmMyYmXX/6sTmLZ3ffG2eY6ZIGBes3pEDxNN6V72WyOw4CPD5RomKdsa8DAAwLg==,
+      }
+    engines: { node: '>=10.0.0' }
 
   ethers@6.17.0:
     resolution:
@@ -6250,6 +6292,12 @@ packages:
         integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==,
       }
     engines: { node: '>=0.8.x' }
+
+  evp_bytestokey@1.0.3:
+    resolution:
+      {
+        integrity: sha512-/f2Go4TognH/KvCISP7OUsHn85hT9nUkxxA9BEWxFn+Oj9o8ZNLm/40hdlgSLyuOimsrTKLUMEorQexp/aPQeA==,
+      }
 
   execa@5.1.1:
     resolution:
@@ -8401,6 +8449,12 @@ packages:
         integrity: sha512-Ntyt4AIXyaLIuMHF6IOoTakB3K+RWxwtsHNRxllEoA6vPwP9o4866g6YWDLUdnucilZhmkxiHwHr11gAENw+QA==,
       }
 
+  node-addon-api@5.1.0:
+    resolution:
+      {
+        integrity: sha512-eh0GgfEkpnoWDq+VY8OyvYhFEzBk6jIYbRKdIlyTiAXIVJ8PyBaKb0rp7oDtoddbdoHWhq8wwr+XZ81F1rpNdA==,
+      }
+
   node-addon-api@7.1.1:
     resolution:
       {
@@ -8811,6 +8865,13 @@ packages:
       {
         integrity: sha512-Dp6zGqpTdETdR63lehJYPeIOqpiNBNtc7BpWSLrOje7UaIsE5aY92r/AunQA7rsXvet3lrJ3JnZX29UPTKXyKQ==,
       }
+
+  pbkdf2@3.1.7:
+    resolution:
+      {
+        integrity: sha512-nS4mvFgVwUrecPTRdpdseM2fwpdfnX0/HibA8DgBRQtihUAzHQYJFU2l+OlEtiXtpqkrMvCPDwyXMUnASDt6Qw==,
+      }
+    engines: { node: '>= 0.10' }
 
   permissionless@0.3.5:
     resolution:
@@ -9422,6 +9483,13 @@ packages:
       }
     engines: { node: '>= 16' }
 
+  rlp@2.2.7:
+    resolution:
+      {
+        integrity: sha512-d5gdPmgQ0Z+AklL2NVXr/IoSjNZFfTVvQWzL/AM2AOcSzYP2xjlb0AC8YyCLc41MSNf6P6QVtjgPdmVtzb+4lQ==,
+      }
+    hasBin: true
+
   router@2.2.0:
     resolution:
       {
@@ -9491,6 +9559,19 @@ packages:
       {
         integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==,
       }
+
+  scrypt-js@3.0.1:
+    resolution:
+      {
+        integrity: sha512-cdwTTnqPu0Hyvf5in5asVdZocVDTNRmR7XEcJuIzMjJeSHybHl7vpB66AzwTaIg6CLSbtjcxc8fqcySfnTkccA==,
+      }
+
+  secp256k1@4.0.4:
+    resolution:
+      {
+        integrity: sha512-6JfvwvjUOn8F/jUoBY2Q1v5WY5XS+rj8qSe0v8Y4ezH4InLgTEeOOPQsRll9OV429Pvo6BCHGavIyJfr3TAhsw==,
+      }
+    engines: { node: '>=18.0.0' }
 
   semver@5.7.2:
     resolution:
@@ -9570,6 +9651,12 @@ packages:
         integrity: sha512-7PGFlmtwsEADb0WYyvCMa1t+yke6daIG4Wirafur5kcf+MhUnPms1UeR0CKQdTZD81yESwMHbtn+TR+dMviakQ==,
       }
     engines: { node: '>= 0.4' }
+
+  setimmediate@1.0.5:
+    resolution:
+      {
+        integrity: sha512-MATJdZp8sLqDl/68LfQmbP8zKPLQNV6BIZoIgrscFDQ+RsvK/BxeDQOgyxKKoh0y/8h3BqVFnCqQ/gd+reiIXA==,
+      }
 
   setprototypeof@1.2.0:
     resolution:
@@ -11501,7 +11588,7 @@ snapshots:
     dependencies:
       '@eslint/object-schema': 3.0.5
       debug: 4.4.3(supports-color@8.1.1)
-      minimatch: 10.2.6(patch_hash=ff46281cffc7261cd4ae4bb27cef7e415e4e51ca3b2e272de1659d025f1539a9)
+      minimatch: 10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
     transitivePeerDependencies:
       - supports-color
 
@@ -11674,7 +11761,7 @@ snapshots:
       '@ethersproject/logger': 5.8.0
       '@ethersproject/properties': 5.8.0
       bn.js: 4.12.3
-      elliptic: 6.6.1(patch_hash=6487cd6ebc71c0e26bc65e40ed6ae495c2f17aea11631e9d22b9ccc69e21a07b)
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       hash.js: 1.1.7
 
   '@ethersproject/strings@5.8.0':
@@ -11926,7 +12013,7 @@ snapshots:
       chalk: 4.1.2
       collect-v8-coverage: 1.0.3
       exit-x: 0.2.2
-      glob: 13.0.6(patch_hash=e4ad61336a82ee4bdc92586d3023ed5869391fd38598ed7cab37516896323472)
+      glob: 13.0.6(patch_hash=3eae7d01c361a7acda6b682a963c3b6ceb254da74e5007e8e4ee57ba82616154)
       graceful-fs: 4.2.11
       istanbul-lib-coverage: 3.2.2
       istanbul-lib-instrument: 6.0.3
@@ -12403,7 +12490,7 @@ snapshots:
 
   '@nomicfoundation/hardhat-network-helpers@1.1.2(hardhat@2.29.1(bufferutil@4.1.0)(ts-node@10.9.2(@types/node@26.6.5)(typescript@6.0.3))(typescript@6.0.3)(utf-8-validate@5.0.10))':
     dependencies:
-      ethereumjs-util: '@ethereumjs/util@9.1.0'
+      ethereumjs-util: 7.1.5
       hardhat: 2.29.1(bufferutil@4.1.0)(ts-node@10.9.2(@types/node@26.6.5)(typescript@6.0.3))(typescript@6.0.3)(utf-8-validate@5.0.10)
 
   '@nomicfoundation/hardhat-toolbox@6.1.2(b2d39e1f89278acd4e2a503cb00e0301)':
@@ -13201,7 +13288,7 @@ snapshots:
       '@toruslabs/torus.js': 16.0.0(@babel/runtime@7.28.6)(@sentry/core@9.47.1)
       base64url: 3.0.1
       bowser: 2.14.1
-      deepmerge: 4.3.1(patch_hash=b2e445b65b85efa74f1c34aab227f009f54871378933788cd5526aaf016c4a63)
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       events: 3.3.0
       loglevel: 1.9.2
     optionalDependencies:
@@ -13213,7 +13300,7 @@ snapshots:
 
   '@toruslabs/eccrypto@6.2.0':
     dependencies:
-      elliptic: 6.6.1(patch_hash=6487cd6ebc71c0e26bc65e40ed6ae495c2f17aea11631e9d22b9ccc69e21a07b)
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
 
   '@toruslabs/ethereum-controllers@8.17.1(@babel/runtime@7.28.6)(@sentry/core@9.47.1)(bufferutil@4.1.0)(color@5.0.3)(typescript@6.0.3)(utf-8-validate@6.0.6)(viem@2.57.4(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@6.0.6)(zod@4.6.6))(zod@4.6.6)':
     dependencies:
@@ -13229,7 +13316,7 @@ snapshots:
       async-mutex: 0.5.0
       bignumber.js: 9.3.1
       bn.js: 4.12.3
-      deepmerge: 4.3.1(patch_hash=b2e445b65b85efa74f1c34aab227f009f54871378933788cd5526aaf016c4a63)
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       ethereum-cryptography: 3.2.0
       ethers: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       fast-json-patch: 3.1.1
@@ -13268,7 +13355,7 @@ snapshots:
   '@toruslabs/http-helpers@8.1.1(@babel/runtime@7.28.6)(@sentry/core@9.47.1)':
     dependencies:
       '@babel/runtime': 7.28.6
-      deepmerge: 4.3.1(patch_hash=b2e445b65b85efa74f1c34aab227f009f54871378933788cd5526aaf016c4a63)
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       loglevel: 1.9.2
     optionalDependencies:
       '@sentry/core': 9.47.1
@@ -13284,7 +13371,7 @@ snapshots:
       '@babel/runtime': 7.28.6
       '@toruslabs/eccrypto': 6.2.0
       '@toruslabs/http-helpers': 8.1.1(@babel/runtime@7.28.6)(@sentry/core@9.47.1)
-      elliptic: 6.6.1(patch_hash=6487cd6ebc71c0e26bc65e40ed6ae495c2f17aea11631e9d22b9ccc69e21a07b)
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       ethereum-cryptography: 3.2.0
       json-stable-stringify: 1.3.0
     transitivePeerDependencies:
@@ -13323,7 +13410,7 @@ snapshots:
       assert: 2.1.0
       bip39: 3.1.0
       bn.js: 4.12.3
-      elliptic: 6.6.1(patch_hash=6487cd6ebc71c0e26bc65e40ed6ae495c2f17aea11631e9d22b9ccc69e21a07b)
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       enc-utils: 3.0.0
       ethereum-cryptography: 3.2.0
       hash.js: 1.1.7
@@ -13336,7 +13423,7 @@ snapshots:
       '@toruslabs/eccrypto': 6.2.0
       '@toruslabs/http-helpers': 8.1.1(@babel/runtime@7.28.6)(@sentry/core@9.47.1)
       bn.js: 4.12.3
-      elliptic: 6.6.1(patch_hash=6487cd6ebc71c0e26bc65e40ed6ae495c2f17aea11631e9d22b9ccc69e21a07b)
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       ethereum-cryptography: 3.2.0
       json-stable-stringify: 1.3.0
       loglevel: 1.9.2
@@ -13398,6 +13485,10 @@ snapshots:
   '@types/babel__traverse@7.28.0':
     dependencies:
       '@babel/types': 7.29.7
+
+  '@types/bn.js@5.2.0':
+    dependencies:
+      '@types/node': 26.6.5
 
   '@types/body-parser@1.19.2':
     dependencies:
@@ -13490,7 +13581,7 @@ snapshots:
 
   '@types/minimatch@6.0.0':
     dependencies:
-      minimatch: 10.2.5(patch_hash=ff46281cffc7261cd4ae4bb27cef7e415e4e51ca3b2e272de1659d025f1539a9)
+      minimatch: 10.2.5(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
 
   '@types/mocha@10.0.10': {}
 
@@ -13510,6 +13601,10 @@ snapshots:
     dependencies:
       undici-types: 8.9.0
 
+  '@types/pbkdf2@3.1.2':
+    dependencies:
+      '@types/node': 26.6.5
+
   '@types/pg@8.23.1':
     dependencies:
       '@types/node': 26.6.5
@@ -13523,6 +13618,10 @@ snapshots:
   '@types/qs@6.15.1': {}
 
   '@types/range-parser@1.2.7': {}
+
+  '@types/secp256k1@4.0.7':
+    dependencies:
+      '@types/node': 26.6.5
 
   '@types/send@1.2.1':
     dependencies:
@@ -13618,7 +13717,7 @@ snapshots:
       '@typescript-eslint/types': 8.71.1
       '@typescript-eslint/visitor-keys': 8.71.1
       debug: 4.4.3(supports-color@8.1.1)
-      minimatch: 10.2.6(patch_hash=ff46281cffc7261cd4ae4bb27cef7e415e4e51ca3b2e272de1659d025f1539a9)
+      minimatch: 10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
       semver: 7.8.5
       tinyglobby: 0.2.17
       ts-api-utils: 2.5.0(typescript@6.0.3)
@@ -13994,7 +14093,7 @@ snapshots:
       bip39: 3.1.0
       bn.js: 4.12.3
       color: 5.0.3
-      deepmerge: 4.3.1(patch_hash=b2e445b65b85efa74f1c34aab227f009f54871378933788cd5526aaf016c4a63)
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       enc-utils: 3.0.0
       end-of-stream: 1.4.5
       events: 3.3.0
@@ -14028,7 +14127,7 @@ snapshots:
       clsx: 2.1.1
       color: 5.0.3
       copy-to-clipboard: 3.3.3
-      deepmerge: 4.3.1(patch_hash=b2e445b65b85efa74f1c34aab227f009f54871378933788cd5526aaf016c4a63)
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       i18next: 25.8.12(typescript@6.0.3)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
@@ -14095,7 +14194,7 @@ snapshots:
       bignumber.js: 9.3.1
       bn.js: 4.12.3
       bowser: 2.14.1
-      deepmerge: 4.3.1(patch_hash=b2e445b65b85efa74f1c34aab227f009f54871378933788cd5526aaf016c4a63)
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       ethers: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       json-rpc-random-id: 1.0.1
       jsonschema: 1.5.0
@@ -14145,7 +14244,7 @@ snapshots:
       '@toruslabs/constants': 15.0.0(@babel/runtime@7.28.6)
       '@toruslabs/http-helpers': 8.1.1(@babel/runtime@7.28.6)(@sentry/core@9.47.1)
       '@web3auth/auth': 10.8.0(@babel/runtime@7.28.6)(@sentry/core@9.47.1)(bufferutil@4.1.0)(color@5.0.3)(utf-8-validate@6.0.6)
-      deepmerge: 4.3.1(patch_hash=b2e445b65b85efa74f1c34aab227f009f54871378933788cd5526aaf016c4a63)
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
       fast-deep-equal: 3.1.3
       loglevel: 1.9.2
       pump: 3.0.4
@@ -14533,7 +14632,7 @@ snapshots:
       widest-line: 3.1.0
       wrap-ansi: 7.0.0
 
-  brace-expansion@5.0.12(patch_hash=a032f9421598ab3675a2d82edcb25085edbc3cc6c80adedb528edba3e70b58e2):
+  brace-expansion@5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0):
     dependencies:
       balanced-match: 4.0.4
 
@@ -14546,6 +14645,15 @@ snapshots:
   brotli-wasm@2.0.1: {}
 
   browser-stdout@1.3.1: {}
+
+  browserify-aes@1.2.0:
+    dependencies:
+      buffer-xor: 1.0.3
+      cipher-base: 1.0.7
+      create-hash: 1.2.0
+      evp_bytestokey: 1.0.3
+      inherits: 2.0.4
+      safe-buffer: 5.2.1
 
   browserslist@4.28.7:
     dependencies:
@@ -14574,6 +14682,8 @@ snapshots:
       node-int64: 0.4.0
 
   buffer-from@1.1.2: {}
+
+  buffer-xor@1.0.3: {}
 
   buffer@6.0.3:
     dependencies:
@@ -14945,7 +15055,7 @@ snapshots:
 
   deep-is@0.1.4: {}
 
-  deepmerge@4.3.1(patch_hash=b2e445b65b85efa74f1c34aab227f009f54871378933788cd5526aaf016c4a63): {}
+  deepmerge@4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281): {}
 
   define-data-property@1.1.4:
     dependencies:
@@ -15018,7 +15128,7 @@ snapshots:
 
   electron-to-chromium@1.5.420: {}
 
-  elliptic@6.6.1(patch_hash=6487cd6ebc71c0e26bc65e40ed6ae495c2f17aea11631e9d22b9ccc69e21a07b):
+  elliptic@6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a):
     dependencies:
       bn.js: 4.12.3
       brorand: 1.1.0
@@ -15190,7 +15300,7 @@ snapshots:
       imurmurhash: 0.1.4
       is-glob: 4.0.3
       json-stable-stringify-without-jsonify: 1.0.1
-      minimatch: 10.2.6(patch_hash=ff46281cffc7261cd4ae4bb27cef7e415e4e51ca3b2e272de1659d025f1539a9)
+      minimatch: 10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
       natural-compare: 1.4.0
       optionator: 0.9.4
     transitivePeerDependencies:
@@ -15237,6 +15347,24 @@ snapshots:
     dependencies:
       '@noble/hashes': 1.8.0
 
+  ethereum-cryptography@0.1.3:
+    dependencies:
+      '@types/pbkdf2': 3.1.2
+      '@types/secp256k1': 4.0.7
+      blakejs: 1.2.1
+      browserify-aes: 1.2.0
+      bs58check: 2.1.2
+      create-hash: 1.2.0
+      create-hmac: 1.1.7
+      hash.js: 1.1.7
+      keccak: 3.0.4
+      pbkdf2: 3.1.7
+      randombytes: 2.1.0
+      safe-buffer: 5.2.1
+      scrypt-js: 3.0.1
+      secp256k1: 4.0.4
+      setimmediate: 1.0.5
+
   ethereum-cryptography@1.2.0:
     dependencies:
       '@noble/hashes': 1.2.0
@@ -15258,6 +15386,14 @@ snapshots:
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
+
+  ethereumjs-util@7.1.5:
+    dependencies:
+      '@types/bn.js': 5.2.0
+      bn.js: 4.12.3
+      create-hash: 1.2.0
+      ethereum-cryptography: 0.1.3
+      rlp: 2.2.7
 
   ethers@6.17.0(bufferutil@4.1.0)(utf-8-validate@5.0.10):
     dependencies:
@@ -15304,6 +15440,11 @@ snapshots:
   eventemitter3@5.0.4: {}
 
   events@3.3.0: {}
+
+  evp_bytestokey@1.0.3:
+    dependencies:
+      md5.js: 1.3.5
+      safe-buffer: 5.2.1
 
   execa@5.1.1:
     dependencies:
@@ -15627,18 +15768,18 @@ snapshots:
     dependencies:
       is-glob: 4.0.3
 
-  glob@10.5.0(patch_hash=caa2d6f44182762c09bb8aadc4c4d9e9fdaa32b5e57b3af4ead854d3b33a3cb6):
+  glob@10.5.0(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3):
     dependencies:
       foreground-child: 3.3.1
       jackspeak: 3.4.3
-      minimatch: 9.0.9(patch_hash=247ca512b77080a96da354f42cdf66a3bfcc6e08d819a0943343daac305e0f60)
+      minimatch: 9.0.9(patch_hash=0c6f52c82276fb3f067779b9c3a176d0b80884b4d92ba949488b4bb0e7f35ec6)
       minipass: 7.1.3
       package-json-from-dist: 1.0.1
       path-scurry: 1.11.1
 
-  glob@13.0.6(patch_hash=e4ad61336a82ee4bdc92586d3023ed5869391fd38598ed7cab37516896323472):
+  glob@13.0.6(patch_hash=3eae7d01c361a7acda6b682a963c3b6ceb254da74e5007e8e4ee57ba82616154):
     dependencies:
-      minimatch: 10.2.6(patch_hash=ff46281cffc7261cd4ae4bb27cef7e415e4e51ca3b2e272de1659d025f1539a9)
+      minimatch: 10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
       minipass: 7.1.3
       path-scurry: 2.0.2
 
@@ -15754,7 +15895,7 @@ snapshots:
       chalk: 4.1.2
       cli-table3: 0.6.5
       ethereum-cryptography: 2.2.1
-      glob: 10.5.0(patch_hash=caa2d6f44182762c09bb8aadc4c4d9e9fdaa32b5e57b3af4ead854d3b33a3cb6)
+      glob: 10.5.0(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
       hardhat: 2.29.1(bufferutil@4.1.0)(ts-node@10.9.2(@types/node@26.6.5)(typescript@6.0.3))(typescript@6.0.3)(utf-8-validate@5.0.10)
       jsonschema: 1.5.0
       lodash: 4.18.1
@@ -16255,8 +16396,8 @@ snapshots:
       babel-jest: 30.5.2(@babel/core@7.29.6)
       chalk: 4.1.2
       ci-info: 4.4.0
-      deepmerge: 4.3.1(patch_hash=b2e445b65b85efa74f1c34aab227f009f54871378933788cd5526aaf016c4a63)
-      glob: 13.0.6(patch_hash=e4ad61336a82ee4bdc92586d3023ed5869391fd38598ed7cab37516896323472)
+      deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
+      glob: 13.0.6(patch_hash=3eae7d01c361a7acda6b682a963c3b6ceb254da74e5007e8e4ee57ba82616154)
       graceful-fs: 4.2.11
       jest-circus: 30.5.2
       jest-docblock: 30.5.0
@@ -16447,7 +16588,7 @@ snapshots:
       cjs-module-lexer: 2.2.0
       collect-v8-coverage: 1.0.3
       es-module-lexer: 2.3.2
-      glob: 13.0.6(patch_hash=e4ad61336a82ee4bdc92586d3023ed5869391fd38598ed7cab37516896323472)
+      glob: 13.0.6(patch_hash=3eae7d01c361a7acda6b682a963c3b6ceb254da74e5007e8e4ee57ba82616154)
       graceful-fs: 4.2.11
       jest-haste-map: 30.5.1
       jest-message-util: 30.5.1
@@ -16794,25 +16935,25 @@ snapshots:
 
   minimalistic-crypto-utils@1.0.1: {}
 
-  minimatch@10.2.5(patch_hash=ff46281cffc7261cd4ae4bb27cef7e415e4e51ca3b2e272de1659d025f1539a9):
+  minimatch@10.2.5(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1):
     dependencies:
-      brace-expansion: 5.0.12(patch_hash=a032f9421598ab3675a2d82edcb25085edbc3cc6c80adedb528edba3e70b58e2)
+      brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
-  minimatch@10.2.6(patch_hash=ff46281cffc7261cd4ae4bb27cef7e415e4e51ca3b2e272de1659d025f1539a9):
+  minimatch@10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1):
     dependencies:
-      brace-expansion: 5.0.12(patch_hash=a032f9421598ab3675a2d82edcb25085edbc3cc6c80adedb528edba3e70b58e2)
+      brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
   minimatch@3.1.5:
     dependencies:
-      brace-expansion: 5.0.12(patch_hash=a032f9421598ab3675a2d82edcb25085edbc3cc6c80adedb528edba3e70b58e2)
+      brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
   minimatch@5.1.9:
     dependencies:
-      brace-expansion: 5.0.12(patch_hash=a032f9421598ab3675a2d82edcb25085edbc3cc6c80adedb528edba3e70b58e2)
+      brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
-  minimatch@9.0.9(patch_hash=247ca512b77080a96da354f42cdf66a3bfcc6e08d819a0943343daac305e0f60):
+  minimatch@9.0.9(patch_hash=0c6f52c82276fb3f067779b9c3a176d0b80884b4d92ba949488b4bb0e7f35ec6):
     dependencies:
-      brace-expansion: 5.0.12(patch_hash=a032f9421598ab3675a2d82edcb25085edbc3cc6c80adedb528edba3e70b58e2)
+      brace-expansion: 5.0.12(patch_hash=768ede5a8ef3d3b80fa0a27e28c06dde7a637ca6e991469774e7a4431cf742f0)
 
   minimist@1.2.8: {}
 
@@ -16863,12 +17004,12 @@ snapshots:
       diff: 8.0.3
       escape-string-regexp: 4.0.0
       find-up: 5.0.0
-      glob: 10.5.0(patch_hash=caa2d6f44182762c09bb8aadc4c4d9e9fdaa32b5e57b3af4ead854d3b33a3cb6)
+      glob: 10.5.0(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
       he: 1.2.0
       is-path-inside: 3.0.3
       js-yaml: 4.3.2
       log-symbols: 4.1.0
-      minimatch: 9.0.9(patch_hash=247ca512b77080a96da354f42cdf66a3bfcc6e08d819a0943343daac305e0f60)
+      minimatch: 9.0.9(patch_hash=0c6f52c82276fb3f067779b9c3a176d0b80884b4d92ba949488b4bb0e7f35ec6)
       ms: 2.1.3
       picocolors: 1.1.1
       serialize-javascript: 7.1.3
@@ -16917,6 +17058,8 @@ snapshots:
 
   node-addon-api@2.0.2: {}
 
+  node-addon-api@5.1.0: {}
+
   node-addon-api@7.1.1: {}
 
   node-domexception@1.0.0: {}
@@ -16950,7 +17093,7 @@ snapshots:
       chokidar: 3.6.0
       debug: 4.4.3(supports-color@5.5.0)
       ignore-by-default: 1.0.1
-      minimatch: 10.2.5(patch_hash=ff46281cffc7261cd4ae4bb27cef7e415e4e51ca3b2e272de1659d025f1539a9)
+      minimatch: 10.2.5(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
       pstree.remy: 1.1.8
       semver: 7.7.4
       simple-update-notifier: 2.0.0
@@ -17171,6 +17314,15 @@ snapshots:
   path-type@4.0.0: {}
 
   pathval@1.1.1: {}
+
+  pbkdf2@3.1.7:
+    dependencies:
+      create-hash: 1.2.0
+      create-hmac: 1.1.7
+      ripemd160: 2.0.3
+      safe-buffer: 5.2.1
+      sha.js: 2.4.12
+      to-buffer: 1.2.2
 
   permissionless@0.3.5(typescript@6.0.3)(viem@2.57.4(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@6.0.6)(zod@4.6.6))(zod@4.6.6):
     dependencies:
@@ -17498,7 +17650,7 @@ snapshots:
     dependencies:
       bn.js: 4.12.3
       brorand: 1.1.0
-      elliptic: 6.6.1(patch_hash=6487cd6ebc71c0e26bc65e40ed6ae495c2f17aea11631e9d22b9ccc69e21a07b)
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       hash.js: 1.1.7
       ripple-address-codec: 4.3.1
 
@@ -17510,6 +17662,10 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+
+  rlp@2.2.7:
+    dependencies:
+      bn.js: 4.12.3
 
   router@2.2.0:
     dependencies:
@@ -17575,6 +17731,14 @@ snapshots:
       wordwrap: 1.0.0
 
   scheduler@0.27.0: {}
+
+  scrypt-js@3.0.1: {}
+
+  secp256k1@4.0.4:
+    dependencies:
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
+      node-addon-api: 5.1.0
+      node-gyp-build: 4.8.4
 
   semver@5.7.2: {}
 
@@ -17653,6 +17817,8 @@ snapshots:
       es-errors: 1.3.0
       functions-have-names: 1.2.3
       has-property-descriptors: 1.0.2
+
+  setimmediate@1.0.5: {}
 
   setprototypeof@1.2.0: {}
 
@@ -17935,8 +18101,8 @@ snapshots:
   test-exclude@7.0.2:
     dependencies:
       '@istanbuljs/schema': 0.1.6
-      glob: 10.5.0(patch_hash=caa2d6f44182762c09bb8aadc4c4d9e9fdaa32b5e57b3af4ead854d3b33a3cb6)
-      minimatch: 10.2.6(patch_hash=ff46281cffc7261cd4ae4bb27cef7e415e4e51ca3b2e272de1659d025f1539a9)
+      glob: 10.5.0(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
+      minimatch: 10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
 
   text-encoding-utf-8@1.0.2: {}
 
@@ -17953,7 +18119,7 @@ snapshots:
       bindings: 1.5.0
       bn.js: 4.12.3
       create-hmac: 1.1.7
-      elliptic: 6.6.1(patch_hash=6487cd6ebc71c0e26bc65e40ed6ae495c2f17aea11631e9d22b9ccc69e21a07b)
+      elliptic: 6.6.1(patch_hash=2370eaa8334b7ea4446e609c30526b5a9f7b0201eaf97c5091ea53facd27963a)
       nan: 2.26.2
 
   tinyexec@1.3.1: {}

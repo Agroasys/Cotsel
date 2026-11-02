@@ -6,11 +6,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { Readable } from 'node:stream';
-import { createHash } from 'node:crypto';
+import { createHash, pbkdf2Sync as nativePbkdf2Sync } from 'node:crypto';
 
 const require = createRequire(import.meta.url);
 const minimatchVersions = ['3.1.5', '5.1.9', '9.0.9', '10.2.5', '10.2.6'];
 const packagePath = installedPackagePath;
+
+const pbkdf2Path = packagePath('pbkdf2', '3.1.7');
+const pbkdf2 = require(pbkdf2Path);
+const browserPbkdf2Sync = require(path.join(pbkdf2Path, 'lib', 'sync.js'));
+for (const password of ['wallet-password', 'long-password-'.repeat(1024)]) {
+  for (const digest of ['sha1', 'sha256', 'sha512']) {
+    const expected = nativePbkdf2Sync(password, 'compatibility-salt', 100, 32, digest);
+    assert.deepEqual(pbkdf2.pbkdf2Sync(password, 'compatibility-salt', 100, 32, digest), expected);
+    assert.deepEqual(browserPbkdf2Sync(password, 'compatibility-salt', 100, 32, digest), expected);
+  }
+}
 
 const braceTargets = new Set();
 for (const version of minimatchVersions) {

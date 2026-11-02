@@ -30,11 +30,11 @@ const clean = () => ({
   metadata: { vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0 } },
 });
 const finding = (changes = {}) => ({
-  github_advisory_id: 'GHSA-848j-6mx2-7j84',
-  module_name: 'elliptic',
-  severity: 'low',
+  github_advisory_id: 'GHSA-vfj7-8cjw-p6xm',
+  module_name: 'braces',
+  severity: 'high',
   patched_versions: '<0.0.0',
-  findings: [{ version: '6.6.1', paths: ['contracts>elliptic'] }],
+  findings: [{ version: '3.0.3', paths: ['contracts>braces'] }],
   ...changes,
 });
 function report(advisory) {
@@ -64,7 +64,7 @@ for (const [label, changes] of [
   ['production informational finding', { prod: report(finding({ severity: 'info' })) }],
   ['unknown advisory', { all: report(finding({ github_advisory_id: 'GHSA-unknown' })) }],
   ['unverified version', { all: report(finding({ findings: [{ version: '6.6.2' }] })) }],
-  ['changed severity', { all: report(finding({ severity: 'high' })) }],
+  ['changed severity', { all: report(finding({ severity: 'low' })) }],
   ['production finding even when patched', { prod: report(finding()) }],
   ['failed installed-artifact proof', { all: report(finding()), compatExit: 1 }],
   ['invalid dependency graph', { listExit: 1 }],

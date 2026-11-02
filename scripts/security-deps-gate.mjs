@@ -1,58 +1,20 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+import { matchesVerifiedDisposition } from './dependency-disposition.mjs';
 
-// Exact-version resolutions are admitted only when the installed-artifact regression
-// suite succeeds. Unknown advisories and every production finding remain blocking.
-const verifiedAdvisoryResolutions = new Map([
-  [
-    'GHSA-vfj7-8cjw-p6xm',
-    {
-      moduleName: 'braces',
-      severity: 'high',
-      versions: new Set(['3.0.3']),
-      patchedVersions: '<0.0.0',
-      evidence: 'patches/braces@3.0.3.patch',
-    },
-  ],
-  [
-    'GHSA-528h-pc64-c93x',
-    {
-      moduleName: 'stream-json',
-      severity: 'moderate',
-      versions: new Set(['1.9.1']),
-      patchedVersions: '>=3.5.0',
-      evidence: 'patches/stream-json@1.9.1.patch',
-    },
-  ],
-  [
-    'GHSA-mjw6-4jj6-33hc',
-    {
-      moduleName: 'stream-json',
-      severity: 'moderate',
-      versions: new Set(['1.9.1']),
-      patchedVersions: '>=3.6.0',
-      evidence: 'patches/stream-json@1.9.1.patch',
-    },
-  ],
-  [
-    'GHSA-hqr4-qq8f-hg3x',
-    {
-      moduleName: 'stream-json',
-      severity: 'moderate',
-      versions: new Set(['1.9.1']),
-      patchedVersions: '>=3.6.0',
-      evidence:
-        'strict JSON 1.9.1 has no affected JSONC parser or verifier; installed entry points checked',
-    },
-  ],
+const locallyPatchedAdvisories = new Map([
   [
     'GHSA-848j-6mx2-7j84',
     {
       moduleName: 'elliptic',
       severity: 'low',
       versions: new Set(['6.6.1']),
+      vulnerableVersions: '<=6.6.1',
       patchedVersions: '<0.0.0',
-      evidence: 'patches/elliptic@6.6.1.patch',
+      overviewHash: 'a426af33fd4534e3c56764c2c49dca780c7834f3d8d19746881d3c6dc23e17cc',
+      upstreamCommit: '99a867dc935324e06498f1acec6b7d70310bd551',
+      disposition:
+        'proposed upstream nonce byte-length fix; published P-521 vector and independent verification',
     },
   ],
   [
@@ -61,8 +23,25 @@ const verifiedAdvisoryResolutions = new Map([
       moduleName: 'deepmerge',
       severity: 'low',
       versions: new Set(['4.3.1']),
+      vulnerableVersions: '>=4.2.0 <=4.3.1',
       patchedVersions: '<0.0.0',
-      evidence: 'patches/deepmerge@4.3.1.patch',
+      overviewHash: 'a6ad5816ac31713fcb857502d8d59a6d562c9e93478e79135906075ce681e725',
+      patchFile: 'patches/deepmerge@4.3.1.patch',
+      disposition:
+        'issue 273 recommended key guards, own-property writes and fail-closed target inspection',
+    },
+  ],
+  [
+    'GHSA-hqr4-qq8f-hg3x',
+    {
+      moduleName: 'stream-json',
+      severity: 'moderate',
+      versions: new Set(['1.9.1']),
+      vulnerableVersions: '<=3.5.0',
+      patchedVersions: '>=3.6.0',
+      overviewHash: '9eeb8ffedaa79721198d8635cfb20a8474498fc450d6ae7a1809b79665d86256',
+      patchFile: 'patches/stream-json@1.9.1.patch',
+      disposition: 'hash-pinned legacy source has no JSONC entry points and rejects comments',
     },
   ],
   [
@@ -72,8 +51,11 @@ const verifiedAdvisoryResolutions = new Map([
       severity: 'moderate',
       versions: new Set(['3.1.5', '5.1.9', '9.0.9', '10.2.5', '10.2.6']),
       patchedVersions: '>=11.0.1',
-      evidence:
-        'patched 9/10 preprocessing; affected optimization absent in legacy 3/5; installed-artifact regressions',
+      vulnerableVersions: '<11.0.1',
+      overviewHash: '864649cfe8b481d0f1de3513fe2ce8d7be9dc660d35c7d1497e3275d29616c75',
+      upstreamCommit: '77a0f5c4b80bdc641c3c930a1d9edf5ad2db57f8',
+      disposition:
+        '9/10 backport tested; 3.1.5/5.1.9 lack the reported algorithm in hash-pinned sources',
     },
   ],
   [
@@ -83,7 +65,37 @@ const verifiedAdvisoryResolutions = new Map([
       severity: 'moderate',
       versions: new Set(['10.5.0', '13.0.6']),
       patchedVersions: '>=14.0.2',
-      evidence: 'patches/glob@10.5.0.patch and patches/glob@13.0.6.patch',
+      upstreamCommit: '4682e8c9babee1b385202ede36389634e12076d7',
+    },
+  ],
+  [
+    'GHSA-vfj7-8cjw-p6xm',
+    {
+      moduleName: 'braces',
+      severity: 'high',
+      versions: new Set(['3.0.3']),
+      patchedVersions: '<0.0.0',
+      patchFile: 'patches/braces@3.0.3.patch',
+    },
+  ],
+  [
+    'GHSA-528h-pc64-c93x',
+    {
+      moduleName: 'stream-json',
+      severity: 'moderate',
+      versions: new Set(['1.9.1']),
+      patchedVersions: '>=3.5.0',
+      upstreamCommit: 'a869fb98aaef9225556f49901a8f55954ff856e6',
+    },
+  ],
+  [
+    'GHSA-mjw6-4jj6-33hc',
+    {
+      moduleName: 'stream-json',
+      severity: 'moderate',
+      versions: new Set(['1.9.1']),
+      patchedVersions: '>=3.6.0',
+      patchFile: 'patches/stream-json@1.9.1.patch',
     },
   ],
 ]);
@@ -160,18 +172,9 @@ function advisoryId(advisory) {
   return advisory?.github_advisory_id ?? String(advisory?.id ?? 'unknown');
 }
 
-function matchesVerifiedResolution(advisory) {
-  const allowed = verifiedAdvisoryResolutions.get(advisoryId(advisory));
-  if (!allowed) return false;
-
-  const findingVersions = (advisory.findings ?? []).map((finding) => finding.version);
-  return (
-    advisory.module_name === allowed.moduleName &&
-    advisory.severity === allowed.severity &&
-    advisory.patched_versions === allowed.patchedVersions &&
-    findingVersions.length > 0 &&
-    findingVersions.every((version) => allowed.versions.has(version))
-  );
+function matchesLocalPatch(advisory) {
+  const allowed = locallyPatchedAdvisories.get(advisoryId(advisory));
+  return matchesVerifiedDisposition(advisory, allowed);
 }
 
 function auditDescription(advisory) {
@@ -223,23 +226,19 @@ if (
 
 if (auditAllReport) {
   const allAdvisories = advisories(auditAllReport);
-  const resolvedAdvisories = allAdvisories.filter(matchesVerifiedResolution);
-  const unexpectedAdvisories = allAdvisories.filter(
-    (advisory) => !matchesVerifiedResolution(advisory),
-  );
+  const patchedAdvisories = allAdvisories.filter(matchesLocalPatch);
+  const unexpectedAdvisories = allAdvisories.filter((advisory) => !matchesLocalPatch(advisory));
 
   if (allSummary.total > 0 && allAdvisories.length === 0) {
     console.error('Release gate failed: full dependency audit findings could not be classified.');
     failed = true;
   }
 
-  for (const advisory of resolvedAdvisories) {
-    const resolution = verifiedAdvisoryResolutions.get(advisoryId(advisory));
-    if (dependencyCompatibility.exitCode === 0) {
-      console.log(
-        `Verified dependency resolution: ${auditDescription(advisory)}; evidence=${resolution.evidence}; installed-artifact-check=passed`,
-      );
-    }
+  for (const advisory of patchedAdvisories) {
+    const patch = locallyPatchedAdvisories.get(advisoryId(advisory));
+    console.log(
+      `Verified dependency disposition: ${auditDescription(advisory)}; patch-source=${patch.upstreamCommit ?? patch.patchFile}; ${patch.disposition ?? 'local backport'}; compatibility-check=${dependencyCompatibility.exitCode === 0 ? 'passed' : 'FAILED'}`,
+    );
   }
 
   for (const advisory of unexpectedAdvisories) {

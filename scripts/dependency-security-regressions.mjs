@@ -51,7 +51,6 @@ const helperRequire = createRequire(
   fs.realpathSync('contracts/node_modules/@nomicfoundation/hardhat-network-helpers/package.json'),
 );
 const addressUtil = helperRequire('ethereumjs-util');
-assert.match(helperRequire.resolve('ethereumjs-util'), /@ethereumjs[+/]util@9\.1\.0/);
 for (const value of [
   '0x0000000000000000000000000000000000000000',
   '0x52908400098527886E0F7030069857D2E4169EE7',
