@@ -24,7 +24,7 @@ interface GraphQlResponse {
   data?: {
     tradesConnection?: { totalCount?: number };
     overviewSnapshots?: Array<{ lastProcessedBlock?: string | null }>;
-    tradeIds?: Array<{ tradeId: string }>;
+    tradeIds?: Array<{ id: string; tradeId: string }>;
     trades?: Array<{
       tradeId: string;
       buyer: string;
@@ -147,7 +147,10 @@ export class IndexerClient {
     `;
 
     const data = await this.execute(query, {});
-    return data.tradesConnection?.totalCount ?? 0;
+    const count = data.tradesConnection?.totalCount;
+    if (!Number.isSafeInteger(count) || (count as number) < 0)
+      throw new Error('Indexer trade count unavailable');
+    return count as number;
   }
 
   /**
@@ -179,54 +182,67 @@ export class IndexerClient {
     return Number.isFinite(parsed) ? parsed : null;
   }
 
-  /**
-   * Enumerate the indexer's own trade ids, independent of any chain-derived id
-   * set.
-   *
-   * `fetchTradesByIds` can only echo back ids from its `tradeId_in` filter, so
-   * it can never surface a record the chain never allocated — the indexer-only
-   * direction is unreachable through it. This walks the indexer's projection on
-   * its own terms (offset pagination over `id`) so an id beyond the chain
-   * counter, or a numeric surplus that a raw count would mask by cancelling
-   * against a missing id, is observed directly.
-   *
-   * Bounded by `maxIds`: a fully enumerated page shorter than the limit means
-   * the walk is complete; `truncated` flags when it was not, so the caller can
-   * surface that rather than treat a partial walk as exhaustive.
-   */
-  async fetchTradeIds(
-    maxIds: number,
-    pageSize: number,
-  ): Promise<{ tradeIds: string[]; truncated: boolean }> {
-    if (maxIds <= 0 || pageSize <= 0) {
-      throw new Error('fetchTradeIds requires positive maxIds and pageSize');
+  /** Fixed upper physical identity for one independently enumerated source cycle. */
+  async fetchTradeIdUpperBound(): Promise<string | null> {
+    const data = await this.execute(
+      `query ReconciliationTradeIdUpperBound {
+      tradeIds: trades(limit: 1, orderBy: id_DESC) { id tradeId }
+    }`,
+      {},
+    );
+    if (!Array.isArray(data.tradeIds)) throw new Error('Indexer identity source unavailable');
+    const id = data.tradeIds[0]?.id;
+    if (
+      data.tradeIds.length > 1 ||
+      (id !== undefined && (typeof id !== 'string' || !id || id.length > 1024))
+    )
+      throw new Error('Invalid indexer identity upper bound');
+    return id ?? null;
+  }
+
+  /** Physical identity keyset; logical trade IDs are deliberately not deduplicated. */
+  async fetchTradeIdsPage(input: {
+    afterId: string | null;
+    throughId: string | null;
+    limit: number;
+  }): Promise<{
+    records: Array<{ id: string; tradeId: string }>;
+    nextId: string | null;
+    exhausted: boolean;
+  }> {
+    if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100000)
+      throw new Error('Invalid indexer keyset limit');
+    if (input.throughId === null) return { records: [], nextId: input.afterId, exhausted: true };
+    const data = await this.execute(
+      `
+      query ReconciliationTradeIdsPage($limit: Int!, $afterId: String!, $throughId: String!) {
+        tradeIds: trades(limit: $limit, orderBy: id_ASC, where: { id_gt: $afterId, id_lte: $throughId }) { id tradeId }
+      }
+    `,
+      { afterId: input.afterId ?? '', throughId: input.throughId, limit: input.limit + 1 },
+    );
+    if (!Array.isArray(data.tradeIds) || data.tradeIds.length > input.limit + 1)
+      throw new Error('Invalid indexer keyset page');
+    let previous = input.afterId ?? '';
+    for (const row of data.tradeIds) {
+      if (
+        typeof row.id !== 'string' ||
+        !row.id ||
+        row.id.length > 1024 ||
+        row.id <= previous ||
+        row.id > input.throughId ||
+        typeof row.tradeId !== 'string' ||
+        !row.tradeId ||
+        row.tradeId.length > 255
+      )
+        throw new Error('Invalid indexer keyset page');
+      previous = row.id;
     }
-
-    const query = `
-      query ReconciliationTradeIds($limit: Int!, $offset: Int!) {
-        tradeIds: trades(limit: $limit, offset: $offset, orderBy: id_ASC) {
-          tradeId
-        }
-      }
-    `;
-
-    const tradeIds: string[] = [];
-    let offset = 0;
-
-    for (;;) {
-      const limit = Math.min(pageSize, maxIds - tradeIds.length);
-      if (limit <= 0) {
-        return { tradeIds, truncated: true };
-      }
-
-      const data = await this.execute(query, { limit, offset });
-      const page = data.tradeIds ?? [];
-      tradeIds.push(...page.map((row) => row.tradeId));
-
-      if (page.length < limit) {
-        return { tradeIds, truncated: false };
-      }
-      offset += page.length;
-    }
+    const records = data.tradeIds.slice(0, input.limit);
+    return {
+      records,
+      nextId: records[records.length - 1]?.id ?? input.afterId,
+      exhausted: data.tradeIds.length <= input.limit,
+    };
   }
 }

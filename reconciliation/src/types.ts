@@ -23,6 +23,7 @@ export type DriftCode =
   | 'INDEXED_INVALID_ADDRESS'
   | 'ONCHAIN_INVALID_ADDRESS'
   | 'INDEXER_TRADE_MISSING'
+  | 'INDEXER_DUPLICATE_TRADE'
   | 'INDEXER_SURPLUS_RECORDS';
 
 export interface IndexedTradeRecord {
@@ -126,6 +127,9 @@ export interface RunStats {
     indexerEnumerationTruncated: boolean;
     /** How many indexer ids the enumeration actually walked. */
     indexerEnumerationWalked: number;
+    enumerationCycleId?: string;
+    indexerSourceCoherent?: boolean;
+    indexerEnumerationExpected?: number;
     /**
      * Window swept *and* indexer enumeration exhausted. A truncated walk leaves
      * the indexer-only direction unproven beyond the bound, so it is not a

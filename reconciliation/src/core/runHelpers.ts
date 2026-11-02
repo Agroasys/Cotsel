@@ -1,3 +1,5 @@
+import type { RunStats } from '../types';
+import { Logger } from '../utils/logger';
 import { config } from '../config';
 import type { ReconcileMode } from '../types';
 
@@ -39,4 +41,32 @@ export async function mapWithConcurrency<T, R>(
 
   await Promise.all(runners);
   return results;
+}
+
+export function logReconciliationCompleted(stats: RunStats): void {
+  const coverage = stats.coverage;
+  if (!coverage) return;
+  Logger.info('Reconciliation run completed', {
+    runKey: stats.runKey,
+    mode: stats.mode,
+    totalTrades: stats.totalTrades,
+    driftCount: stats.driftCount,
+    critical: stats.severityCounts.CRITICAL,
+    high: stats.severityCounts.HIGH,
+    coveredFromTradeId: coverage.window.fromTradeId.toString(),
+    coveredToTradeId: coverage.window.toTradeId.toString(),
+    blockInterval: `${coverage.fromBlock}..${coverage.boundary.blockNumber}`,
+    nextCursor: coverage.nextCursor.toString(),
+    uncoveredTail: coverage.window.uncoveredTail.toString(),
+    coverageComplete: coverage.complete,
+    windowComplete: coverage.window.complete,
+    indexerEnumerationTruncated: coverage.indexerEnumerationTruncated,
+    indexerEnumerationWalked: coverage.indexerEnumerationWalked,
+    indexerProcessedBlock: coverage.indexerProcessedBlock,
+    cursorAdvanced: coverage.cursorAdvanced,
+    sweepReset: coverage.sweepReset,
+    slaBreached: coverage.sla.breached,
+    enumerationCycleId: coverage.enumerationCycleId,
+    indexerSourceCoherent: coverage.indexerSourceCoherent,
+  });
 }
