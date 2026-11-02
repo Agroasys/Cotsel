@@ -8,13 +8,17 @@ import { createHash, pbkdf2Sync as nativePbkdf2Sync } from 'node:crypto';
 
 const require = createRequire(import.meta.url);
 const virtualStore = path.resolve('node_modules/.pnpm');
-const minimatchVersions = ['3.1.5', '5.1.9', '9.0.9', '10.2.5'];
+const minimatchVersions = ['3.1.5', '5.1.9', '9.0.9', '10.2.5', '10.2.6'];
 
 function packagePath(name, version) {
   const prefix = `${name}@${version}`;
   const matches = fs
     .readdirSync(virtualStore)
-    .filter((entry) => entry === prefix || entry.startsWith(`${prefix}_`));
+    .filter((entry) =>
+      name === 'minimatch' && ['9.0.9', '10.2.5', '10.2.6'].includes(version)
+        ? entry.startsWith(`${prefix}_patch_hash=`)
+        : entry === prefix || entry.startsWith(`${prefix}_`),
+    );
 
   assert.equal(
     matches.length,
