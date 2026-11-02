@@ -1,31 +1,20 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+import { matchesVerifiedDisposition } from './dependency-disposition.mjs';
 
-const developmentAuditAllowlist = new Map([
+const locallyPatchedAdvisories = new Map([
   [
     'GHSA-848j-6mx2-7j84',
     {
       moduleName: 'elliptic',
       severity: 'low',
       versions: new Set(['6.6.1']),
+      vulnerableVersions: '<=6.6.1',
       patchedVersions: '<0.0.0',
-      owner: 'Cotsel security maintainers',
-      expiresOn: '2026-10-31',
-      reason:
-        'No patched release exists. The affected path is limited to development-only Hardhat tooling.',
-    },
-  ],
-  [
-    'GHSA-hp3w-g68c-fv3c',
-    {
-      moduleName: 'sprintf-js',
-      severity: 'moderate',
-      versions: new Set(['1.0.3']),
-      patchedVersions: '<0.0.0',
-      pathPrefix: 'auth>jest>',
-      owner: 'Cotsel security maintainers',
-      expiresOn: '2026-10-31',
-      reason: 'No patched release exists. This path is limited to development-only Jest tooling.',
+      overviewHash: 'a426af33fd4534e3c56764c2c49dca780c7834f3d8d19746881d3c6dc23e17cc',
+      upstreamCommit: '99a867dc935324e06498f1acec6b7d70310bd551',
+      disposition:
+        'proposed upstream nonce byte-length fix; published P-521 vector and independent verification',
     },
   ],
   [
@@ -34,11 +23,12 @@ const developmentAuditAllowlist = new Map([
       moduleName: 'deepmerge',
       severity: 'low',
       versions: new Set(['4.3.1']),
+      vulnerableVersions: '>=4.2.0 <=4.3.1',
       patchedVersions: '<0.0.0',
-      pathPrefix: 'auth>jest>',
-      owner: 'Cotsel security maintainers',
-      expiresOn: '2026-10-31',
-      reason: 'No patched release exists. This path is limited to development-only Jest tooling.',
+      overviewHash: 'a6ad5816ac31713fcb857502d8d59a6d562c9e93478e79135906075ce681e725',
+      patchFile: 'patches/deepmerge@4.3.1.patch',
+      disposition:
+        'issue 273 recommended key guards, own-property writes and fail-closed target inspection',
     },
   ],
   [
@@ -47,17 +37,37 @@ const developmentAuditAllowlist = new Map([
       moduleName: 'stream-json',
       severity: 'moderate',
       versions: new Set(['1.9.1']),
+      vulnerableVersions: '<=3.5.0',
       patchedVersions: '>=3.6.0',
-      pathPrefix: 'sdk>@web3auth/modal>',
-      owner: 'Cotsel security maintainers',
-      expiresOn: '2026-10-31',
-      reason:
-        'Only development-only Web3Auth reaches this version; stream-json 1.9.1 has no JSONC parser or verifier entry point.',
+      overviewHash: '9eeb8ffedaa79721198d8635cfb20a8474498fc450d6ae7a1809b79665d86256',
+      patchFile: 'patches/stream-json@1.9.1.patch',
+      disposition: 'hash-pinned legacy source has no JSONC entry points and rejects comments',
     },
   ],
-]);
-
-const locallyPatchedAdvisories = new Map([
+  [
+    'GHSA-g3hv-75wg-m249',
+    {
+      moduleName: 'minimatch',
+      severity: 'moderate',
+      versions: new Set(['3.1.5', '5.1.9', '9.0.9', '10.2.5', '10.2.6']),
+      patchedVersions: '>=11.0.1',
+      vulnerableVersions: '<11.0.1',
+      overviewHash: '864649cfe8b481d0f1de3513fe2ce8d7be9dc660d35c7d1497e3275d29616c75',
+      upstreamCommit: '77a0f5c4b80bdc641c3c930a1d9edf5ad2db57f8',
+      disposition:
+        '9/10 backport tested; 3.1.5/5.1.9 lack the reported algorithm in hash-pinned sources',
+    },
+  ],
+  [
+    'GHSA-3g3m-2fjr-6pw4',
+    {
+      moduleName: 'glob',
+      severity: 'moderate',
+      versions: new Set(['10.5.0', '13.0.6']),
+      patchedVersions: '>=14.0.2',
+      upstreamCommit: '4682e8c9babee1b385202ede36389634e12076d7',
+    },
+  ],
   [
     'GHSA-vfj7-8cjw-p6xm',
     {
@@ -141,45 +151,9 @@ function advisoryId(advisory) {
   return advisory?.github_advisory_id ?? String(advisory?.id ?? 'unknown');
 }
 
-function matchesDevelopmentAllowlist(advisory, currentDate = new Date()) {
-  const allowed = developmentAuditAllowlist.get(advisoryId(advisory));
-  if (!allowed) {
-    return false;
-  }
-
-  const expiresAt = new Date(`${allowed.expiresOn}T23:59:59Z`);
-  const findingVersions = (advisory.findings ?? []).map((finding) => finding.version);
-  const pathsMatch =
-    !allowed.pathPrefix ||
-    (advisory.findings ?? []).every(
-      (finding) =>
-        (finding.paths ?? []).length > 0 &&
-        finding.paths.every((path) => path.startsWith(allowed.pathPrefix)),
-    );
-
-  return (
-    currentDate <= expiresAt &&
-    advisory.module_name === allowed.moduleName &&
-    advisory.severity === allowed.severity &&
-    advisory.patched_versions === allowed.patchedVersions &&
-    findingVersions.length > 0 &&
-    findingVersions.every((version) => allowed.versions.has(version)) &&
-    pathsMatch
-  );
-}
-
 function matchesLocalPatch(advisory) {
   const allowed = locallyPatchedAdvisories.get(advisoryId(advisory));
-  if (!allowed) return false;
-
-  const findingVersions = (advisory.findings ?? []).map((finding) => finding.version);
-  return (
-    advisory.module_name === allowed.moduleName &&
-    advisory.severity === allowed.severity &&
-    advisory.patched_versions === allowed.patchedVersions &&
-    findingVersions.length > 0 &&
-    findingVersions.every((version) => allowed.versions.has(version))
-  );
+  return matchesVerifiedDisposition(advisory, allowed);
 }
 
 function auditDescription(advisory) {
@@ -220,28 +194,18 @@ if (
 
 if (auditAllReport) {
   const allAdvisories = advisories(auditAllReport);
-  const acceptedAdvisories = allAdvisories.filter(matchesDevelopmentAllowlist);
   const patchedAdvisories = allAdvisories.filter(matchesLocalPatch);
-  const unexpectedAdvisories = allAdvisories.filter(
-    (advisory) => !matchesDevelopmentAllowlist(advisory) && !matchesLocalPatch(advisory),
-  );
+  const unexpectedAdvisories = allAdvisories.filter((advisory) => !matchesLocalPatch(advisory));
 
   if (allSummary.total > 0 && allAdvisories.length === 0) {
     console.error('Release gate failed: full dependency audit findings could not be classified.');
     failed = true;
   }
 
-  for (const advisory of acceptedAdvisories) {
-    const allowed = developmentAuditAllowlist.get(advisoryId(advisory));
-    console.log(
-      `Accepted development advisory: ${auditDescription(advisory)}; owner=${allowed.owner}; expires=${allowed.expiresOn}; reason=${allowed.reason}`,
-    );
-  }
-
   for (const advisory of patchedAdvisories) {
     const patch = locallyPatchedAdvisories.get(advisoryId(advisory));
     console.log(
-      `Accepted locally patched advisory: ${auditDescription(advisory)}; patch-source=${patch.upstreamCommit ?? patch.patchFile}; compatibility-check=passed`,
+      `Verified dependency disposition: ${auditDescription(advisory)}; patch-source=${patch.upstreamCommit ?? patch.patchFile}; ${patch.disposition ?? 'local backport'}; compatibility-check=${dependencyCompatibility.exitCode === 0 ? 'passed' : 'FAILED'}`,
     );
   }
 

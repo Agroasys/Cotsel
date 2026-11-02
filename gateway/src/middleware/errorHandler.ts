@@ -9,12 +9,9 @@ import { createGatewayErrorEnvelope } from '../core/errorEnvelope';
 import { persistIdempotentError } from './idempotency';
 
 export function notFoundHandler(req: Request, res: Response): void {
-  res.status(404).json(
-    errorResponse(req.requestContext, 'NOT_FOUND', 'Route not found', {
-      route: req.originalUrl || req.path,
-      method: req.method,
-    }),
-  );
+  // Paths can contain tokens and query parameters. The request context is
+  // enough to locate the route in server logs without echoing it to callers.
+  res.status(404).json(errorResponse(req.requestContext, 'NOT_FOUND', 'Route not found'));
 }
 
 export async function errorHandler(

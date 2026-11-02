@@ -24,7 +24,7 @@ export interface ReconciliationConfig {
   chainReadConcurrency: number;
   /** Upper bound on ids walked by the independent indexer-side enumeration. */
   indexerEnumerationLimit: number;
-  /** Page size for that enumeration's offset pagination. */
+  /** Page size for that enumeration's physical identity keyset. */
   indexerEnumerationPageSize: number;
   /**
    * How long a run's lease stays valid without a heartbeat. This is the longest

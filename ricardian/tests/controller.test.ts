@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { CallerSafeError } from '@agroasys/shared-http';
 import { RicardianController } from '../src/api/controller';
 import type { RicardianRegistrationRequest } from '../src/types';
 import { buildRicardianHash } from '../src/utils/hash';
@@ -60,7 +61,7 @@ describe('RicardianController.createHash', () => {
 
   test('returns 400 for payload validation failures', async () => {
     mockedBuildRicardianHash.mockImplementation(() => {
-      throw new Error('documentRef is required');
+      throw new CallerSafeError('documentRef is required');
     });
 
     const req = asHashRequest({ tenantId: 'platform-main' });
@@ -106,6 +107,30 @@ describe('RicardianController.createHash', () => {
         code: 'DOCUMENT_PERSISTENCE_FAILURE',
       }),
     );
+  });
+
+  test('unexpected hash-building failure never becomes a validation response', async () => {
+    mockedBuildRicardianHash.mockImplementation(() => {
+      throw new Error('SQL query failed at postgres://svc:secret@internal.example/db');
+    });
+    const req = asHashRequest({
+      tenantId: 'platform-main',
+      documentRef: 'doc://ok',
+      terms: { ok: true },
+    });
+    req.headers = { 'x-correlation-id': 'trace-ricardian-123' };
+    const res = createMockResponse();
+
+    await controller.createHash(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    const body = res.json.mock.calls[0][0];
+    expect(body).toMatchObject({
+      error: 'InternalError',
+      message: 'An unexpected error occurred',
+      correlationId: 'trace-ricardian-123',
+    });
+    expect(JSON.stringify(body)).not.toMatch(/postgres:|internal\.example|secret|SQL query/u);
   });
 
   test('returns 409 when a registration conflicts with immutable history', async () => {

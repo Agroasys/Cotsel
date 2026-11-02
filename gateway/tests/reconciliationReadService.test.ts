@@ -123,7 +123,7 @@ describe('reconciliation read service', () => {
         sourceFreshAt: null,
         queriedAt: '2026-03-14T11:00:00.000Z',
         available: false,
-        degradedReason: 'connection refused',
+        degradedReason: 'Settlement ledger is unavailable',
       },
     });
   });
@@ -194,6 +194,6 @@ describe('reconciliation read service', () => {
     expect(snapshot.items[0]?.handoffId).toBe('sth-2');
     expect(snapshot.items[0]?.tradeProjection).toBeNull();
     expect(snapshot.freshness.available).toBe(false);
-    expect(snapshot.freshness.degradedReason).toContain('projection lookup unavailable');
+    expect(snapshot.freshness.degradedReason).toBe('Trade settlement projection is unavailable');
   });
 });

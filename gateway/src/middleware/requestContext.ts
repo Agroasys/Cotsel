@@ -44,9 +44,8 @@ export function createRequestContextMiddleware() {
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {
-  if (Array.isArray(value)) {
-    return value[0]?.trim() || undefined;
-  }
-
-  return value?.trim() || undefined;
+  const candidate = Array.isArray(value) ? value[0]?.trim() : value?.trim();
+  // Do not reflect arbitrary caller-controlled strings in response bodies,
+  // headers or telemetry. Match the shared HTTP correlation-ID contract.
+  return candidate && /^[A-Za-z0-9._:-]{8,128}$/u.test(candidate) ? candidate : undefined;
 }
