@@ -1,39 +1,16 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { installedPackagePath } from './installed-dependency-paths.mjs';
+import './dependency-security-regressions.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { Readable } from 'node:stream';
-import { createHash, pbkdf2Sync as nativePbkdf2Sync } from 'node:crypto';
+import { createHash } from 'node:crypto';
 
 const require = createRequire(import.meta.url);
-const virtualStore = path.resolve('node_modules/.pnpm');
-const minimatchVersions = ['3.1.5', '5.1.9', '9.0.9', '10.2.5'];
-
-function packagePath(name, version) {
-  const prefix = `${name}@${version}`;
-  const matches = fs
-    .readdirSync(virtualStore)
-    .filter((entry) => entry === prefix || entry.startsWith(`${prefix}_`));
-
-  assert.equal(
-    matches.length,
-    1,
-    `Expected one installed ${name}@${version}, found ${matches.length}`,
-  );
-  return path.join(virtualStore, matches[0], 'node_modules', name);
-}
-
-const pbkdf2Path = packagePath('pbkdf2', '3.1.7');
-const pbkdf2 = require(pbkdf2Path);
-const browserPbkdf2Sync = require(path.join(pbkdf2Path, 'lib', 'sync.js'));
-for (const password of ['wallet-password', 'long-password-'.repeat(1024)]) {
-  for (const digest of ['sha1', 'sha256', 'sha512']) {
-    const expected = nativePbkdf2Sync(password, 'compatibility-salt', 100, 32, digest);
-    assert.deepEqual(pbkdf2.pbkdf2Sync(password, 'compatibility-salt', 100, 32, digest), expected);
-    assert.deepEqual(browserPbkdf2Sync(password, 'compatibility-salt', 100, 32, digest), expected);
-  }
-}
+const minimatchVersions = ['3.1.5', '5.1.9', '9.0.9', '10.2.5', '10.2.6'];
+const packagePath = installedPackagePath;
 
 const braceTargets = new Set();
 for (const version of minimatchVersions) {

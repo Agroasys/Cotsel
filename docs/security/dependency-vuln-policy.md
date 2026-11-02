@@ -8,8 +8,7 @@ Define short-term dependency vulnerability posture and remediation workflow with
 
 - Release-blocking target: no vulnerability findings at any severity in the
   production dependency tree.
-- Development-toolchain findings are tracked and remediated in targeted,
-  low-risk changes or accepted only through an owned, expiring allowlist entry.
+- Development-toolchain findings require a patched installed artifact or evidence that the affected feature is absent.
 - `pnpm list --depth Infinity` must remain healthy (no dependency graph breakage).
 
 ## Remediation Rules
@@ -78,21 +77,42 @@ remain clear at every release candidate head.
   chain moves to a compatible patched version. The compatibility check verifies
   normal JSON-RPC parsing, the depth limit, and both assembler paths.
 
-The full-tree gate temporarily accepts three additional development-only
-advisories. All entries name Cotsel security maintainers as owner and expire
-on 31 October 2026:
+## November 2026 Installed-Artifact Remediation
 
-| Advisory                                                                 | Dependency path                                 | Reason for temporary acceptance                                                                                           |
-| ------------------------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| [GHSA-hp3w-g68c-fv3c](https://github.com/advisories/GHSA-hp3w-g68c-fv3c) | `auth > jest > … > sprintf-js@1.0.3`            | No patched release exists. The production audit excludes this test-tool path.                                             |
-| [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) | `auth > jest > … > deepmerge@4.3.1`             | No patched release exists. The production audit excludes this test-tool path.                                             |
-| [GHSA-hqr4-qq8f-hg3x](https://github.com/advisories/GHSA-hqr4-qq8f-hg3x) | `sdk > @web3auth/modal > … > stream-json@1.9.1` | The production audit excludes this development dependency, and version 1.9.1 has no JSONC parser or verifier entry point. |
+[PR #903](https://github.com/Agroasys/Cotsel/pull/903) removes the expired development exceptions. It does not extend their expiry dates.
 
-The gate checks advisory ID, package, severity, version, and dependency path for
-these entries. It rejects any production finding and any development finding
-outside the exact allowlist. Reassess or remove the entries before expiry in
-[dependency issue #100](https://github.com/Agroasys/Cotsel/issues/100). A green
-repository gate does not replace release-candidate scan and acceptance evidence.
+Cotsel security maintainers own these patches and their removal:
+
+| Package                               | Resolution                                                                                                                                            | Removal condition                                                           |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `elliptic@6.6.1`                      | Preserve generated nonce octet width during RFC 6979 truncation. Independent P-521 and secp256k1 vectors verify deterministic signatures.             | Hardhat verification dependencies select a compatible fixed implementation. |
+| `deepmerge@4.3.1`                     | Exclude `__proto__` during source and target copying, including null-prototype objects.                                                               | Jest selects a compatible fixed release.                                    |
+| `minimatch@9.0.9`, `10.2.5`, `10.2.6` | Backport upstream expansion and quadratic-preprocessing bounds from commit `77a0f5c`.                                                                 | Consumers select a compatible fixed release.                                |
+| `minimatch@3.1.5`, `5.1.9`            | Verify the affected optimization preprocessor is absent in installed modules.                                                                         | Remove legacy consumers.                                                    |
+| `glob@10.5.0`, `13.0.6`               | Return immediately from aborted walker callbacks. Route version 13 exports through patched published modules, avoiding stale bundled implementations. | Consumers select a compatible fixed release.                                |
+| `brace-expansion@5.0.12`              | Preserve callable CommonJS and default ESM imports for legacy minimatch consumers.                                                                    | Remove legacy import requirements.                                          |
+| `stream-json@1.9.1`                   | Retain existing depth and prototype patches. Verify affected JSONC entry points are absent and strict parsing rejects comments.                       | Web3Auth selects a compatible fixed implementation.                         |
+
+The helper-specific `ethereumjs-util` alias uses `@ethereumjs/util@9.1.0` for its two address-validation functions. Regression checks cover valid, malformed, and invalid-checksum addresses.
+
+The gate resolves the active installed graph. It does not inspect unused packages retained in pnpm's virtual store.
+
+Each resolution matches the advisory ID, package, severity, exact versions, and upstream fixed-version range. Installed-artifact regression failure blocks release.
+
+Unknown advisories, malformed reports, failed audit commands, invalid dependency trees, and every production finding block release. The gate has no development risk exceptions.
+
+Run `pnpm run security:deps:gate` after each dependency change. This command also tests the gate's rejection paths.
+
+The upstream advisory scanner still reports patched package versions. A green repository gate does not replace release-candidate scans or independent acceptance.
+
+Patch references:
+
+- [RFC 6979 nonce generation](https://www.rfc-editor.org/rfc/rfc6979.html#section-3.2)
+- [Elliptic advisory](https://github.com/advisories/GHSA-848j-6mx2-7j84)
+- [Deepmerge advisory](https://github.com/advisories/GHSA-gcqx-w48m-w2h4)
+- [Minimatch advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249)
+- [Glob advisory](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)
+- [JSONC advisory](https://github.com/advisories/GHSA-hqr4-qq8f-hg3x)
 
 ## Hardhat Major Deferral Policy (Issue #192)
 

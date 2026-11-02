@@ -1,63 +1,9 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 
-const developmentAuditAllowlist = new Map([
-  [
-    'GHSA-848j-6mx2-7j84',
-    {
-      moduleName: 'elliptic',
-      severity: 'low',
-      versions: new Set(['6.6.1']),
-      patchedVersions: '<0.0.0',
-      owner: 'Cotsel security maintainers',
-      expiresOn: '2026-10-31',
-      reason:
-        'No patched release exists. The affected path is limited to development-only Hardhat tooling.',
-    },
-  ],
-  [
-    'GHSA-hp3w-g68c-fv3c',
-    {
-      moduleName: 'sprintf-js',
-      severity: 'moderate',
-      versions: new Set(['1.0.3']),
-      patchedVersions: '<0.0.0',
-      pathPrefix: 'auth>jest>',
-      owner: 'Cotsel security maintainers',
-      expiresOn: '2026-10-31',
-      reason: 'No patched release exists. This path is limited to development-only Jest tooling.',
-    },
-  ],
-  [
-    'GHSA-gcqx-w48m-w2h4',
-    {
-      moduleName: 'deepmerge',
-      severity: 'low',
-      versions: new Set(['4.3.1']),
-      patchedVersions: '<0.0.0',
-      pathPrefix: 'auth>jest>',
-      owner: 'Cotsel security maintainers',
-      expiresOn: '2026-10-31',
-      reason: 'No patched release exists. This path is limited to development-only Jest tooling.',
-    },
-  ],
-  [
-    'GHSA-hqr4-qq8f-hg3x',
-    {
-      moduleName: 'stream-json',
-      severity: 'moderate',
-      versions: new Set(['1.9.1']),
-      patchedVersions: '>=3.6.0',
-      pathPrefix: 'sdk>@web3auth/modal>',
-      owner: 'Cotsel security maintainers',
-      expiresOn: '2026-10-31',
-      reason:
-        'Only development-only Web3Auth reaches this version; stream-json 1.9.1 has no JSONC parser or verifier entry point.',
-    },
-  ],
-]);
-
-const locallyPatchedAdvisories = new Map([
+// Exact-version resolutions are admitted only when the installed-artifact regression
+// suite succeeds. Unknown advisories and every production finding remain blocking.
+const verifiedAdvisoryResolutions = new Map([
   [
     'GHSA-vfj7-8cjw-p6xm',
     {
@@ -65,7 +11,7 @@ const locallyPatchedAdvisories = new Map([
       severity: 'high',
       versions: new Set(['3.0.3']),
       patchedVersions: '<0.0.0',
-      patchFile: 'patches/braces@3.0.3.patch',
+      evidence: 'patches/braces@3.0.3.patch',
     },
   ],
   [
@@ -75,7 +21,7 @@ const locallyPatchedAdvisories = new Map([
       severity: 'moderate',
       versions: new Set(['1.9.1']),
       patchedVersions: '>=3.5.0',
-      upstreamCommit: 'a869fb98aaef9225556f49901a8f55954ff856e6',
+      evidence: 'patches/stream-json@1.9.1.patch',
     },
   ],
   [
@@ -85,7 +31,59 @@ const locallyPatchedAdvisories = new Map([
       severity: 'moderate',
       versions: new Set(['1.9.1']),
       patchedVersions: '>=3.6.0',
-      patchFile: 'patches/stream-json@1.9.1.patch',
+      evidence: 'patches/stream-json@1.9.1.patch',
+    },
+  ],
+  [
+    'GHSA-hqr4-qq8f-hg3x',
+    {
+      moduleName: 'stream-json',
+      severity: 'moderate',
+      versions: new Set(['1.9.1']),
+      patchedVersions: '>=3.6.0',
+      evidence:
+        'strict JSON 1.9.1 has no affected JSONC parser or verifier; installed entry points checked',
+    },
+  ],
+  [
+    'GHSA-848j-6mx2-7j84',
+    {
+      moduleName: 'elliptic',
+      severity: 'low',
+      versions: new Set(['6.6.1']),
+      patchedVersions: '<0.0.0',
+      evidence: 'patches/elliptic@6.6.1.patch',
+    },
+  ],
+  [
+    'GHSA-gcqx-w48m-w2h4',
+    {
+      moduleName: 'deepmerge',
+      severity: 'low',
+      versions: new Set(['4.3.1']),
+      patchedVersions: '<0.0.0',
+      evidence: 'patches/deepmerge@4.3.1.patch',
+    },
+  ],
+  [
+    'GHSA-g3hv-75wg-m249',
+    {
+      moduleName: 'minimatch',
+      severity: 'moderate',
+      versions: new Set(['3.1.5', '5.1.9', '9.0.9', '10.2.5', '10.2.6']),
+      patchedVersions: '>=11.0.1',
+      evidence:
+        'patched 9/10 preprocessing; affected optimization absent in legacy 3/5; installed-artifact regressions',
+    },
+  ],
+  [
+    'GHSA-3g3m-2fjr-6pw4',
+    {
+      moduleName: 'glob',
+      severity: 'moderate',
+      versions: new Set(['10.5.0', '13.0.6']),
+      patchedVersions: '>=14.0.2',
+      evidence: 'patches/glob@10.5.0.patch and patches/glob@13.0.6.patch',
     },
   ],
 ]);
@@ -109,7 +107,23 @@ function runPnpm(args) {
 
 function parseAudit(stdout) {
   try {
-    return JSON.parse(stdout);
+    const report = JSON.parse(stdout);
+    const summary = report?.metadata?.vulnerabilities;
+    if (
+      !summary ||
+      !report.advisories ||
+      Array.isArray(report.advisories) ||
+      typeof report.advisories !== 'object' ||
+      report.error
+    )
+      return null;
+    if (
+      !['critical', 'high', 'moderate', 'low', 'info'].every(
+        (severity) => Number.isSafeInteger(summary[severity]) && summary[severity] >= 0,
+      )
+    )
+      return null;
+    return report;
   } catch {
     return null;
   }
@@ -141,35 +155,8 @@ function advisoryId(advisory) {
   return advisory?.github_advisory_id ?? String(advisory?.id ?? 'unknown');
 }
 
-function matchesDevelopmentAllowlist(advisory, currentDate = new Date()) {
-  const allowed = developmentAuditAllowlist.get(advisoryId(advisory));
-  if (!allowed) {
-    return false;
-  }
-
-  const expiresAt = new Date(`${allowed.expiresOn}T23:59:59Z`);
-  const findingVersions = (advisory.findings ?? []).map((finding) => finding.version);
-  const pathsMatch =
-    !allowed.pathPrefix ||
-    (advisory.findings ?? []).every(
-      (finding) =>
-        (finding.paths ?? []).length > 0 &&
-        finding.paths.every((path) => path.startsWith(allowed.pathPrefix)),
-    );
-
-  return (
-    currentDate <= expiresAt &&
-    advisory.module_name === allowed.moduleName &&
-    advisory.severity === allowed.severity &&
-    advisory.patched_versions === allowed.patchedVersions &&
-    findingVersions.length > 0 &&
-    findingVersions.every((version) => allowed.versions.has(version)) &&
-    pathsMatch
-  );
-}
-
-function matchesLocalPatch(advisory) {
-  const allowed = locallyPatchedAdvisories.get(advisoryId(advisory));
+function matchesVerifiedResolution(advisory) {
+  const allowed = verifiedAdvisoryResolutions.get(advisoryId(advisory));
   if (!allowed) return false;
 
   const findingVersions = (advisory.findings ?? []).map((finding) => finding.version);
@@ -208,6 +195,15 @@ console.log(`dependency compatibility: exit=${dependencyCompatibility.exitCode}`
 console.log(`pnpm list --depth Infinity: exit=${lsAll.exitCode}`);
 
 let failed = false;
+for (const [label, result] of [
+  ['production audit', auditProd],
+  ['full audit', auditAll],
+]) {
+  if (result.exitCode !== 0 && result.exitCode !== 1) {
+    console.error(`Release gate failed: ${label} command failed with exit ${result.exitCode}.`);
+    failed = true;
+  }
+}
 if (
   prodSummary.critical > 0 ||
   prodSummary.high > 0 ||
@@ -220,10 +216,9 @@ if (
 
 if (auditAllReport) {
   const allAdvisories = advisories(auditAllReport);
-  const acceptedAdvisories = allAdvisories.filter(matchesDevelopmentAllowlist);
-  const patchedAdvisories = allAdvisories.filter(matchesLocalPatch);
+  const resolvedAdvisories = allAdvisories.filter(matchesVerifiedResolution);
   const unexpectedAdvisories = allAdvisories.filter(
-    (advisory) => !matchesDevelopmentAllowlist(advisory) && !matchesLocalPatch(advisory),
+    (advisory) => !matchesVerifiedResolution(advisory),
   );
 
   if (allSummary.total > 0 && allAdvisories.length === 0) {
@@ -231,18 +226,13 @@ if (auditAllReport) {
     failed = true;
   }
 
-  for (const advisory of acceptedAdvisories) {
-    const allowed = developmentAuditAllowlist.get(advisoryId(advisory));
-    console.log(
-      `Accepted development advisory: ${auditDescription(advisory)}; owner=${allowed.owner}; expires=${allowed.expiresOn}; reason=${allowed.reason}`,
-    );
-  }
-
-  for (const advisory of patchedAdvisories) {
-    const patch = locallyPatchedAdvisories.get(advisoryId(advisory));
-    console.log(
-      `Accepted locally patched advisory: ${auditDescription(advisory)}; patch-source=${patch.upstreamCommit ?? patch.patchFile}; compatibility-check=passed`,
-    );
+  for (const advisory of resolvedAdvisories) {
+    const resolution = verifiedAdvisoryResolutions.get(advisoryId(advisory));
+    if (dependencyCompatibility.exitCode === 0) {
+      console.log(
+        `Verified dependency resolution: ${auditDescription(advisory)}; evidence=${resolution.evidence}; installed-artifact-check=passed`,
+      );
+    }
   }
 
   for (const advisory of unexpectedAdvisories) {

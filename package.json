@@ -67,7 +67,7 @@
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs",
     "security:deps:compat": "node scripts/dependency-compatibility-check.mjs",
-    "security:deps:gate": "node scripts/security-deps-gate.mjs",
+    "security:deps:gate": "node --test scripts/tests/dependency-security-gate.test.mjs && node scripts/security-deps-gate.mjs",
     "quality:file-size:check": "node scripts/source-line-limit.mjs",
     "openapi:dashboard:bundle": "pnpm --filter gateway run openapi:bundle",
     "openapi:dashboard:check": "pnpm --filter gateway run openapi:check",
@@ -113,7 +113,7 @@
     "diff@>=6 <8.0.3": "8.0.3",
     "fast-uri": "3.1.9",
     "brace-expansion": "5.0.12",
-    "follow-redirects": "1.16.1",
+    "follow-redirects": "1.16.2",
     "js-cookie": "3.0.7",
     "lodash": "4.18.1",
     "serialize-javascript": "7.1.3",
@@ -156,7 +156,8 @@
     },
     "tiny-secp256k1": {
       "bn.js": "4.12.3"
-    }
+    },
+    "@nomicfoundation/hardhat-network-helpers>ethereumjs-util": "npm:@ethereumjs/util@9.1.0"
   },
   "packageManager": "pnpm@10.34.4"
 }
