@@ -124,7 +124,8 @@ describe('TreasuryWorkflowService', () => {
             success: false,
             error: {
               code: 'TREASURY_INTERNAL_ERROR',
-              message: 'internal error',
+              message: 'provider failed at https://treasury.internal.example/key-secret',
+              details: { query: 'SELECT secret FROM treasury' },
             },
           }),
           {
@@ -140,18 +141,21 @@ describe('TreasuryWorkflowService', () => {
     const auditLogStore = createInMemoryAuditLogStore();
     const service = new TreasuryWorkflowService(orchestrator, auditLogStore);
 
-    await expect(
-      service.createSweepBatch(buildCreateSweepBatchInput(), buildCreateSweepBatchContext()),
-    ).rejects.toMatchObject<Partial<GatewayError>>({
+    const error = await service
+      .createSweepBatch(buildCreateSweepBatchInput(), buildCreateSweepBatchContext())
+      .catch((failure: unknown) => failure);
+    expect(error).toMatchObject<Partial<GatewayError>>({
       statusCode: 502,
       code: 'UPSTREAM_UNAVAILABLE',
-      message: 'internal error',
+      message: 'Failed treasury operation treasury.sweep_batch.created',
       details: expect.objectContaining({
         upstream: 'treasury',
         upstreamStatus: 500,
-        upstreamCode: 'TREASURY_INTERNAL_ERROR',
       }),
     });
+    expect(JSON.stringify(error)).not.toMatch(
+      /treasury\.internal\.example|key-secret|SELECT secret/u,
+    );
 
     expect(auditLogStore.entries).toHaveLength(0);
   });
