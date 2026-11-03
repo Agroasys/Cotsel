@@ -242,7 +242,13 @@ Do not apply this root until all of the following are true:
 4. The protected Cotsel GitHub deployment environment and AWS OIDC role exist.
 5. The reviewed plan contains no replacement or deletion of shared Agroasys resources.
 6. The monthly AWS budget and alert recipients are approved.
-7. A different person dispatches the exact plan that the protected job applies.
+7. A different person applies the exact plan, or the owner uses the workflow break-glass option with a reason.
+
+For the owner-authorized test-only demo, set `COTSEL_STAGING_TEST_ONLY_DEMO` to
+`true`. The plan checks the exact main image and validates the deployment against
+two Base Sepolia RPC endpoints. This selection does not attest hardware custody
+or replace independent staging acceptance. Leave the variable `false` for the
+existing accepted selection.
 
 The plan dispatch also requires these non-secret release coordinates:
 
