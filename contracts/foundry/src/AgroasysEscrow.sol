@@ -6,7 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {LaunchSettlementSchedule} from "./LaunchSettlementSchedule.sol";
 
 interface IUSDCReceiveWithAuthorization {
     function receiveWithAuthorization(
@@ -122,11 +122,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     uint256 public constant STANDARD_INSPECTION_WINDOW = 72 hours;
     /// @notice Inspection notice window for explicitly classified packaged local deliveries.
     uint256 public constant PACKAGED_LOCAL_INSPECTION_WINDOW = 48 hours;
-    uint256 private constant BUYER_PLATFORM_FEE_BPS = 100;
-    uint256 private constant SUPPLIER_PLATFORM_FEE_BPS = 50;
-    uint256 private constant FIRST_SUPPLIER_TRANCHE_BPS = 6_000;
-    uint256 private constant BPS_DENOMINATOR = 10_000;
-    uint256 private constant SETTLEMENT_SUPPORT_FEE = 4_000_000;
     /// @notice Maximum time a trade can remain LOCKED before buyer can cancel for refundable principal.
     uint256 public constant LOCK_TIMEOUT = 7 days;
     /// @notice Maximum time a trade can remain IN_TRANSIT without arrival confirmation before buyer principal refund.
@@ -942,6 +937,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 totalExpected = logisticsAmount + platformFeesAmount + supplierFirstTranche + supplierSecondTranche;
 
         if (!(totalAmount == totalExpected)) revert EscrowBreakdownMismatch();
+        if (logisticsAmount % LaunchSettlementSchedule.USDC_BASE_UNITS_PER_CENT != 0) {
+            revert EscrowInvalidLaunchSettlementSchedule();
+        }
         if (!(supplierFirstTranche > 0 && supplierSecondTranche > 0)) revert EscrowTranchesMustBeGreaterThan0();
     }
 
@@ -1095,35 +1093,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 supplierFirstTranche,
         uint256 supplierSecondTranche
     ) internal pure {
-        uint256 netSupplierPayout = supplierFirstTranche + supplierSecondTranche;
-        uint256 maximumGoodsCandidate =
-            Math.mulDiv(netSupplierPayout, BPS_DENOMINATOR, BPS_DENOMINATOR - SUPPLIER_PLATFORM_FEE_BPS);
-
-        bool valid = _matchesLaunchSettlementSchedule(
-            maximumGoodsCandidate, platformFeesAmount, supplierFirstTranche, supplierSecondTranche
-        );
-        if (!valid && maximumGoodsCandidate > 0) {
-            valid = _matchesLaunchSettlementSchedule(
-                maximumGoodsCandidate - 1, platformFeesAmount, supplierFirstTranche, supplierSecondTranche
-            );
+        if (!LaunchSettlementSchedule.isValid(platformFeesAmount, supplierFirstTranche, supplierSecondTranche)) {
+            revert EscrowInvalidLaunchSettlementSchedule();
         }
-
-        if (!(valid)) revert EscrowInvalidLaunchSettlementSchedule();
-    }
-
-    function _matchesLaunchSettlementSchedule(
-        uint256 goodsAmount,
-        uint256 platformFeesAmount,
-        uint256 supplierFirstTranche,
-        uint256 supplierSecondTranche
-    ) internal pure returns (bool) {
-        uint256 buyerFee = Math.mulDiv(goodsAmount, BUYER_PLATFORM_FEE_BPS, BPS_DENOMINATOR);
-        uint256 supplierFee = Math.mulDiv(goodsAmount, SUPPLIER_PLATFORM_FEE_BPS, BPS_DENOMINATOR);
-        uint256 firstTrancheGross = Math.mulDiv(goodsAmount, FIRST_SUPPLIER_TRANCHE_BPS, BPS_DENOMINATOR);
-
-        return firstTrancheGross >= supplierFee && supplierFirstTranche == firstTrancheGross - supplierFee
-            && supplierSecondTranche == goodsAmount - firstTrancheGross
-            && platformFeesAmount == buyerFee + supplierFee + SETTLEMENT_SUPPORT_FEE;
     }
 
     function _accrueClaimable(uint256 _tradeId, address _recipient, uint256 _amount, ClaimType _claimType) internal {
@@ -1162,7 +1134,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         pure
         returns (uint256 platformFeeNetAmount, uint256 settlementSupportFeeAmount)
     {
-        settlementSupportFeeAmount = _platformFeesAmount < 4_000_000 ? _platformFeesAmount : 4_000_000;
+        settlementSupportFeeAmount = _platformFeesAmount < LaunchSettlementSchedule.SETTLEMENT_SUPPORT_FEE
+            ? _platformFeesAmount
+            : LaunchSettlementSchedule.SETTLEMENT_SUPPORT_FEE;
         platformFeeNetAmount = _platformFeesAmount - settlementSupportFeeAmount;
     }
 

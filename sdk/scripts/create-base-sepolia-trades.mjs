@@ -4,6 +4,8 @@
  */
 import { createRequire } from 'node:module';
 import process from 'node:process';
+import { readFileSync } from 'node:fs';
+import { parseBuyerLockPayload } from './buyer-lock-payload.mjs';
 import { ethers } from 'ethers';
 
 const require = createRequire(import.meta.url);
@@ -100,24 +102,6 @@ function parsePositiveInt(name, raw, fallback) {
   return parsed;
 }
 
-function parseUsdcAmount(name, raw, fallback) {
-  const value = raw ?? fallback;
-  try {
-    const parsed = ethers.parseUnits(value, USDC_DECIMALS);
-    if (parsed <= 0n) {
-      throw new Error('amount must be positive');
-    }
-    return parsed;
-  } catch (error) {
-    throw new Error(
-      `${name} must be a positive USDC decimal string, got ${value}. ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-      { cause: error },
-    );
-  }
-}
-
 function parseAddress(name, value) {
   if (!ethers.isAddress(value)) {
     throw new Error(`${name} must be a valid EVM address, got ${value}`);
@@ -148,28 +132,6 @@ function buildIdempotencyKey(args, handoffId) {
     ['IDEMPOTENCY_KEY', 'COTSEL_IDEMPOTENCY_KEY', 'GASLESS_IDEMPOTENCY_KEY'],
     `base-sepolia-create-trade:${handoffId}`,
   );
-}
-
-function buildTradePayload({ supplier, totalAmount, label }) {
-  const logisticsAmount = totalAmount / 10n;
-  const platformFeesAmount = totalAmount / 20n;
-  const supplierFirstTranche = (totalAmount * 40n) / 100n;
-  const supplierSecondTranche =
-    totalAmount - logisticsAmount - platformFeesAmount - supplierFirstTranche;
-
-  if (supplierFirstTranche <= 0n || supplierSecondTranche <= 0n) {
-    throw new Error('Trade amount is too small to split into positive supplier tranches');
-  }
-
-  return {
-    supplier,
-    totalAmount,
-    logisticsAmount,
-    platformFeesAmount,
-    supplierFirstTranche,
-    supplierSecondTranche,
-    ricardianHash: ethers.keccak256(ethers.toUtf8Bytes(label)),
-  };
 }
 
 function formatUsdc(value) {
@@ -220,10 +182,22 @@ const supplier = parseAddress(
 );
 const buyerPrivateKey = requireEnvValue(args, 'buyer-private-key', 'BUYER_PRIVATE_KEY');
 const expectedBuyerAddress = readValue(args, 'buyer-address', ['BUYER_ADDRESS']);
-const amountInput =
-  readValue(args, 'amount-usdc', ['TRADE_AMOUNT_USDC']) ??
-  readValue(args, 'total-usdc', ['TRADE_TOTAL_USDC']);
-const totalAmount = parseUsdcAmount('trade total', amountInput, '1');
+// Consume a backend-issued BuyerLockPayload. Never invent fees, tranches, or legal hashes.
+if (
+  args['amount-usdc'] ||
+  args['total-usdc'] ||
+  process.env.TRADE_AMOUNT_USDC ||
+  process.env.TRADE_TOTAL_USDC
+) {
+  throw new Error(
+    'Use --payload-file with backend-issued amounts; amount-only trade creation is unsupported',
+  );
+}
+const payloadFile = requireValue(args, 'payload-file', ['BUYER_LOCK_PAYLOAD_FILE']);
+const payload = parseBuyerLockPayload(JSON.parse(readFileSync(payloadFile, 'utf8')));
+if (ethers.getAddress(payload.supplier) !== supplier)
+  throw new Error('Payload supplier does not match --supplier-address');
+const totalAmount = payload.totalAmount;
 const labelPrefix = readValue(args, 'label-prefix', ['TRADE_LABEL_PREFIX'], 'COTSEL-DASH-167');
 const gatewayBaseUrl = requireValue(args, 'gateway-url', [
   'COTSEL_GATEWAY_URL',
@@ -299,7 +273,6 @@ const gaslessClient = new GaslessSettlementClient({
 });
 
 const label = buildExecutionLabel(labelPrefix);
-const payload = buildTradePayload({ supplier, totalAmount, label });
 const handoffId = buildHandoffId(args, label);
 const idempotencyKey = buildIdempotencyKey(args, handoffId);
 const expiresAt = new Date(Date.now() + expiresMinutes * 60 * 1000);

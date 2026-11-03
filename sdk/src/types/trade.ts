@@ -72,7 +72,7 @@ export interface BuyerLockPayload {
   /**
    * Platform service fee component, in the smallest USDC unit.
    *
-   * For the Agroasys 60/40 policy this combines the buyer's 1% fee, the fixed
+   * For the Agroasys 60/40 policy this combines the buyer's 0.5% fee, the fixed
    * USD 4 settlement/support fee, and the supplier's 0.5% full-order fee. It
    * is routed to the `TreasuryWallet` during Stage 1.
    */

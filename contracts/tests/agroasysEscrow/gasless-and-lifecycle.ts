@@ -41,9 +41,9 @@ export function registerGaslessAndLifecycleTests(getHarness: () => AgroasysEscro
         finalizeAfterDisputeWindowAsSupplier,
       } = getHarness());
     });
-    const totalAmount = ethers.parseUnits('106004', 6);
+    const totalAmount = ethers.parseUnits('105504', 6);
     const logisticsAmount = ethers.parseUnits('5000', 6);
-    const platformFeesAmount = ethers.parseUnits('1504', 6);
+    const platformFeesAmount = ethers.parseUnits('1004', 6);
     const supplierFirstTranche = ethers.parseUnits('59500', 6);
     const supplierSecondTranche = ethers.parseUnits('40000', 6);
 
@@ -243,9 +243,9 @@ export function registerGaslessAndLifecycleTests(getHarness: () => AgroasysEscro
       } = getHarness());
     });
     let tradeId: bigint;
-    const totalAmount = ethers.parseUnits('106004', 6);
+    const totalAmount = ethers.parseUnits('105504', 6);
     const logisticsAmount = ethers.parseUnits('5000', 6);
-    const platformFeesAmount = ethers.parseUnits('1504', 6);
+    const platformFeesAmount = ethers.parseUnits('1004', 6);
     const supplierFirstTranche = ethers.parseUnits('59500', 6);
     const supplierSecondTranche = ethers.parseUnits('40000', 6);
 
@@ -344,14 +344,14 @@ export function registerGaslessAndLifecycleTests(getHarness: () => AgroasysEscro
     let tradeId: bigint;
 
     beforeEach(async function () {
-      const totalAmount = ethers.parseUnits('106004', 6);
+      const totalAmount = ethers.parseUnits('105504', 6);
       const ricardianHash = ethers.id('trade-hash');
 
       await createTradeWithAuthorizationForTest(
         supplier.address,
         totalAmount,
         ethers.parseUnits('5000', 6),
-        ethers.parseUnits('1504', 6),
+        ethers.parseUnits('1004', 6),
         ethers.parseUnits('59500', 6),
         ethers.parseUnits('40000', 6),
         ricardianHash,

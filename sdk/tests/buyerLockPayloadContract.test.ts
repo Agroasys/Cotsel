@@ -47,11 +47,11 @@ describe('BuyerLockPayload contract', () => {
   test('canonical payload example remains valid against runtime validation', () => {
     const payload: BuyerLockPayload = {
       supplier: '0x1111111111111111111111111111111111111111',
-      totalAmount: 141_500_000n,
-      logisticsAmount: 10_000_000n,
-      platformFeesAmount: 1_500_000n,
-      supplierFirstTranche: 52_000_000n,
-      supplierSecondTranche: 78_000_000n,
+      totalAmount: 1_059_000_000n,
+      logisticsAmount: 50_000_000n,
+      platformFeesAmount: 14_000_000n,
+      supplierFirstTranche: 595_000_000n,
+      supplierSecondTranche: 400_000_000n,
       ricardianHash: `0x${'a'.repeat(64)}`,
     };
 

@@ -28,17 +28,83 @@ export function registerCreateTradeHappyPathTests(getHarness: () => AgroasysEscr
         createTradeWithAuthorizationForTest,
       } = getHarness());
     });
-    const totalAmount = ethers.parseUnits('106004', 6);
+    const totalAmount = ethers.parseUnits('105504', 6);
 
     const logisticsAmount = ethers.parseUnits('5000', 6);
 
-    const platformFeesAmount = ethers.parseUnits('1504', 6);
+    const platformFeesAmount = ethers.parseUnits('1004', 6);
 
     const supplierFirstTranche = ethers.parseUnits('59500', 6);
 
     const supplierSecondTranche = ethers.parseUnits('40000', 6);
 
     const ricardianHash = ethers.id('trade-contract-hash');
+
+    for (const [goods, fee, first] of [
+      [2n, 0n, 1n],
+      [12_300_000_000_000_001n, 61_500_000_000_000n, 7_380_000_000_000_001n],
+      [99n, 0n, 59n],
+      [100n, 1n, 60n],
+      [101n, 1n, 61n],
+      [299n, 1n, 179n],
+      [300n, 2n, 180n],
+      [301n, 2n, 181n],
+      [10000n, 50n, 6000n],
+      [10100n, 51n, 6060n],
+      [100000n, 500n, 60000n],
+    ]) {
+      it(`accepts half-up cent schedule for ${goods} goods cents`, async function () {
+        const unit = 10_000n;
+        const total = (goods + 5000n + fee + 400n) * unit;
+        await usdc.mint(buyer.address, total);
+        await createTradeWithAuthorizationForTest(
+          supplier.address,
+          total,
+          5000n * unit,
+          (fee * 2n + 400n) * unit,
+          (first - fee) * unit,
+          (goods - first) * unit,
+          ricardianHash,
+        );
+        const trade = await escrow.trades(0);
+        expect(trade.totalAmountLocked).to.equal(total);
+        expect(trade.platformFeesAmount).to.equal((2n * fee + 400n) * unit);
+        expect(
+          trade.supplierFirstTranche +
+            trade.supplierSecondTranche +
+            trade.platformFeesAmount +
+            trade.logisticsAmount,
+        ).to.equal(total);
+      });
+    }
+
+    it('rejects the old buyer fee independently of the tranche schedule', async function () {
+      await expect(
+        createTradeWithAuthorizationForTest(
+          supplier.address,
+          ethers.parseUnits('106004', 6),
+          logisticsAmount,
+          ethers.parseUnits('1504', 6),
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+        ),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowInvalidLaunchSettlementSchedule');
+    });
+
+    it('rejects sub-cent logistics even when the component sum matches', async function () {
+      await expect(
+        createTradeWithAuthorizationForTest(
+          supplier.address,
+          totalAmount + 1n,
+          logisticsAmount + 1n,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+        ),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowInvalidLaunchSettlementSchedule');
+    });
 
     it('Should create a trade with valid signature', async function () {
       const nonce = await escrow.authorizationNonces(buyer.address);
@@ -96,7 +162,7 @@ export function registerCreateTradeHappyPathTests(getHarness: () => AgroasysEscr
 
     it('Should preserve the launch 60/40 and fee accounting invariant on-chain', async function () {
       const goodsAmount = ethers.parseUnits('1000', 6);
-      const buyerPlatformFee = ethers.parseUnits('10', 6);
+      const buyerPlatformFee = ethers.parseUnits('5', 6);
       const settlementSupportFee = ethers.parseUnits('4', 6);
       const supplierPlatformFee = ethers.parseUnits('5', 6);
       const orderLogisticsFee = ethers.parseUnits('50', 6);
@@ -137,9 +203,9 @@ export function registerCreateTradeHappyPathTests(getHarness: () => AgroasysEscr
       await expect(
         createTradeWithAuthorizationForTest(
           supplier.address,
-          ethers.parseUnits('1064', 6),
+          ethers.parseUnits('1059', 6),
           ethers.parseUnits('50', 6),
-          ethers.parseUnits('19', 6),
+          ethers.parseUnits('14', 6),
           ethers.parseUnits('400', 6),
           ethers.parseUnits('595', 6),
           ethers.id('invalid-launch-accounting'),
@@ -148,7 +214,7 @@ export function registerCreateTradeHappyPathTests(getHarness: () => AgroasysEscr
     });
 
     it('Should create multiple trades with incrementing nonces', async function () {
-      const amount = ethers.parseUnits('106004', 6);
+      const amount = ethers.parseUnits('105504', 6);
       const hash1 = ethers.id('hash1');
       const hash2 = ethers.id('hash2');
 
@@ -225,7 +291,7 @@ export function registerCreateTradeHappyPathTests(getHarness: () => AgroasysEscr
         const goodsAmount =
           ethers.parseUnits('100000', 6) + ethers.parseUnits('1000', 6) * BigInt(index);
         const tradeLogisticsAmount = logisticsAmount + ethers.parseUnits('10', 6) * BigInt(index);
-        const buyerFee = (goodsAmount * 100n) / 10_000n;
+        const buyerFee = (goodsAmount * 50n) / 10_000n;
         const supplierFee = (goodsAmount * 50n) / 10_000n;
         const firstTrancheGross = (goodsAmount * 6_000n) / 10_000n;
         const tradePlatformFeesAmount = buyerFee + supplierFee + launchSupportFee;

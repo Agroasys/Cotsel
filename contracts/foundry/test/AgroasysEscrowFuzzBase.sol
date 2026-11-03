@@ -137,10 +137,10 @@ abstract contract AgroasysEscrowFuzzBase is Test {
         pure
         returns (uint96 fees, uint96 tranche1, uint96 tranche2)
     {
-        uint256 supplierFee = uint256(goodsAmount) * 50 / 10_000;
-        uint256 firstGross = uint256(goodsAmount) * 6_000 / 10_000;
+        uint256 supplierFee = ((uint256(goodsAmount) / 10_000 * 50 + 5_000) / 10_000) * 10_000;
+        uint256 firstGross = ((uint256(goodsAmount) / 10_000 * 6_000 + 5_000) / 10_000) * 10_000;
 
-        fees = uint96(uint256(goodsAmount) / 100 + supplierFee + 4e6);
+        fees = uint96(2 * supplierFee + 4e6);
         tranche1 = uint96(firstGross - supplierFee);
         tranche2 = uint96(uint256(goodsAmount) - firstGross);
     }

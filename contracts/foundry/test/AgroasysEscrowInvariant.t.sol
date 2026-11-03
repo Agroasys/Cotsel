@@ -68,11 +68,11 @@ contract Handler is Test {
         address supplier,
         uint16 privateKey
     ) public {
-        logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        uint256 goodsAmount = bound(fees, 20_000e6, 200_000e6);
-        uint256 supplierFee = goodsAmount * 50 / 10_000;
-        uint256 firstGross = goodsAmount * 6_000 / 10_000;
-        fees = uint96(goodsAmount / 100 + supplierFee + 4e6);
+        logistics = uint96(bound(logistics, 1000e6, 10_000e6) / 10_000 * 10_000);
+        uint256 goodsAmount = bound(fees, 20_000e6, 200_000e6) / 10_000 * 10_000;
+        uint256 supplierFee = ((goodsAmount / 10_000 * 50 + 5_000) / 10_000) * 10_000;
+        uint256 firstGross = ((goodsAmount / 10_000 * 6_000 + 5_000) / 10_000) * 10_000;
+        fees = uint96(2 * supplierFee + 4e6);
         tranche1 = uint96(firstGross - supplierFee);
         tranche2 = uint96(goodsAmount - firstGross);
 
