@@ -62,7 +62,7 @@ patchedDependencies:
     hash: aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3
     path: patches/glob@10.5.0.patch
   glob@13.0.6:
-    hash: aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3
+    hash: 3eae7d01c361a7acda6b682a963c3b6ceb254da74e5007e8e4ee57ba82616154
     path: patches/glob@13.0.6.patch
   minimatch@10.2.5:
     hash: 22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1
@@ -12038,7 +12038,7 @@ snapshots:
       chalk: 4.1.2
       collect-v8-coverage: 1.0.3
       exit-x: 0.2.2
-      glob: 13.0.6(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
+      glob: 13.0.6(patch_hash=3eae7d01c361a7acda6b682a963c3b6ceb254da74e5007e8e4ee57ba82616154)
       graceful-fs: 4.2.11
       istanbul-lib-coverage: 3.2.2
       istanbul-lib-instrument: 6.0.3
@@ -15812,7 +15812,7 @@ snapshots:
       package-json-from-dist: 1.0.1
       path-scurry: 1.11.1
 
-  glob@13.0.6(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3):
+  glob@13.0.6(patch_hash=3eae7d01c361a7acda6b682a963c3b6ceb254da74e5007e8e4ee57ba82616154):
     dependencies:
       minimatch: 10.2.6(patch_hash=22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1)
       minipass: 7.1.3
@@ -16434,7 +16434,7 @@ snapshots:
       chalk: 4.1.2
       ci-info: 4.4.0
       deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
-      glob: 13.0.6(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
+      glob: 13.0.6(patch_hash=3eae7d01c361a7acda6b682a963c3b6ceb254da74e5007e8e4ee57ba82616154)
       graceful-fs: 4.2.11
       jest-circus: 30.5.2
       jest-docblock: 30.5.0
@@ -16625,7 +16625,7 @@ snapshots:
       cjs-module-lexer: 2.2.0
       collect-v8-coverage: 1.0.3
       es-module-lexer: 2.3.2
-      glob: 13.0.6(patch_hash=aa3a98d243db59427689bada80d8824e3e8b7cff11bf6007c528d70324791dd3)
+      glob: 13.0.6(patch_hash=3eae7d01c361a7acda6b682a963c3b6ceb254da74e5007e8e4ee57ba82616154)
       graceful-fs: 4.2.11
       jest-haste-map: 30.5.1
       jest-message-util: 30.5.1

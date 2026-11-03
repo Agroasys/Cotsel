@@ -96,3 +96,41 @@ index 3d68196c4f175f6b314b444e409f9b8a77164963..c3d401c2246bca0822bbb8f29a576beb
          if (this.paused) {
              this.onResume(() => this.walkCB2Sync(target, patterns, processor, cb));
              return;
+--- a/package.json
++++ b/package.json
+@@ -11,17 +11,17 @@
+       ".": {
+         "import": {
+           "types": "./dist/esm/index.d.ts",
+-          "default": "./dist/esm/index.min.js"
++          "default": "./dist/esm/index.js"
+         },
+         "require": {
+           "types": "./dist/commonjs/index.d.ts",
+-          "default": "./dist/commonjs/index.min.js"
++          "default": "./dist/commonjs/index.js"
+         }
+       }
+     }
+   },
+-  "main": "./dist/commonjs/index.min.js",
+-  "module": "./dist/esm/index.min.js",
++  "main": "./dist/commonjs/index.js",
++  "module": "./dist/esm/index.js",
+   "types": "./dist/commonjs/index.d.ts",
+   "exports": {
+     "./package.json": "./package.json",
+@@ -38,11 +38,11 @@
+     ".": {
+       "import": {
+         "types": "./dist/esm/index.d.ts",
+-        "default": "./dist/esm/index.min.js"
++        "default": "./dist/esm/index.js"
+       },
+       "require": {
+         "types": "./dist/commonjs/index.d.ts",
+-        "default": "./dist/commonjs/index.min.js"
++        "default": "./dist/commonjs/index.js"
+       }
+     }
+   },

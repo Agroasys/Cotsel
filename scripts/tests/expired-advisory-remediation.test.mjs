@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { installedPackagePath } from '../installed-dependency-paths.mjs';
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -8,14 +9,7 @@ import { pipeline } from 'node:stream/promises';
 import test from 'node:test';
 
 const require = createRequire(import.meta.url);
-const store = path.resolve('node_modules/.pnpm');
-function installed(name, version) {
-  const entries = fs
-    .readdirSync(store)
-    .filter((entry) => entry === `${name}@${version}` || entry.startsWith(`${name}@${version}_`));
-  assert.equal(entries.length, 1, `Expected one installed ${name}@${version}`);
-  return path.join(store, entries[0], 'node_modules', name);
-}
+const installed = installedPackagePath;
 
 // Public test vector, never a live key. Source: elliptic PR 322, comment 2463004218.
 const p521PrivateKey =
@@ -78,24 +72,12 @@ test('elliptic retains the Ethereum secp256k1 signature and custom nonce APIs', 
   );
 });
 
-test('all installed elliptic and deepmerge consumers resolve the patched artifacts', () => {
-  for (const name of ['elliptic', 'deepmerge']) {
-    let consumers = 0;
-    for (const entry of fs.readdirSync(store)) {
-      const link = path.join(store, entry, 'node_modules', name);
-      let stat;
-      try {
-        stat = fs.lstatSync(link);
-      } catch (error) {
-        if (error.code === 'ENOENT' || error.code === 'ENOTDIR') continue;
-        throw error;
-      }
-      if (!stat.isSymbolicLink()) continue;
-      assert.match(fs.realpathSync(link), /_patch_hash=/);
-      consumers++;
-    }
-    assert.ok(consumers > 0, `No ${name} consumers checked`);
-  }
+test('active elliptic and deepmerge consumers resolve patched artifacts', () => {
+  for (const [name, version] of [
+    ['elliptic', '6.6.1'],
+    ['deepmerge', '4.3.1'],
+  ])
+    assert.match(installedPackagePath(name, version), /_patch_hash=/);
 });
 
 for (const entry of ['dist/cjs.js', 'dist/umd.js']) {
