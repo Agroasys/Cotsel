@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import { getAddress, isAddress, isHexString, type TransactionResponse } from 'ethers';
 
+export function getDeployerCustodyEvidence() {
+  // A valid externally signed transaction cannot attest which wallet held its key.
+  return { deployerCustody: 'unattested', deployerCustodyRequired: 'hardware-wallet' } as const;
+}
+
 export async function waitForDeploymentReceipt(
   transaction: TransactionResponse,
   confirmations: number,

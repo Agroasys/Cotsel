@@ -7,6 +7,7 @@ import { loadBaseDeploymentConfig } from './lib/baseDeploymentConfig';
 import { getDeploymentSourceIdentity } from './lib/deploymentSourceIdentity';
 import {
   assertHardwareWalletDeploymentTransaction,
+  getDeployerCustodyEvidence,
   loadDeploymentTransactionHash,
   loadHardwareWalletDeployerConfig,
   waitForDeploymentReceipt,
@@ -195,7 +196,7 @@ async function main(): Promise<void> {
   console.log('=== AgroasysEscrow Base deploy ===');
   console.log(`Network           : ${config.target.networkName} (${config.target.chainId})`);
   console.log(`Deployer          : ${deployerAddress}`);
-  console.log('Deployer custody  : hardware wallet');
+  console.log('Deployer custody  : unattested (hardware wallet required)');
   console.log(`USDC              : ${config.usdcAddress}`);
   console.log(`Oracle            : ${config.oracleAddress}`);
   console.log(`Treasury          : ${config.treasuryAddress}`);
@@ -330,7 +331,7 @@ async function main(): Promise<void> {
         requiredApprovals: config.requiredApprovals,
       },
       deployerAddress,
-      deployerCustody: 'hardware-wallet',
+      ...getDeployerCustodyEvidence(),
       roleAttestation,
     },
     verification: {

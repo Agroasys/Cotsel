@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import { ethers } from 'hardhat';
 import {
   assertHardwareWalletDeploymentTransaction,
+  getDeployerCustodyEvidence,
   loadDeploymentTransactionHash,
   loadHardwareWalletDeployerConfig,
   waitForDeploymentReceipt,
@@ -21,6 +22,13 @@ describe('hardware-wallet contract deployment', function () {
     const receipt = await waitForDeploymentReceipt(transaction!, 1);
     expect(receipt?.hash).to.equal(submitted.hash);
     expect(receipt?.status).to.equal(1);
+  });
+
+  it('does not claim hardware custody from an on-chain transaction', function () {
+    expect(getDeployerCustodyEvidence()).to.deep.equal({
+      deployerCustody: 'unattested',
+      deployerCustodyRequired: 'hardware-wallet',
+    });
   });
 
   it('requires an independently reviewed deployment address', function () {
