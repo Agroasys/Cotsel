@@ -183,14 +183,29 @@ export function loadConfig(): IndexerConfig {
       'EXPECTED_ABI_FINGERPRINT must be a sha256 hex digest',
     );
 
+    const demoAlertsDisabled = optionalEnvBoolean('DEMO_INDEXER_ALERTS_DISABLED') ?? false;
     assertDeploymentPins({
       profile: config.cotselEnvironment,
+      demoAlertsDisabled,
+      chainId: config.chainId,
+      contractAddress: config.contractAddress,
       expectedContractCodehash: config.expectedContractCodehash,
       expectedAbiFingerprint: config.expectedAbiFingerprint,
       notificationsEnabled: config.notificationsEnabled,
       notificationsWebhookUrl: config.notificationsWebhookUrl,
     });
 
+    if (demoAlertsDisabled) {
+      process.stderr.write(
+        `${serializeTelemetryRecord({
+          level: 'warn',
+          service: 'indexer',
+          eventType: 'demo.alerts_disabled',
+          message:
+            'Demo indexer alerts are disabled; quarantine and checkpoint protection remain active.',
+        })}\n`,
+      );
+    }
     return config;
   } catch (error) {
     process.stderr.write(

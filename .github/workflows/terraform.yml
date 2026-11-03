@@ -90,6 +90,7 @@ env:
   ROOT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root || 'staging-platform' }}
   TF_VAR_gateway_desired_count: ${{ vars.COTSEL_STAGING_GATEWAY_DESIRED_COUNT || '0' }}
   TF_VAR_indexer_desired_count: ${{ vars.COTSEL_STAGING_INDEXER_DESIRED_COUNT || '0' }}
+  TF_VAR_demo_disable_indexer_alerts: ${{ vars.COTSEL_STAGING_DEMO_DISABLE_INDEXER_ALERTS || 'false' }}
   STATE_BUCKET: agroasys-tfstate-655177116834
   TF_VAR_oracle_kms_expected_address: ${{ vars.COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS }}
   TF_VAR_oracle_desired_count: ${{ vars.COTSEL_STAGING_ORACLE_DESIRED_COUNT || '0' }}
@@ -130,6 +131,9 @@ jobs:
           terraform -chdir=infra/terraform/staging-foundation validate -no-color
           terraform -chdir=infra/terraform/staging-platform validate -no-color
           terraform -chdir=infra/terraform/base-sepolia-evidence-archive validate -no-color
+
+      - name: Test demo indexer alert configuration
+        run: node --test infra/terraform/scripts/demo-indexer-alerts.test.mjs
 
       - name: Test destructive-change policy
         run: |

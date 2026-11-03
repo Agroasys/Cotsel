@@ -136,6 +136,9 @@ export interface DeploymentPinInput {
   expectedAbiFingerprint: string | null;
   notificationsEnabled: boolean;
   notificationsWebhookUrl: string | null;
+  demoAlertsDisabled?: boolean;
+  chainId?: number;
+  contractAddress?: string;
 }
 
 export class MissingDeploymentPinError extends Error {
@@ -158,9 +161,20 @@ export class MissingDeploymentPinError extends Error {
  * there any code at this address", so a redeploy at the same address starts
  * cleanly and the drift it introduces is only caught one poison log at a time.
  * Without a notification endpoint the halt is silent: the checkpoint holds and
- * nobody is paged. Both are therefore required to start a deployed indexer.
+ * nobody is paged. The explicit Base Sepolia demo exception skips paging only.
  */
 export function assertDeploymentPins(input: DeploymentPinInput): void {
+  if (
+    input.demoAlertsDisabled &&
+    (input.profile !== 'staging' ||
+      input.chainId !== 84532 ||
+      input.contractAddress?.toLowerCase() !== '0xe8787748547a6ce40287cde678a58e385b65d069' ||
+      input.notificationsEnabled)
+  ) {
+    throw new Error(
+      'Disabled demo alerts are permitted only for the selected Base Sepolia staging escrow',
+    );
+  }
   if (input.profile === 'local') {
     return;
   }
@@ -172,10 +186,12 @@ export function assertDeploymentPins(input: DeploymentPinInput): void {
   if (!input.expectedAbiFingerprint) {
     missing.push('EXPECTED_ABI_FINGERPRINT');
   }
-  if (!input.notificationsEnabled) {
-    missing.push('NOTIFICATIONS_ENABLED=true');
-  } else if (!input.notificationsWebhookUrl) {
-    missing.push('NOTIFICATIONS_WEBHOOK_URL');
+  if (!input.demoAlertsDisabled) {
+    if (!input.notificationsEnabled) {
+      missing.push('NOTIFICATIONS_ENABLED=true');
+    } else if (!input.notificationsWebhookUrl) {
+      missing.push('NOTIFICATIONS_WEBHOOK_URL');
+    }
   }
 
   if (missing.length > 0) {

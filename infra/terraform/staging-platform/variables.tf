@@ -406,3 +406,19 @@ variable "edge_rate_limit_per_five_minutes" {
     error_message = "edge_rate_limit_per_five_minutes must be at least 100."
   }
 }
+
+variable "demo_disable_indexer_alerts" {
+  description = "Disable indexer alert delivery only for the selected Base Sepolia demo deployment."
+  type        = bool
+  default     = false
+
+  validation {
+    condition = (
+      !var.demo_disable_indexer_alerts || (
+        var.environment == "staging" &&
+        lower(var.base_sepolia_escrow_address) == "0xe8787748547a6ce40287cde678a58e385b65d069"
+      )
+    )
+    error_message = "Disabling alerts is permitted only for the selected Base Sepolia staging demo."
+  }
+}

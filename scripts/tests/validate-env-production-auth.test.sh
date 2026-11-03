@@ -68,4 +68,17 @@ set_env_value "$tmp_dir/.env.runtime" INDEXER_NOTIFICATIONS_WEBHOOK_URL \
 (cd "$tmp_dir" && bash "$SCRIPT" runtime >out.log 2>err.log)
 grep -Fq 'env validation passed for profile: runtime' "$tmp_dir/out.log"
 
+# Only the selected staging demo may explicitly pause indexer alerts.
+set_env_value "$tmp_dir/.env.runtime" INDEXER_NOTIFICATIONS_ENABLED false
+set_env_value "$tmp_dir/.env.runtime" INDEXER_NOTIFICATIONS_WEBHOOK_URL ''
+set_env_value "$tmp_dir/.env.runtime" INDEXER_DEMO_ALERTS_DISABLED true
+set_env_value "$tmp_dir/.env.runtime" INDEXER_CONTRACT_ADDRESS 0xE8787748547A6ce40287CDE678A58e385b65d069
+set_env_value "$tmp_dir/.env.runtime" INDEXER_CHAIN_ID 84532
+(cd "$tmp_dir" && bash "$SCRIPT" runtime >out.log 2>err.log)
+set_env_value "$tmp_dir/.env.runtime" COTSEL_ENVIRONMENT production
+assert_rejected 'Disabled demo alerts require the selected Base Sepolia staging escrow and disabled notifications'
+set_env_value "$tmp_dir/.env.runtime" COTSEL_ENVIRONMENT staging
+set_env_value "$tmp_dir/.env.runtime" INDEXER_CHAIN_ID 8453
+assert_rejected 'Disabled demo alerts require the selected Base Sepolia staging escrow and disabled notifications'
+
 echo 'validate-env production auth guards: pass'
