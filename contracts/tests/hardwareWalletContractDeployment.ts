@@ -1,14 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
 import { expect } from 'chai';
+import { ethers } from 'hardhat';
 import {
   assertHardwareWalletDeploymentTransaction,
   loadDeploymentTransactionHash,
   loadHardwareWalletDeployerConfig,
+  waitForDeploymentReceipt,
 } from '../scripts/lib/hardwareWalletContractDeployment';
 
 describe('hardware-wallet contract deployment', function () {
   const deployer = '0x1111111111111111111111111111111111111111';
   const expectedData = '0x60006000';
+
+  it('waits for an already-submitted transaction using the Hardhat provider', async function () {
+    const [sender, recipient] = await ethers.getSigners();
+    const submitted = await sender.sendTransaction({ to: recipient.address, value: 0n });
+    await submitted.wait();
+    const transaction = await ethers.provider.getTransaction(submitted.hash);
+    expect(transaction).not.to.equal(null);
+    const receipt = await waitForDeploymentReceipt(transaction!, 1);
+    expect(receipt?.hash).to.equal(submitted.hash);
+    expect(receipt?.status).to.equal(1);
+  });
 
   it('requires an independently reviewed deployment address', function () {
     expect(() => loadHardwareWalletDeployerConfig({})).to.throw('DEPLOYER_ADDRESS is required');

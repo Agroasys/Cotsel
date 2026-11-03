@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-import { getAddress, isAddress, isHexString } from 'ethers';
+import { getAddress, isAddress, isHexString, type TransactionResponse } from 'ethers';
+
+export async function waitForDeploymentReceipt(
+  transaction: TransactionResponse,
+  confirmations: number,
+) {
+  return transaction.wait(confirmations, 120_000);
+}
 
 export interface HardwareWalletDeployerConfig {
   expectedAddress: string;
