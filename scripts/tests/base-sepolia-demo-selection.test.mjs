@@ -13,6 +13,7 @@ const originalManifest = read('integration/base-sepolia-demo-contract.json');
 const originalDeployment = read('contracts/reports/deploy/base-sepolia/demo-deployment.json');
 const originalPreparation = read('contracts/reports/deploy/base-sepolia/demo-preparation.json');
 const input = () => ({
+  demoExplicit: true,
   manifest: structuredClone(originalManifest),
   deployment: structuredClone(originalDeployment),
   preparation: structuredClone(originalPreparation),
@@ -32,6 +33,9 @@ test('the owner-authorized demo is distinct from independently accepted staging'
 
 test('demo selection rejects altered input, custody claims, chain, address and verifier identity', () => {
   for (const mutate of [
+    (x) => {
+      x.demoExplicit = false;
+    },
     (x) => {
       x.preparation.transaction.data += '00';
     },

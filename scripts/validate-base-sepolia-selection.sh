@@ -7,6 +7,7 @@ if [ "${DEMO_MODE:-false}" = true ]; then
     exit 1
   }
   node scripts/validate-base-sepolia-staging-contract.mjs \
+    --demo-mode true \
     --manifest integration/base-sepolia-demo-contract.json \
     --deployment contracts/reports/deploy/base-sepolia/demo-deployment.json \
     --address "$BASE_SEPOLIA_ESCROW_ADDRESS" \

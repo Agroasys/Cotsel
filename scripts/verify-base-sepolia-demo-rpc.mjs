@@ -110,6 +110,7 @@ async function main() {
     manifest,
     deployment,
     preparation,
+    demoExplicit: true,
     requested: {
       address: manifest.address,
       deploymentBlock: manifest.deploymentBlock,

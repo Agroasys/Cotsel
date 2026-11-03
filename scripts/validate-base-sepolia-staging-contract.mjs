@@ -45,9 +45,16 @@ function normalizedAddresses(values, label) {
   return values.map((value, index) => requireAddress(value, `${label}[${index}]`));
 }
 
-export function validateBaseSepoliaSelection({ manifest, deployment, preparation, requested }) {
+export function validateBaseSepoliaSelection({
+  manifest,
+  deployment,
+  preparation,
+  requested,
+  demoExplicit,
+}) {
   const demo = manifest.schemaVersion === 'cotsel.base-sepolia-staging-demo.v1';
   if (demo) {
+    requireEqual(demoExplicit, true, 'explicit demo selection');
     requireEqual(manifest.status, 'owner-authorized-test-only', 'demo status');
     requireEqual(manifest.environment, 'aws-staging-demo', 'demo environment');
     requireEqual(manifest.chainId, 84532, 'demo chainId');
@@ -366,6 +373,7 @@ export function run(argv = process.argv.slice(2)) {
     manifest,
     deployment,
     preparation,
+    demoExplicit: options['demo-mode'] === 'true',
     requested: {
       address: options.address,
       deploymentBlock: options['start-block'],
