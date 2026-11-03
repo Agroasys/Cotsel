@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { installedPackagePath } from '../installed-dependency-paths.mjs';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -6,7 +7,6 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 
-const store = path.resolve('node_modules/.pnpm');
 const require = createRequire(import.meta.url);
 const legacySourceHashes = {
   '3.1.5': '746849f267c4868a53729225bd85c7dccd387712136fb305fcc0a3eadd4a3d9d',
@@ -14,7 +14,7 @@ const legacySourceHashes = {
 };
 for (const version of ['3.1.5', '5.1.9']) {
   test(`minimatch ${version} has no preprocessing methods`, () => {
-    const modulePath = path.join(store, `minimatch@${version}`, 'node_modules/minimatch');
+    const modulePath = installedPackagePath('minimatch', version);
     const source = fs.readFileSync(path.join(modulePath, 'minimatch.js'));
     assert.equal(createHash('sha256').update(source).digest('hex'), legacySourceHashes[version]);
     assert.doesNotMatch(
@@ -32,37 +32,20 @@ for (const version of ['3.1.5', '5.1.9']) {
   });
 }
 
-test('modern minimatch consumers resolve patched installations', () => {
-  const seen = new Set();
-  for (const entry of fs.readdirSync(store)) {
-    const link = path.join(store, entry, 'node_modules/minimatch');
-    let stat;
-    try {
-      stat = fs.lstatSync(link);
-    } catch (error) {
-      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') continue;
-      throw error;
-    }
-    if (!stat.isSymbolicLink()) continue;
-    const resolved = fs.realpathSync(link);
-    const version = JSON.parse(
-      fs.readFileSync(path.join(resolved, 'package.json'), 'utf8'),
-    ).version;
-    if (!['9.0.9', '10.2.5', '10.2.6'].includes(version)) continue;
-    assert.match(resolved, /minimatch@(?:9\.0\.9|10\.2\.5|10\.2\.6)_patch_hash=/);
-    seen.add(version);
-  }
-  assert.deepEqual([...seen].sort(), ['10.2.5', '10.2.6', '9.0.9']);
+test('modern minimatch consumers resolve active patched installations', () => {
+  for (const version of ['9.0.9', '10.2.5', '10.2.6'])
+    assert.match(installedPackagePath('minimatch', version), /_patch_hash=/);
 });
 
 for (const version of ['9.0.9', '10.2.5', '10.2.6']) {
   for (const format of ['commonjs', 'esm']) {
     test(`minimatch ${version} ${format} bounds pattern amplification`, async () => {
-      const entries = fs
-        .readdirSync(store)
-        .filter((entry) => entry.startsWith(`minimatch@${version}_patch_hash=`));
-      assert.equal(entries.length, 1);
-      const file = path.join(store, entries[0], 'node_modules/minimatch/dist', format, 'index.js');
+      const file = path.join(
+        installedPackagePath('minimatch', version),
+        'dist',
+        format,
+        'index.js',
+      );
       const { Minimatch } = await import(pathToFileURL(file).href);
       const pattern = Array(30).fill('**/../a/b').join('/');
       const bounded = new Minimatch(pattern, { optimizationLevel: 2, braceExpandMax: 64 });

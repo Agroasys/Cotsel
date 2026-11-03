@@ -119,7 +119,23 @@ function runPnpm(args) {
 
 function parseAudit(stdout) {
   try {
-    return JSON.parse(stdout);
+    const report = JSON.parse(stdout);
+    const summary = report?.metadata?.vulnerabilities;
+    if (
+      !summary ||
+      !report.advisories ||
+      Array.isArray(report.advisories) ||
+      typeof report.advisories !== 'object' ||
+      report.error
+    )
+      return null;
+    if (
+      !['critical', 'high', 'moderate', 'low', 'info'].every(
+        (severity) => Number.isSafeInteger(summary[severity]) && summary[severity] >= 0,
+      )
+    )
+      return null;
+    return report;
   } catch {
     return null;
   }
@@ -137,9 +153,14 @@ function vulnerabilities(report) {
     high: summary.high ?? 0,
     moderate: summary.moderate ?? 0,
     low: summary.low ?? 0,
+    info: summary.info ?? 0,
     total:
       summary.total ??
-      (summary.critical ?? 0) + (summary.high ?? 0) + (summary.moderate ?? 0) + (summary.low ?? 0),
+      (summary.critical ?? 0) +
+        (summary.high ?? 0) +
+        (summary.moderate ?? 0) +
+        (summary.low ?? 0) +
+        (summary.info ?? 0),
   };
 }
 
@@ -182,11 +203,22 @@ console.log(`dependency compatibility: exit=${dependencyCompatibility.exitCode}`
 console.log(`pnpm list --depth Infinity: exit=${lsAll.exitCode}`);
 
 let failed = false;
+for (const [label, result] of [
+  ['production audit', auditProd],
+  ['full audit', auditAll],
+]) {
+  if (result.exitCode !== 0 && result.exitCode !== 1) {
+    console.error(`Release gate failed: ${label} command failed with exit ${result.exitCode}.`);
+    failed = true;
+  }
+}
 if (
   prodSummary.critical > 0 ||
   prodSummary.high > 0 ||
   prodSummary.moderate > 0 ||
-  prodSummary.low > 0
+  prodSummary.low > 0 ||
+  prodSummary.info > 0 ||
+  advisories(auditProdReport).length > 0
 ) {
   console.error('Release gate failed: production dependency audit has findings.');
   failed = true;
