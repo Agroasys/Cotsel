@@ -84,6 +84,14 @@ with tested package repairs and an exact-source applicability assessment.
 The gate does not extend those exceptions. New or changed findings fail closed.
 A green repository gate does not replace candidate scans or independent review.
 
+The `glob@13.0.6` patch routes public CommonJS and ESM entries to the patched
+published modules. The original bundled entries embed an unpatched walker.
+Retire this route when all consumers select a compatible fixed release.
+The compatibility check resolves the active installed graph and tests aborts
+through both public entries. It ignores unused virtual-store copies.
+Malformed audit reports, failed audit commands, unrecognized findings, and any
+production finding block the gate.
+
 ## Hardhat Major Deferral Policy (Issue #192)
 
 ### Deferral Rationale

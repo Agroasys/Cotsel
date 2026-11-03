@@ -148,6 +148,21 @@ export function settlementAmountToNumber(canonical: string): number {
   return Number(canonical);
 }
 
+/** Reject unsupported legacy/backfilled values before the v1 number boundary. */
+export function storedSettlementAmountToNumber(
+  value: string,
+  field: string,
+  spec: SettlementAmountSpec,
+): number {
+  try {
+    return settlementAmountToNumber(parseSettlementAmount(value, field, spec));
+  } catch {
+    throw new GatewayError(500, 'INTERNAL_ERROR', 'Stored settlement amount is invalid', {
+      field,
+    });
+  }
+}
+
 export interface SettlementMonetaryIntent {
   displayCurrency: string;
   displayAmount: string;

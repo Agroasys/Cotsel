@@ -20,6 +20,8 @@ linkWorkspacePackages: true
 pnpmfile: patches/permissionless-ox-peer.cjs
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
+  # Security fix GHSA-j3cq-92fq-qg5f; the Gateway dev dependency pins 8.7.2.
+  - express-rate-limit@8.7.2
   # Security fix for GHSA-7q85-xj36-vmfc. Keep the exception version-specific.
   - adm-zip@0.6.1
   # Security fixes for GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7, and

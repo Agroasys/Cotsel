@@ -269,6 +269,7 @@ const INTERNAL_FIELDS = [
   'previousRequestId',
   'deliveryId',
   'handoffId',
+  'exportId',
   'outboxId',
   'alertId',
   'dedupKey',
