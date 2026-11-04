@@ -10,7 +10,7 @@ const vars = readFileSync(new URL('variables.tf', root), 'utf8');
 const runtime = readFileSync(new URL('runtime-indexer.tf', root), 'utf8');
 const network = readFileSync(new URL('network.tf', root), 'utf8');
 const destinations = JSON.parse(readFileSync(new URL('egress-destinations.json', root), 'utf8'));
-const egressConfig = network.match(/ {2}egress_destinations = \[[\s\S]*?\n  \]/)?.[0];
+const egressConfig = network.match(/ {2}egress_destinations = \[[\s\S]*?\n {2}\]/)?.[0];
 assert.ok(egressConfig, 'Egress destination configuration is missing');
 const variable = vars.match(/variable "demo_disable_indexer_alerts" \{[\s\S]*?\n\}/)?.[0];
 let secretConfig = runtime.match(
