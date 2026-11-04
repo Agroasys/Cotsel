@@ -90,6 +90,7 @@ env:
   ROOT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root || 'staging-platform' }}
   TF_VAR_gateway_desired_count: ${{ vars.COTSEL_STAGING_GATEWAY_DESIRED_COUNT || '0' }}
   TF_VAR_indexer_desired_count: ${{ vars.COTSEL_STAGING_INDEXER_DESIRED_COUNT || '0' }}
+  TF_VAR_demo_disable_indexer_alerts: ${{ vars.COTSEL_STAGING_DEMO_DISABLE_INDEXER_ALERTS || 'false' }}
   STATE_BUCKET: agroasys-tfstate-655177116834
   TF_VAR_oracle_kms_expected_address: ${{ vars.COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS }}
   TF_VAR_oracle_desired_count: ${{ vars.COTSEL_STAGING_ORACLE_DESIRED_COUNT || '0' }}
@@ -100,7 +101,6 @@ env:
   TF_VAR_treasury_desired_count: ${{ vars.COTSEL_STAGING_TREASURY_DESIRED_COUNT || '0' }}
   TF_VERSION: 1.15.8
   OWNER_BREAK_GLASS_ACTORS: Astton
-
 concurrency:
   group: terraform-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root || 'validation' }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
@@ -137,8 +137,8 @@ jobs:
           node infra/terraform/scripts/oracle-kms-isolation-selftest.mjs
           node infra/terraform/scripts/staging-foundation-selftest.mjs
 
-      - name: Test saved-plan metadata validation
-        run: node infra/terraform/scripts/plan-metadata-selftest.mjs
+      - name: Test saved-plan metadata and demo alerts
+        run: node infra/terraform/scripts/plan-metadata-selftest.mjs && node --test infra/terraform/scripts/demo-indexer-alerts.test.mjs
 
       - name: Test accepted Base Sepolia selection validation
         run: node --test scripts/tests/base-sepolia-staging-contract.test.mjs
@@ -279,8 +279,8 @@ jobs:
       - name: Apply destructive-change policy
         run: node infra/terraform/scripts/check-destructive-changes.mjs < "infra/terraform/$ROOT/plan.json"
 
-      - name: Test saved-plan metadata validation
-        run: node infra/terraform/scripts/plan-metadata-selftest.mjs
+      - name: Test saved-plan metadata and demo alerts
+        run: node infra/terraform/scripts/plan-metadata-selftest.mjs && node --test infra/terraform/scripts/demo-indexer-alerts.test.mjs
 
       - name: Remove rendered plan JSON
         if: always()

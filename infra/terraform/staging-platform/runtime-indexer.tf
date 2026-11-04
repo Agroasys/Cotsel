@@ -12,7 +12,8 @@ locals {
     { name = "FINALITY_CONFIRMATION_BLOCKS", value = "1" },
     { name = "GRAPHQL_PORT", value = "4350" },
     { name = "NOTIFICATIONS_COOLDOWN_MS", value = "300000" },
-    { name = "NOTIFICATIONS_ENABLED", value = "true" },
+    { name = "NOTIFICATIONS_ENABLED", value = var.demo_disable_indexer_alerts ? "false" : "true" },
+    { name = "DEMO_INDEXER_ALERTS_DISABLED", value = tostring(var.demo_disable_indexer_alerts) },
     { name = "NOTIFICATIONS_REQUEST_TIMEOUT_MS", value = "5000" },
     { name = "PGSSLMODE", value = "verify-full" },
     { name = "RATE_LIMIT", value = "10" },
@@ -27,14 +28,15 @@ locals {
     { name = "VERIFY_START_BLOCK_CODE", value = "true" },
   ]
 
-  indexer_pipeline_secrets = [
+  indexer_pipeline_secrets = concat([
     { name = "DB_PASS", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/runtime"].arn}:password::" },
     { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/runtime"].arn}:password::" },
     { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/runtime"].arn}:username::" },
-    { name = "NOTIFICATIONS_WEBHOOK_URL", valueFrom = local.foundation_secret_arns["notifications-webhook"] },
     { name = "RPC_ENDPOINT", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn },
     { name = "RPC_FALLBACK_ENDPOINTS", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn },
-  ]
+    ], var.demo_disable_indexer_alerts ? [] : [
+    { name = "NOTIFICATIONS_WEBHOOK_URL", valueFrom = local.foundation_secret_arns["notifications-webhook"] },
+  ])
 
   indexer_pipeline_container = {
     name                   = "indexer-pipeline"

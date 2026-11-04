@@ -64,6 +64,21 @@ case "${COTSEL_ENVIRONMENT:-}" in
     ;;
 esac
 
+demo_indexer_alerts_disabled="${INDEXER_DEMO_ALERTS_DISABLED:-false}"
+if [[ "$demo_indexer_alerts_disabled" != "true" && "$demo_indexer_alerts_disabled" != "false" ]]; then
+  echo "INDEXER_DEMO_ALERTS_DISABLED must be true or false" >&2
+  exit 1
+fi
+if [[ "$demo_indexer_alerts_disabled" == "true" ]]; then
+  demo_indexer_address="$(printf '%s' "${INDEXER_CONTRACT_ADDRESS:-}" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$COTSEL_ENVIRONMENT" != "staging" || "${INDEXER_CHAIN_ID:-}" != "84532" ||
+        "$demo_indexer_address" != "0xe8787748547a6ce40287cde678a58e385b65d069" ||
+        "${INDEXER_NOTIFICATIONS_ENABLED:-}" != "false" ]]; then
+    echo "Disabled demo alerts require the selected Base Sepolia staging escrow and disabled notifications" >&2
+    exit 1
+  fi
+fi
+
 if [[ "$COTSEL_ENVIRONMENT" != "local" ]]; then
   if [[ "${NODE_ENV:-}" != "production" ]]; then
     echo "NODE_ENV must be production when COTSEL_ENVIRONMENT=$COTSEL_ENVIRONMENT" >&2
@@ -98,12 +113,12 @@ if [[ "$COTSEL_ENVIRONMENT" != "local" ]]; then
   fi
 
   # A poison log holds the checkpoint; without a webhook it holds silently.
-  if [[ "${INDEXER_NOTIFICATIONS_ENABLED:-}" != "true" ]]; then
+  if [[ "$demo_indexer_alerts_disabled" != "true" && "${INDEXER_NOTIFICATIONS_ENABLED:-}" != "true" ]]; then
     echo "INDEXER_NOTIFICATIONS_ENABLED must be true when COTSEL_ENVIRONMENT=$COTSEL_ENVIRONMENT" >&2
     exit 1
   fi
 
-  if [[ -z "${INDEXER_NOTIFICATIONS_WEBHOOK_URL:-}" ]]; then
+  if [[ "$demo_indexer_alerts_disabled" != "true" && -z "${INDEXER_NOTIFICATIONS_WEBHOOK_URL:-}" ]]; then
     echo "INDEXER_NOTIFICATIONS_WEBHOOK_URL is required when COTSEL_ENVIRONMENT=$COTSEL_ENVIRONMENT" >&2
     exit 1
   fi

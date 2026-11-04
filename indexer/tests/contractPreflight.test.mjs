@@ -331,3 +331,52 @@ test('every missing control is reported at once, not one restart at a time', () 
     },
   );
 });
+
+const DEMO_ONLY = {
+  profile: 'staging',
+  ...PINNED,
+  chainId: 84532,
+  contractAddress: '0xE8787748547A6ce40287CDE678A58e385b65d069',
+  demoAlertsDisabled: true,
+  notificationsEnabled: false,
+  notificationsWebhookUrl: null,
+};
+
+test('the selected Base Sepolia staging demo can skip notification delivery', () => {
+  assert.doesNotThrow(() => assertDeploymentPins(DEMO_ONLY));
+});
+
+test('the demo alert exception cannot disable contract identity or production controls', () => {
+  assert.throws(
+    () => assertDeploymentPins({ ...DEMO_ONLY, expectedContractCodehash: null }),
+    /EXPECTED_CONTRACT_CODEHASH/,
+  );
+  assert.throws(
+    () => assertDeploymentPins({ ...DEMO_ONLY, expectedAbiFingerprint: null }),
+    /EXPECTED_ABI_FINGERPRINT/,
+  );
+  assert.throws(
+    () => assertDeploymentPins({ ...DEMO_ONLY, profile: 'production' }),
+    /only for the selected/,
+  );
+  assert.throws(
+    () => assertDeploymentPins({ ...DEMO_ONLY, profile: 'local' }),
+    /only for the selected/,
+  );
+  assert.throws(
+    () => assertDeploymentPins({ ...DEMO_ONLY, chainId: 8453 }),
+    /only for the selected/,
+  );
+  assert.throws(
+    () =>
+      assertDeploymentPins({
+        ...DEMO_ONLY,
+        contractAddress: '0x1111111111111111111111111111111111111111',
+      }),
+    /only for the selected/,
+  );
+  assert.throws(
+    () => assertDeploymentPins({ ...DEMO_ONLY, notificationsEnabled: true }),
+    /only for the selected/,
+  );
+});

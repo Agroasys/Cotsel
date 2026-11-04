@@ -100,3 +100,31 @@ test('rejects a readiness port that collides with the Prometheus port', () => {
   assert.equal(status, 1);
   assert.match(stderr, /PROMETHEUS_PORT and READINESS_PORT must differ/);
 });
+
+test('warns when the selected staging demo starts without alert delivery', () => {
+  const result = loadConfig({
+    COTSEL_ENVIRONMENT: 'staging',
+    CHAIN_ID: '84532',
+    CONTRACT_ADDRESS: '0xE8787748547A6ce40287CDE678A58e385b65d069',
+    EXPECTED_CONTRACT_CODEHASH: `0x${'ab'.repeat(32)}`,
+    EXPECTED_ABI_FINGERPRINT: 'c'.repeat(64),
+    NOTIFICATIONS_ENABLED: 'false',
+    DEMO_INDEXER_ALERTS_DISABLED: 'true',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /demo\.alerts_disabled/);
+});
+
+test('rejects the demo alert exception in production', () => {
+  const result = loadConfig({
+    COTSEL_ENVIRONMENT: 'production',
+    CHAIN_ID: '84532',
+    CONTRACT_ADDRESS: '0xE8787748547A6ce40287CDE678A58e385b65d069',
+    EXPECTED_CONTRACT_CODEHASH: `0x${'ab'.repeat(32)}`,
+    EXPECTED_ABI_FINGERPRINT: 'c'.repeat(64),
+    NOTIFICATIONS_ENABLED: 'false',
+    DEMO_INDEXER_ALERTS_DISABLED: 'true',
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /only for the selected Base Sepolia staging escrow/);
+});

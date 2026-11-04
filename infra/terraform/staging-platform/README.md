@@ -149,6 +149,11 @@ the Oracle task role can call `kms:GetPublicKey` and `kms:Sign` on the Oracle ke
 Oracle reads the isolated indexer through private Cloud Map DNS; gateway-to-
 Oracle calls remain authenticated with the existing service credential.
 
+Indexer alerts are enabled by default. For the selected Base Sepolia demo only,
+`COTSEL_STAGING_DEMO_DISABLE_INDEXER_ALERTS=true` disables alert delivery and
+omits the webhook secret. The indexer still quarantines invalid logs and holds
+its checkpoint. Set the variable to `false` after the alert destination is ready.
+
 The gasless relayer also runs as its own ECS service and task role. Only that
 task role can sign with the relayer key. The gateway sends HMAC-authenticated,
 intent-bound requests and independently verifies the returned transaction. The
