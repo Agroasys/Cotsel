@@ -37,7 +37,11 @@ async function repair(client, service, profile, baseline, manifest) {
     await client.query("SELECT set_config('app.runtime_db_user', $1, true)", [
       service === 'gateway' ? 'cotsel_gateway_runtime' : 'cotsel_oracle_app',
     ]);
-    await client.query(baseline);
+    const auditTableStart = baseline.indexOf(
+      'CREATE TABLE IF NOT EXISTS managed_signer_validation_audit',
+    );
+    if (auditTableStart < 0) throw new Error('Signer audit table definition is missing');
+    await client.query(service === 'gateway' ? baseline.slice(auditTableStart) : baseline);
     if (service === 'oracle') {
       // Same allowed values; rebuild the older expression in the baseline form.
       await client.query(`ALTER TABLE oracle_triggers DROP CONSTRAINT check_error_type;
