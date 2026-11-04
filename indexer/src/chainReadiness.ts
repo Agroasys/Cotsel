@@ -1,5 +1,5 @@
 import { evaluateReadiness, type ReadinessResult } from '@agroasys/shared-edge';
-import { callRpc } from './rpc-preflight';
+import { RpcUnavailableError, callRpc } from './rpc-preflight';
 
 /**
  * Startup gates and runtime readiness for the indexer pipeline.
@@ -102,6 +102,7 @@ export async function assertFinalitySupport(
   try {
     finalized = await getBlockHeader(rpcUrl, 'finalized', timeoutMs);
   } catch (error) {
+    if (error instanceof RpcUnavailableError) throw error;
     throw new ChainReadinessError(
       `RPC endpoint does not support the finalized block tag: ${error instanceof Error ? error.message : String(error)}`,
     );

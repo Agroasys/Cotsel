@@ -87,7 +87,7 @@
     },
     {
       "service": "Base Sepolia RPC primary",
-      "hostname": "base-sepolia.infura.io",
+      "hostname": "sepolia.base.org",
       "workloads": ["gateway", "oracle", "indexer-pipeline", "reconciliation", "treasury"],
       "purpose": "rpc-base-sepolia-primary secret",
       "status": "required",

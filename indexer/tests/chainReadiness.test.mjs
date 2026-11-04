@@ -10,6 +10,7 @@ import {
   createIndexerReadinessCheck,
   readProcessorCheckpoint,
 } from '../lib/chainReadiness.js';
+import { RpcUnavailableError } from '../lib/rpc-preflight.js';
 import { createProbeServer } from '../lib/probeServer.js';
 
 const CHAIN_ID = 84532;
@@ -393,6 +394,20 @@ test('coverage probe reports the retained checkpoint only while readiness is hea
     checkpoint = null;
     assert.equal((await fetch(`${base}/coverage`)).status, 503);
     assert.equal((await fetch(`${base}/coverage`, { method: 'POST' })).status, 405);
+  } finally {
+    await close(server);
+  }
+});
+
+test('finality throttling remains typed for startup fallback', async () => {
+  const server = createServer((request, response) => {
+    request.resume();
+    response.writeHead(429, { 'retry-after': '0' });
+    response.end();
+  });
+  const url = await listen(server);
+  try {
+    await assert.rejects(() => assertFinalitySupport(url, 300), RpcUnavailableError);
   } finally {
     await close(server);
   }

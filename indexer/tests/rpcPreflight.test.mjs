@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
 
-import { selectReachableRpcEndpoint } from '../lib/rpc-preflight.js';
+import { callRpc, selectReachableRpcEndpoint } from '../lib/rpc-preflight.js';
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -23,7 +23,12 @@ function close(server) {
   });
 }
 
-function rpcServer({ chainId = '0x14a34', blockNumber = '0x64', blockError = null } = {}) {
+function rpcServer({
+  chainId = '0x14a34',
+  blockNumber = '0x64',
+  blockError = null,
+  codeStatus = 200,
+} = {}) {
   return createServer((request, response) => {
     let body = '';
     request.setEncoding('utf8');
@@ -45,6 +50,14 @@ function rpcServer({ chainId = '0x14a34', blockNumber = '0x64', blockError = nul
           return;
         }
         result = { number: payload.params[0], hash: `0x${'1'.repeat(64)}` };
+      } else if (payload.method === 'eth_getCode') {
+        const status = typeof codeStatus === 'function' ? codeStatus() : codeStatus;
+        if (status !== 200) {
+          response.writeHead(status, { 'retry-after': '0' });
+          response.end();
+          return;
+        }
+        result = '0x6000';
       } else {
         response.writeHead(400, { 'content-type': 'application/json' });
         response.end();
@@ -117,5 +130,146 @@ test('fails closed when every endpoint is unavailable or on the wrong chain', as
     );
   } finally {
     await close(wrongChain);
+  }
+});
+
+test('retries a transient rate limit while keeping the same verified endpoint', async () => {
+  let calls = 0;
+  const server = rpcServer({ codeStatus: () => (++calls === 1 ? 429 : 200) });
+  const url = await listen(server);
+  try {
+    assert.equal(await callRpc(url, 'eth_getCode', ['0x00', 'latest'], 300), '0x6000');
+    assert.equal(calls, 2);
+  } finally {
+    await close(server);
+  }
+});
+
+test('a rate limit during contract verification selects a fully checked fallback', async () => {
+  const primary = rpcServer({ codeStatus: 429 });
+  const fallback = rpcServer();
+  const urls = [await listen(primary), await listen(fallback)];
+  const checked = [];
+  try {
+    const selection = await selectReachableRpcEndpoint(urls, 84532, 300, async (url) => {
+      checked.push(url);
+      assert.equal(await callRpc(url, 'eth_getCode', ['0x00', 'latest'], 300), '0x6000');
+    });
+    assert.equal(selection.url, urls[1]);
+    assert.deepEqual(checked, urls);
+  } finally {
+    await close(primary);
+    await close(fallback);
+  }
+});
+
+test('semantic verification failures cannot be hidden by a fallback', async () => {
+  const primary = rpcServer();
+  const fallback = rpcServer();
+  const urls = [await listen(primary), await listen(fallback)];
+  let calls = 0;
+  try {
+    await assert.rejects(
+      () =>
+        selectReachableRpcEndpoint(urls, 84532, 300, async () => {
+          calls++;
+          throw new Error('Contract codehash mismatch');
+        }),
+      /Contract codehash mismatch/,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    await close(primary);
+    await close(fallback);
+  }
+});
+
+test('rate-limit retries are bounded and authentication failures are not retried', async () => {
+  for (const [status, expectedCalls] of [
+    [429, 3],
+    [401, 1],
+  ]) {
+    let calls = 0;
+    const server = rpcServer({
+      codeStatus: () => {
+        calls++;
+        return status;
+      },
+    });
+    const url = await listen(server);
+    try {
+      await assert.rejects(
+        () => callRpc(url, 'eth_getCode', ['0x00', 'latest'], 300),
+        new RegExp(`HTTP ${status}`),
+      );
+      assert.equal(calls, expectedCalls);
+    } finally {
+      await close(server);
+    }
+  }
+});
+
+test('Retry-After shares the original call timeout and cannot trigger an early retry', async () => {
+  let calls = 0;
+  const server = createServer((request, response) => {
+    request.resume();
+    calls++;
+    response.writeHead(429, { 'retry-after': '2' });
+    response.end();
+  });
+  const url = await listen(server);
+  try {
+    await assert.rejects(() => callRpc(url, 'eth_getCode', [], 100), /RPC request timed out/);
+    assert.equal(calls, 1);
+  } finally {
+    await close(server);
+  }
+});
+
+test('a response-body disconnect stays a transport error and can select a fallback', async () => {
+  const primary = rpcServer();
+  const fallback = rpcServer();
+  const urls = [await listen(primary), await listen(fallback)];
+  const originalFetch = globalThis.fetch;
+  const validated = [];
+  globalThis.fetch = async (url, options) => {
+    const request = JSON.parse(options.body);
+    if (url === urls[0] && request.method === 'eth_getCode') {
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new TypeError('terminated'));
+          },
+        }),
+        { status: 200 },
+      );
+    }
+    return originalFetch(url, options);
+  };
+  try {
+    const result = await selectReachableRpcEndpoint(urls, 84532, 100, async (url) => {
+      validated.push(url);
+      await callRpc(url, 'eth_getCode', [], 100);
+    });
+    assert.equal(result.url, urls[1]);
+    assert.deepEqual(validated, urls);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await close(primary);
+    await close(fallback);
+  }
+});
+
+test('malformed JSON remains fatal and is not mistaken for a connection failure', async () => {
+  const server = createServer((request, response) => {
+    request.resume();
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end('{invalid');
+  });
+  const url = await listen(server);
+  try {
+    await assert.rejects(() => callRpc(url, 'eth_getCode', [], 300), SyntaxError);
+  } finally {
+    await close(server);
   }
 });

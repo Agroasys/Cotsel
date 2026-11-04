@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { keccak256 } from 'ethers';
 import { ESCROW_EVENT_SIGNATURES } from './eventTopics';
-import { callRpc, redactRpcUrlForLogs } from './rpc-preflight';
+import { RpcUnavailableError, callRpc, redactRpcUrlForLogs } from './rpc-preflight';
 
 const DEFAULT_TIMEOUT_MS = 3000;
 const EMPTY_CODE = '0x';
@@ -106,6 +106,7 @@ export async function assertContractPreflight(
         'eth_getCode',
       );
     } catch (error) {
+      if (error instanceof RpcUnavailableError) throw error;
       // A pruned or non-archive endpoint cannot answer this at all. That is a
       // gap in verification, not evidence of a bad start block, so warn rather
       // than block startup. An endpoint that *does* answer is trusted below.
