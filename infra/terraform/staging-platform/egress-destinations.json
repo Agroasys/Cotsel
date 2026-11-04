@@ -87,19 +87,19 @@
     },
     {
       "service": "Base Sepolia RPC primary",
-      "hostname": null,
+      "hostname": "base-sepolia.infura.io",
       "workloads": ["gateway", "oracle", "indexer-pipeline", "reconciliation", "treasury"],
       "purpose": "rpc-base-sepolia-primary secret",
-      "status": "unresolved",
-      "note": "Record the bare hostname from the secret, never the URL or key."
+      "status": "required",
+      "note": "Keep the hostname aligned with the secret; never record the URL or key."
     },
     {
       "service": "Base Sepolia RPC fallback",
-      "hostname": null,
+      "hostname": "base-sepolia.g.alchemy.com",
       "workloads": ["gateway", "oracle", "indexer-pipeline", "reconciliation", "treasury"],
       "purpose": "rpc-base-sepolia-fallback secret",
-      "status": "unresolved",
-      "note": "Record the bare hostname from the secret, never the URL or key."
+      "status": "required",
+      "note": "Keep the hostname aligned with the secret; never record the URL or key."
     },
     {
       "service": "Notifications webhook",

@@ -144,7 +144,7 @@ locals {
   egress_destinations = [
     for entry in local.egress_contract.entries : merge(entry, {
       hostname = entry.hostname == null ? "" : entry.hostname
-    })
+    }) if !(var.demo_disable_indexer_alerts && entry.service == "Notifications webhook")
   ]
 
   unresolved_egress_destinations = [
