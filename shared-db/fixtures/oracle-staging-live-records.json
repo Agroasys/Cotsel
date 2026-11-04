@@ -1,0 +1,292 @@
+[
+  {
+    "record_type": "column",
+    "identity": "public.oracle_hmac_nonces.1",
+    "definition": "name=api_key,type=character varying(128),not_null=true,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_hmac_nonces.2",
+    "definition": "name=nonce,type=character varying(255),not_null=true,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_hmac_nonces.3",
+    "definition": "name=expires_at,type=timestamp without time zone,not_null=true,default=,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_hmac_nonces.4",
+    "definition": "name=created_at,type=timestamp without time zone,not_null=false,default=now(),identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.1",
+    "definition": "name=id,type=integer,not_null=true,default=nextval('oracle_triggers_id_seq'::regclass),identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.10",
+    "definition": "name=tx_hash,type=character varying(66),not_null=false,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.11",
+    "definition": "name=block_number,type=bigint,not_null=false,default=,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.12",
+    "definition": "name=confirmation_stage,type=character varying(16),not_null=false,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.13",
+    "definition": "name=confirmation_stage_at,type=timestamp without time zone,not_null=false,default=,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.14",
+    "definition": "name=indexer_confirmed,type=boolean,not_null=false,default=false,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.15",
+    "definition": "name=indexer_confirmed_at,type=timestamp without time zone,not_null=false,default=,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.16",
+    "definition": "name=indexer_event_id,type=character varying(255),not_null=false,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.17",
+    "definition": "name=last_error,type=text,not_null=false,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.18",
+    "definition": "name=error_type,type=character varying(50),not_null=false,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.19",
+    "definition": "name=on_chain_verified,type=boolean,not_null=false,default=false,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.2",
+    "definition": "name=action_key,type=character varying(255),not_null=true,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.20",
+    "definition": "name=on_chain_verified_at,type=timestamp without time zone,not_null=false,default=,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.21",
+    "definition": "name=approved_by,type=character varying(255),not_null=false,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.22",
+    "definition": "name=approved_at,type=timestamp without time zone,not_null=false,default=,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.23",
+    "definition": "name=rejected_by,type=character varying(255),not_null=false,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.24",
+    "definition": "name=rejected_at,type=timestamp without time zone,not_null=false,default=,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.25",
+    "definition": "name=rejection_reason,type=text,not_null=false,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.26",
+    "definition": "name=created_at,type=timestamp without time zone,not_null=false,default=now(),identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.27",
+    "definition": "name=submitted_at,type=timestamp without time zone,not_null=false,default=,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.28",
+    "definition": "name=confirmed_at,type=timestamp without time zone,not_null=false,default=,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.29",
+    "definition": "name=updated_at,type=timestamp without time zone,not_null=false,default=now(),identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.3",
+    "definition": "name=request_id,type=character varying(255),not_null=true,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.4",
+    "definition": "name=idempotency_key,type=character varying(255),not_null=true,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.5",
+    "definition": "name=trade_id,type=character varying(100),not_null=true,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.6",
+    "definition": "name=trigger_type,type=character varying(50),not_null=true,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.7",
+    "definition": "name=request_hash,type=character varying(66),not_null=false,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.8",
+    "definition": "name=attempt_count,type=integer,not_null=false,default=0,identity=,generated=,collation="
+  },
+  {
+    "record_type": "column",
+    "identity": "public.oracle_triggers.9",
+    "definition": "name=status,type=character varying(30),not_null=true,default=,identity=,generated=,collation=pg_catalog.default"
+  },
+  {
+    "record_type": "constraint",
+    "identity": "public.oracle_hmac_nonces.oracle_hmac_nonces_pkey",
+    "definition": "type=p,definition=PRIMARY KEY (api_key, nonce)"
+  },
+  {
+    "record_type": "constraint",
+    "identity": "public.oracle_triggers.check_confirmation_stage",
+    "definition": "type=c,definition=CHECK (confirmation_stage IS NULL OR (confirmation_stage::text = ANY (ARRAY['INDEXED'::character varying, 'SAFE'::character varying, 'FINALIZED'::character varying]::text[])))"
+  },
+  {
+    "record_type": "constraint",
+    "identity": "public.oracle_triggers.check_error_type",
+    "definition": "type=c,definition=CHECK (error_type::text = ANY (ARRAY['VALIDATION'::character varying, 'NETWORK'::character varying, 'CONTRACT'::character varying, 'TERMINAL'::character varying, 'INDEXER_LAG'::character varying]::text[]))"
+  },
+  {
+    "record_type": "constraint",
+    "identity": "public.oracle_triggers.check_status",
+    "definition": "type=c,definition=CHECK (status::text = ANY (ARRAY['PENDING'::character varying, 'EXECUTING'::character varying, 'SUBMITTED'::character varying, 'CONFIRMED'::character varying, 'FAILED'::character varying, 'EXHAUSTED_NEEDS_REDRIVE'::character varying, 'TERMINAL_FAILURE'::character varying, 'PENDING_APPROVAL'::character varying, 'REJECTED'::character varying]::text[]))"
+  },
+  {
+    "record_type": "constraint",
+    "identity": "public.oracle_triggers.check_trigger_type",
+    "definition": "type=c,definition=CHECK (trigger_type::text = ANY (ARRAY['RELEASE_STAGE_1'::character varying, 'CONFIRM_ARRIVAL'::character varying, 'CONFIRM_INSPECTION_AVAILABLE_STANDARD'::character varying, 'CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL'::character varying, 'FINALIZE_AFTER_INSPECTION_ACCEPTANCE'::character varying, 'FINALIZE_TRADE'::character varying]::text[]))"
+  },
+  {
+    "record_type": "constraint",
+    "identity": "public.oracle_triggers.oracle_triggers_pkey",
+    "definition": "type=p,definition=PRIMARY KEY (idempotency_key)"
+  },
+  {
+    "record_type": "function",
+    "identity": "public.current_app_service_name()",
+    "definition": "CREATE OR REPLACE FUNCTION public.current_app_service_name()\n RETURNS text\n LANGUAGE sql\n STABLE\nAS $function$\n    SELECT COALESCE(current_setting('app.service_name', true), '');\n$function$\n"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.idx_action_key",
+    "definition": "CREATE INDEX idx_action_key ON public.oracle_triggers USING btree (action_key)"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.idx_active_action_key_unique",
+    "definition": "CREATE UNIQUE INDEX idx_active_action_key_unique ON public.oracle_triggers USING btree (action_key) WHERE ((status)::text = ANY ((ARRAY['PENDING'::character varying, 'EXECUTING'::character varying, 'SUBMITTED'::character varying, 'PENDING_APPROVAL'::character varying])::text[]))"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.idx_created_at",
+    "definition": "CREATE INDEX idx_created_at ON public.oracle_triggers USING btree (created_at DESC)"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.idx_exhausted_needs_redrive",
+    "definition": "CREATE INDEX idx_exhausted_needs_redrive ON public.oracle_triggers USING btree (status, updated_at) WHERE ((status)::text = 'EXHAUSTED_NEEDS_REDRIVE'::text)"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.idx_oracle_hmac_nonces_expires_at",
+    "definition": "CREATE INDEX idx_oracle_hmac_nonces_expires_at ON public.oracle_hmac_nonces USING btree (expires_at)"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.idx_pending_approval",
+    "definition": "CREATE INDEX idx_pending_approval ON public.oracle_triggers USING btree (status, created_at) WHERE ((status)::text = 'PENDING_APPROVAL'::text)"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.idx_request_id",
+    "definition": "CREATE INDEX idx_request_id ON public.oracle_triggers USING btree (request_id)"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.idx_status",
+    "definition": "CREATE INDEX idx_status ON public.oracle_triggers USING btree (status)"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.idx_submitted_unconfirmed",
+    "definition": "CREATE INDEX idx_submitted_unconfirmed ON public.oracle_triggers USING btree (status, submitted_at) WHERE (((status)::text = 'SUBMITTED'::text) AND (indexer_confirmed = false))"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.idx_trade_id",
+    "definition": "CREATE INDEX idx_trade_id ON public.oracle_triggers USING btree (trade_id)"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.oracle_hmac_nonces_pkey",
+    "definition": "CREATE UNIQUE INDEX oracle_hmac_nonces_pkey ON public.oracle_hmac_nonces USING btree (api_key, nonce)"
+  },
+  {
+    "record_type": "index",
+    "identity": "public.oracle_triggers_pkey",
+    "definition": "CREATE UNIQUE INDEX oracle_triggers_pkey ON public.oracle_triggers USING btree (idempotency_key)"
+  },
+  {
+    "record_type": "policy",
+    "identity": "public.oracle_hmac_nonces.oracle_hmac_nonces_service_isolation",
+    "definition": "command=*,permissive=true,roles=,using=(current_app_service_name() = 'oracle'::text),check=(current_app_service_name() = 'oracle'::text)"
+  },
+  {
+    "record_type": "policy",
+    "identity": "public.oracle_triggers.oracle_triggers_service_isolation",
+    "definition": "command=*,permissive=true,roles=,using=(current_app_service_name() = 'oracle'::text),check=(current_app_service_name() = 'oracle'::text)"
+  },
+  {
+    "record_type": "relation",
+    "identity": "public.oracle_hmac_nonces",
+    "definition": "kind=r,persistence=p,rls=true,force_rls=true,partition=,view="
+  },
+  {
+    "record_type": "relation",
+    "identity": "public.oracle_triggers",
+    "definition": "kind=r,persistence=p,rls=true,force_rls=true,partition=,view="
+  },
+  {
+    "record_type": "relation",
+    "identity": "public.oracle_triggers_id_seq",
+    "definition": "kind=S,persistence=p,rls=false,force_rls=false,partition=,view="
+  },
+  {
+    "record_type": "sequence",
+    "identity": "public.oracle_triggers_id_seq",
+    "definition": "type=integer,start=1,increment=1,minimum=1,maximum=2147483647,cache=1,cycle=false"
+  }
+]

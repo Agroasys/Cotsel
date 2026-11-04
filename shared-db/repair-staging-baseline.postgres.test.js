@@ -4,8 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
 const { Client } = require('pg');
+const crypto = require('node:crypto');
 const { repair, profiles } = require('./repair-staging-baseline');
-const { computePublicSchemaFingerprint } = require('./schema-fingerprint');
+const { computePublicSchemaFingerprint, SCHEMA_RECORDS_SQL } = require('./schema-fingerprint');
 const connectionString = process.env.REPAIR_TEST_DATABASE_URL;
 if (!connectionString) throw new Error('REPAIR_TEST_DATABASE_URL is required');
 
@@ -37,7 +38,33 @@ for (const service of ['gateway', 'oracle']) {
           .join('\n'),
       );
       await client.query('RESET search_path');
-      assert.equal(await computePublicSchemaFingerprint(client), profiles[service].before);
+      assert.ok(
+        [profiles[service].before].flat().includes(await computePublicSchemaFingerprint(client)),
+      );
+      if (service === 'oracle') {
+        const live = require('./fixtures/oracle-staging-live-records.json');
+        const liveHash = crypto
+          .createHash('sha256')
+          .update(
+            JSON.stringify(live.map((row) => [row.record_type, row.identity, row.definition])),
+          )
+          .digest('hex');
+        assert.ok(profiles.oracle.before.includes(liveHash));
+        const replay = (await client.query(SCHEMA_RECORDS_SQL)).rows;
+        const normalizeArrayCasts = (value) =>
+          value
+            .replace(/\('([^']*)'::character varying\)::text/g, "'$1'::character varying::text")
+            .replace(/\(ARRAY\[([^\]]+)\]\)::text\[\]/g, 'ARRAY[$1]::text[]')
+            .replace(
+              /ARRAY\[([^\]]+)\]::text\[\]/g,
+              (_, entries) =>
+                `ARRAY[${entries.replace(/::character varying(?!::text)/g, '::character varying::text')}]`,
+            );
+        assert.deepEqual(
+          live.map((row) => ({ ...row, definition: normalizeArrayCasts(row.definition) })),
+          replay.map((row) => ({ ...row, definition: normalizeArrayCasts(row.definition) })),
+        );
+      }
       const baseline = fs.readFileSync(
         path.join(__dirname, '..', service, 'src', 'database', 'schema.sql'),
         'utf8',
@@ -69,7 +96,9 @@ for (const service of ['gateway', 'oracle']) {
         }),
         /rolling back/,
       );
-      assert.equal(await computePublicSchemaFingerprint(client), profiles[service].before);
+      assert.ok(
+        [profiles[service].before].flat().includes(await computePublicSchemaFingerprint(client)),
+      );
       await repair(client, service, profiles[service], baseline, manifest);
       assert.equal(await computePublicSchemaFingerprint(client), manifest.schema_sha256);
       const table = service === 'gateway' ? 'idempotency_keys' : 'oracle_triggers';

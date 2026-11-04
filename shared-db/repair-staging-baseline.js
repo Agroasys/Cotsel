@@ -12,7 +12,12 @@ const profiles = {
     user: 'cotsel_gateway_migration',
   },
   oracle: {
-    before: 'a8c7dd0abc1f683719c16482248c364a2111437e5538305f6938dc081beb8fe5',
+    // Dump replay folds varchar-array casts differently from the live RDS schema.
+    // Both complete schema fingerprints were compared record by record.
+    before: [
+      'a8c7dd0abc1f683719c16482248c364a2111437e5538305f6938dc081beb8fe5',
+      'c1330a85e0aba64a633065dcf4abefbe579e73cd75a14a3d6a30935cd439fcc2',
+    ],
     user: 'cotsel_oracle_migrator',
   },
 };
@@ -28,7 +33,7 @@ async function repair(client, service, profile, baseline, manifest) {
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
       `cotsel:${service}:schema-migrations`,
     ]);
-    if ((await computePublicSchemaFingerprint(client)) !== profile.before)
+    if (![profile.before].flat().includes(await computePublicSchemaFingerprint(client)))
       throw new Error('Unrecognized staging schema; no repair applied');
     const ledger = await client.query(
       "SELECT to_regclass('public.cotsel_schema_migrations') IS NOT NULL AS present",
