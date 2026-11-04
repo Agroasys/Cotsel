@@ -242,6 +242,19 @@ jobs:
           set -euo pipefail
           cp "$PROVENANCE_BUNDLE" "provenance-${SERVICE}.sigstore.json"
 
+      - name: Verify packaged runtime imports
+        if: matrix.service == 'relayer' || matrix.service == 'treasury'
+        env:
+          IMAGE: ${{ steps.identity.outputs.reference }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          case "$SERVICE" in
+            relayer) PROBE="require('node:module').createRequire('/app/shared-auth/index.js').resolve('ioredis')" ;;
+            treasury) PROBE="require('/app/treasury/dist/core/finalizedTransaction.js')" ;;
+          esac
+          docker run --rm --network none --read-only --entrypoint node "$IMAGE" -e "$PROBE"
+
       - name: Generate SPDX image SBOM
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c
         with:
