@@ -81,6 +81,7 @@ COPY --from=builder /app/indexer/package.json /app/indexer/package.json
 COPY --from=builder /app/indexer/lib /app/indexer/lib
 COPY --from=builder /app/indexer/db /app/indexer/db
 COPY --from=builder /app/indexer/migrate.js /app/indexer/migrate.js
+COPY --from=builder /app/indexer/adopt-staging-history.js /app/indexer/adopt-staging-history.js
 COPY --from=builder /app/indexer/quarantine.js /app/indexer/quarantine.js
 COPY --from=builder /app/indexer/schema.graphql /app/indexer/schema.graphql
 COPY --from=builder /app/notifications/dist /app/notifications/dist

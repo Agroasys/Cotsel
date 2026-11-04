@@ -870,6 +870,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Test guarded staging schema repairs
+        env:
+          REPAIR_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/cotsel_indexer_test
+        run: pnpm --filter @agroasys/shared-db run test:staging-repair:postgres && pnpm --filter ./indexer exec node --test tests/adopt-staging-history.postgres.check.mjs
+
       - name: Run workspace checks
         shell: bash
         run: |
