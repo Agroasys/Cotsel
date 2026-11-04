@@ -25,8 +25,8 @@ async function repair(client, service, profile, baseline, manifest) {
   try {
     await client.query("SET LOCAL lock_timeout = '5s'");
     await client.query("SET LOCAL statement_timeout = '60s'");
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
-      `cotsel-staging-repair:${service}`,
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+      `cotsel:${service}:schema-migrations`,
     ]);
     if ((await computePublicSchemaFingerprint(client)) !== profile.before)
       throw new Error('Unrecognized staging schema; no repair applied');

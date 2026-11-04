@@ -2,7 +2,6 @@
 --
 -- PostgreSQL database dump
 --
-\restrict Hrd3o3MLy2bfBuKfpjQAumQpitemxjRYBfgnYxrns8evsmotWcL7dbS6utfjKL9
 -- Dumped from database version 16.13
 -- Dumped by pg_dump version 16.15
 SET statement_timeout = 0;
@@ -161,4 +160,3 @@ CREATE POLICY oracle_triggers_service_isolation ON public.oracle_triggers USING 
 --
 -- PostgreSQL database dump complete
 --
-\unrestrict Hrd3o3MLy2bfBuKfpjQAumQpitemxjRYBfgnYxrns8evsmotWcL7dbS6utfjKL9

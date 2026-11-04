@@ -2,7 +2,6 @@
 --
 -- PostgreSQL database dump
 --
-\restrict jLU6RQlHpJtRY35BMXQLtAhZxMGU4kn8Vd5gK8asYjQyjyyPlMhxWeTVeEGbHt8
 -- Dumped from database version 16.13
 -- Dumped by pg_dump version 16.15
 SET statement_timeout = 0;
@@ -659,4 +658,3 @@ CREATE POLICY settlement_handoffs_service_isolation ON public.settlement_handoff
 --
 -- PostgreSQL database dump complete
 --
-\unrestrict jLU6RQlHpJtRY35BMXQLtAhZxMGU4kn8Vd5gK8asYjQyjyyPlMhxWeTVeEGbHt8
