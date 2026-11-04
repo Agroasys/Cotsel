@@ -40,6 +40,7 @@ locals {
     printf '%s  %s\n' '90a6f1a7978a1b1b096dca6c57511ca48d3b8cf052f8e704baf358f34ea2f21b' "$${PGSSLROOTCERT}" | sha256sum -c -s
 
     verify_restricted_role() {
+      local database_name role_name restricted_role_count
       database_name="$${1}"
       role_name="$${2}"
       restricted_role_count="$(psql --dbname "$${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align <<'SQL'
@@ -67,6 +68,7 @@ locals {
     }
 
     verify_connection_denied() {
+      local database_name role_name
       database_name="$${1}"
       role_name="$${2}"
       if psql --dbname "$${database_name}" --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null 2>&1; then
@@ -76,6 +78,7 @@ locals {
     }
 
     verify_service() {
+      local database_name other_database_name migration_username migration_password runtime_username runtime_password probe_schema
       database_name="$${1}"
       other_database_name="$${2}"
       migration_username="$${3}"

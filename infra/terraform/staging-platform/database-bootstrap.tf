@@ -125,6 +125,10 @@ locals {
     SELECT format('CREATE DATABASE %I OWNER %I', 'cotsel_treasury', 'cotsel_treasury_migrator')
     WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'cotsel_treasury')
     \gexec
+    -- The shared reconciliation database is owned by the RDS administrator,
+    -- not the migration role. Database-level grants must be applied here.
+    REVOKE ALL ON DATABASE cotsel_reconciliation FROM cotsel_reconciliation_reader;
+    GRANT CONNECT ON DATABASE cotsel_reconciliation TO cotsel_reconciliation_reader;
     SQL
 
     # Oracle consults reconciliation containment before progressing a trade.
@@ -132,15 +136,15 @@ locals {
     # or erase the control it is supposed to enforce.
     # The reconciliation migration role owns the database objects, so it also
     # applies the current and future reader grants.
-    export PGUSER="$${RECONCILIATION_MIGRATION_USERNAME}"
-    export PGPASSWORD="$${RECONCILIATION_MIGRATION_PASSWORD}"
     psql --dbname cotsel_reconciliation --set ON_ERROR_STOP=1 <<SQL
-    REVOKE ALL ON DATABASE cotsel_reconciliation FROM PUBLIC;
-    REVOKE ALL ON DATABASE cotsel_reconciliation FROM cotsel_reconciliation_reader;
-    GRANT CONNECT ON DATABASE cotsel_reconciliation TO cotsel_reconciliation_reader;
     REVOKE CREATE ON SCHEMA public FROM PUBLIC;
     REVOKE ALL ON SCHEMA public FROM cotsel_reconciliation_reader;
     GRANT USAGE ON SCHEMA public TO cotsel_reconciliation_reader;
+    SQL
+
+    export PGUSER="$${RECONCILIATION_MIGRATION_USERNAME}"
+    export PGPASSWORD="$${RECONCILIATION_MIGRATION_PASSWORD}"
+    psql --dbname cotsel_reconciliation --set ON_ERROR_STOP=1 <<SQL
     REVOKE ALL ON ALL TABLES IN SCHEMA public FROM cotsel_reconciliation_reader;
     REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM cotsel_reconciliation_reader;
     GRANT SELECT ON ALL TABLES IN SCHEMA public TO cotsel_reconciliation_reader;
@@ -150,6 +154,8 @@ locals {
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO cotsel_reconciliation_reader;
     SQL
 
+    export PGUSER="$${MASTER_USERNAME}"
+    export PGPASSWORD="$${MASTER_PASSWORD}"
     psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 <<SQL
     BEGIN;
     GRANT cotsel_indexer_app, cotsel_indexer_migrator TO CURRENT_USER;
