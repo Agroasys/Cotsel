@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "cotsel.base-sepolia-staging-demo.v1",
+  "status": "owner-authorized-test-only",
+  "environment": "aws-staging-demo",
+  "chainId": 84532,
+  "address": "0xE8787748547A6ce40287CDE678A58e385b65d069",
+  "deploymentBlock": 53907534,
+  "deploymentTransactionHash": "0x8e4e4f79f031baddb29faf077a29a0cf4c250e4b16e318b379081348210a3106",
+  "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "sourceCommit": "225cb6168caac3fb07b7182089d7dda49aac762e",
+  "finalizerCommit": "393d97e7e6145929822d6061f1421d602ef0de6b",
+  "deploymentEvidence": "contracts/reports/deploy/base-sepolia/demo-deployment.json",
+  "preparationEvidence": "contracts/reports/deploy/base-sepolia/demo-preparation.json",
+  "runtimeCodehash": "0x5c6f72dcf74784a049417937f20cc633ee5c2bb804a460ecf0fc6483bb3b0ff7",
+  "indexerAbiFingerprint": "2c4e1edd1d7c967dad6838f17b02cf854c087a88be7a0fa1dbb9b19f9e6f996a",
+  "artifact": {
+    "compilerVersion": "0.8.34+commit.80d5c536",
+    "compilerSettings": {
+      "viaIR": true,
+      "optimizerEnabled": true,
+      "optimizerRuns": 1,
+      "evmVersion": "paris"
+    },
+    "compilerInputSha256": "b4d78432579c606c3010218c4d3294d229dd6666c47b3339f97655375f0f31c3",
+    "abiSha256": "4384792054d99e2063cd133c62c22aea3916982d5d9c29d2c168217e6e552277",
+    "creationBytecodeSha256": "70cbae211b107f76f0bb9e7fffc22f524b955a1dfdc38d300da05e6a14fb0ead",
+    "normalizedRuntimeBytecodeSha256": "3e524675ea727b405032ff9899c257bd0df05abd23c630aa3b9365fe30093122"
+  },
+  "roles": {
+    "oracle": "0xA8205dcA6Ed809afcBC0CfD1478615aD869Fd304",
+    "treasury": "0x8b4C1A4545A36F2b9D91d32B678C69c05bCA2333",
+    "treasuryPayout": "0x8b4C1A4545A36F2b9D91d32B678C69c05bCA2333",
+    "relayer": "0xA03f8177164E48d9Efb2C9cBd719b80f01002C9F",
+    "admins": [
+      "0x109feA94c2424bD0f2C5cA4E0d3E8Acbad1B3b3b",
+      "0xbBC2Dd5C793a27c62cF6A8a248A33DD8b7b8Df12",
+      "0x2E121A75a4559Cef27b1D0b70151060a8e89A12d"
+    ],
+    "requiredApprovals": 2,
+    "governanceEpoch": 1,
+    "oracleActive": true,
+    "relayerAllowed": true
+  },
+  "custodyAttestation": "unattested",
+  "notice": "Test-only owner authorization; this does not represent production custody or independent acceptance."
+}

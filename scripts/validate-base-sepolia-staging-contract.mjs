@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -44,24 +45,116 @@ function normalizedAddresses(values, label) {
   return values.map((value, index) => requireAddress(value, `${label}[${index}]`));
 }
 
-export function validateBaseSepoliaSelection({ manifest, deployment, requested }) {
-  requireEqual(manifest.schemaVersion, 'cotsel.base-sepolia-staging-contract.v1', 'schemaVersion');
-  requireEqual(manifest.status, 'accepted-for-staging-promotion', 'status');
-  requireEqual(manifest.environment, 'aws-staging', 'environment');
-  requireEqual(manifest.chainId, 84532, 'chainId');
-  requireEqual(manifest.acceptance?.decision, 'ACCEPTED', 'acceptance decision');
-  requireEqual(
-    manifest.acceptance?.issue,
-    'https://github.com/Agroasys/Cotsel/issues/639',
-    'acceptance issue',
-  );
-  requireEqual(manifest.acceptance?.acceptedBy, 'czpyioe', 'acceptance actor');
-  requireEqual(manifest.acceptance?.acceptedAt, '2026-08-26T14:26:59Z', 'acceptance timestamp');
-  requireEqual(
-    manifest.acceptance?.evidence,
-    'https://github.com/Agroasys/Cotsel/issues/639#issuecomment-5426793276',
-    'acceptance evidence',
-  );
+export function validateBaseSepoliaSelection({
+  manifest,
+  deployment,
+  preparation,
+  requested,
+  demoExplicit,
+}) {
+  const demo = manifest.schemaVersion === 'cotsel.base-sepolia-staging-demo.v1';
+  if (demo) {
+    requireEqual(demoExplicit, true, 'explicit demo selection');
+    requireEqual(manifest.status, 'owner-authorized-test-only', 'demo status');
+    requireEqual(manifest.environment, 'aws-staging-demo', 'demo environment');
+    requireEqual(manifest.chainId, 84532, 'demo chainId');
+    requireEqual(
+      requireAddress(manifest.address, 'demo address'),
+      '0xe8787748547a6ce40287cde678a58e385b65d069',
+      'demo address',
+    );
+    requireEqual(
+      manifest.sourceCommit,
+      '225cb6168caac3fb07b7182089d7dda49aac762e',
+      'demo preparation source',
+    );
+    requireEqual(
+      manifest.finalizerCommit,
+      '393d97e7e6145929822d6061f1421d602ef0de6b',
+      'demo verification source',
+    );
+    requireEqual(
+      manifest.preparationEvidence,
+      'contracts/reports/deploy/base-sepolia/demo-preparation.json',
+      'demo preparation path',
+    );
+    requireEqual(
+      manifest.deploymentEvidence,
+      'contracts/reports/deploy/base-sepolia/demo-deployment.json',
+      'demo deployment path',
+    );
+    requireEqual(
+      requireAddress(manifest.usdcAddress, 'demo USDC'),
+      '0x036cbd53842c5426634e7929541ec2318f3dcf7e',
+      'demo USDC',
+    );
+    requireEqual(
+      manifest.runtimeCodehash,
+      '0x5c6f72dcf74784a049417937f20cc633ee5c2bb804a460ecf0fc6483bb3b0ff7',
+      'demo runtime codehash',
+    );
+    requireEqual(
+      manifest.indexerAbiFingerprint,
+      '2c4e1edd1d7c967dad6838f17b02cf854c087a88be7a0fa1dbb9b19f9e6f996a',
+      'demo ABI fingerprint',
+    );
+    requireEqual(manifest.custodyAttestation, 'unattested', 'demo custody attestation');
+    requireEqual(deployment.contract?.deployerCustody, 'unattested', 'deployment custody');
+    requireEqual(
+      deployment.artifact?.liveRuntimeBytecodeSha256,
+      'b45c20d5f1d0664cc8e1d0862c3149ad6be20d89a9d90577d016f685a3b6ba32',
+      'demo live bytecode hash',
+    );
+    if (!COMMIT_PATTERN.test(manifest.finalizerCommit ?? '')) {
+      fail('finalizerCommit must be a full Git commit');
+    }
+    requireEqual(preparation?.commitSha, manifest.sourceCommit, 'preparation source commit');
+    requireEqual(preparation?.worktreeClean, true, 'preparation worktreeClean');
+    requireEqual(preparation?.network?.chainId, manifest.chainId, 'preparation chainId');
+    requireEqual(preparation?.custodyAttestation, 'unattested', 'preparation custody');
+    requireEqual(preparation?.transaction?.to, null, 'preparation transaction recipient');
+    requireEqual(preparation?.transaction?.value, '0', 'preparation transaction value');
+    requirePositiveInteger(preparation?.transaction?.nonce, 'preparation nonce');
+    const data = requireString(preparation?.transaction?.data, 'preparation transaction data');
+    if (!/^0x[0-9a-fA-F]+$/.test(data)) fail('preparation transaction data must be hex');
+    requireEqual(
+      createHash('sha256').update(data).digest('hex'),
+      requireSha256(preparation?.transaction?.dataSha256, 'preparation data hash'),
+      'preparation data hash',
+    );
+    requireEqual(
+      requireAddress(preparation?.transaction?.from, 'preparation signer'),
+      requireAddress(deployment.contract?.deployerAddress, 'deployment signer'),
+      'preparation signer',
+    );
+    requireEqual(
+      requireAddress(preparation?.transaction?.expectedContractAddress, 'expected demo address'),
+      requireAddress(manifest.address, 'demo address'),
+      'expected demo address',
+    );
+  } else {
+    requireEqual(
+      manifest.schemaVersion,
+      'cotsel.base-sepolia-staging-contract.v1',
+      'schemaVersion',
+    );
+    requireEqual(manifest.status, 'accepted-for-staging-promotion', 'status');
+    requireEqual(manifest.environment, 'aws-staging', 'environment');
+    requireEqual(manifest.chainId, 84532, 'chainId');
+    requireEqual(manifest.acceptance?.decision, 'ACCEPTED', 'acceptance decision');
+    requireEqual(
+      manifest.acceptance?.issue,
+      'https://github.com/Agroasys/Cotsel/issues/639',
+      'acceptance issue',
+    );
+    requireEqual(manifest.acceptance?.acceptedBy, 'czpyioe', 'acceptance actor');
+    requireEqual(manifest.acceptance?.acceptedAt, '2026-08-26T14:26:59Z', 'acceptance timestamp');
+    requireEqual(
+      manifest.acceptance?.evidence,
+      'https://github.com/Agroasys/Cotsel/issues/639#issuecomment-5426793276',
+      'acceptance evidence',
+    );
+  }
 
   const address = requireAddress(manifest.address, 'address');
   const usdcAddress = requireAddress(manifest.usdcAddress, 'usdcAddress');
@@ -131,7 +224,11 @@ export function validateBaseSepoliaSelection({ manifest, deployment, requested }
   requireEqual(deployment.worktreeClean, true, 'deployment worktreeClean');
   requireEqual(deployment.verification?.requested, true, 'explorer verification request');
   requireEqual(deployment.verification?.status, 'verified', 'explorer verification status');
-  requireEqual(deployment.commitSha, manifest.sourceCommit, 'deployment source commit');
+  requireEqual(
+    deployment.commitSha,
+    demo ? manifest.finalizerCommit : manifest.sourceCommit,
+    'deployment verification commit',
+  );
   requireEqual(
     requireAddress(deployment.contract?.address, 'deployment address'),
     address,
@@ -263,9 +360,20 @@ export function run(argv = process.argv.slice(2)) {
     'deployment evidence path',
   );
   const deployment = JSON.parse(readFileSync(deploymentPath, 'utf8'));
+  const preparation =
+    manifest.schemaVersion === 'cotsel.base-sepolia-staging-demo.v1'
+      ? JSON.parse(
+          readFileSync(
+            path.resolve(requireString(manifest.preparationEvidence, 'preparationEvidence')),
+            'utf8',
+          ),
+        )
+      : undefined;
   const result = validateBaseSepoliaSelection({
     manifest,
     deployment,
+    preparation,
+    demoExplicit: options['demo-mode'] === 'true',
     requested: {
       address: options.address,
       deploymentBlock: options['start-block'],
@@ -273,7 +381,7 @@ export function run(argv = process.argv.slice(2)) {
     },
   });
   process.stdout.write(
-    `accepted Base Sepolia selection verified: chain=${result.chainId} address=${result.address} block=${result.deploymentBlock}\n`,
+    `${manifest.schemaVersion === 'cotsel.base-sepolia-staging-demo.v1' ? 'test-only demo' : 'accepted'} Base Sepolia selection verified: chain=${result.chainId} address=${result.address} block=${result.deploymentBlock}\n`,
   );
 }
 

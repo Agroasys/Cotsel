@@ -1,0 +1,111 @@
+{
+  "generatedAt": "2026-11-03T11:17:32.355Z",
+  "commitSha": "393d97e7e6145929822d6061f1421d602ef0de6b",
+  "worktreeClean": true,
+  "network": {
+    "hardhatName": "base-sepolia",
+    "runtimeKey": "base-sepolia",
+    "displayName": "Base Sepolia",
+    "chainId": 84532
+  },
+  "contract": {
+    "name": "AgroasysEscrow",
+    "address": "0xE8787748547A6ce40287CDE678A58e385b65d069",
+    "deploymentTxHash": "0x8e4e4f79f031baddb29faf077a29a0cf4c250e4b16e318b379081348210a3106",
+    "deploymentBlock": 53907534,
+    "deploymentReceiptStatus": 1,
+    "explorerAddressUrl": "https://sepolia.basescan.org/address/0xE8787748547A6ce40287CDE678A58e385b65d069",
+    "constructorArguments": {
+      "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      "oracleAddress": "0xA8205dcA6Ed809afcBC0CfD1478615aD869Fd304",
+      "treasuryAddress": "0x8b4C1A4545A36F2b9D91d32B678C69c05bCA2333",
+      "relayerAddress": "0xA03f8177164E48d9Efb2C9cBd719b80f01002C9F",
+      "admins": [
+        "0x109feA94c2424bD0f2C5cA4E0d3E8Acbad1B3b3b",
+        "0xbBC2Dd5C793a27c62cF6A8a248A33DD8b7b8Df12",
+        "0x2E121A75a4559Cef27b1D0b70151060a8e89A12d"
+      ],
+      "requiredApprovals": 2
+    },
+    "deployerAddress": "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a",
+    "deployerCustody": "unattested",
+    "deployerCustodyRequired": "hardware-wallet",
+    "roleAttestation": {
+      "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      "oracleAddress": "0xA8205dcA6Ed809afcBC0CfD1478615aD869Fd304",
+      "treasuryAddress": "0x8b4C1A4545A36F2b9D91d32B678C69c05bCA2333",
+      "treasuryPayoutAddress": "0x8b4C1A4545A36F2b9D91d32B678C69c05bCA2333",
+      "relayerAllowed": true,
+      "admins": [
+        "0x109feA94c2424bD0f2C5cA4E0d3E8Acbad1B3b3b",
+        "0xbBC2Dd5C793a27c62cF6A8a248A33DD8b7b8Df12",
+        "0x2E121A75a4559Cef27b1D0b70151060a8e89A12d"
+      ],
+      "requiredApprovals": 2,
+      "governanceEpoch": 1,
+      "oracleActive": true
+    }
+  },
+  "verification": {
+    "requested": true,
+    "status": "verified",
+    "verificationUrl": "https://sepolia.basescan.org/address/0xE8787748547A6ce40287CDE678A58e385b65d069#code"
+  },
+  "artifact": {
+    "compilerVersion": "0.8.34",
+    "compilerLongVersion": "0.8.34+commit.80d5c536",
+    "compilerSettings": {
+      "viaIR": true,
+      "optimizer": {
+        "enabled": true,
+        "runs": 1
+      },
+      "evmVersion": "paris",
+      "outputSelection": {
+        "*": {
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ],
+          "": [
+            "ast"
+          ]
+        }
+      }
+    },
+    "compilerInputSha256": "b4d78432579c606c3010218c4d3294d229dd6666c47b3339f97655375f0f31c3",
+    "sourceSha256": {
+      "@openzeppelin/contracts/interfaces/draft-IERC6093.sol": "fa7068f56bc180571a6095be6eaef06d51dbe81e30cb128397d993c9599ecc30",
+      "@openzeppelin/contracts/interfaces/IERC1363.sol": "9c3a75a925a6dac9e88b03cddc58d42fe3131b0aaaad84408521f3f7af2f991b",
+      "@openzeppelin/contracts/interfaces/IERC165.sol": "dfb3f56fa928a7c6cae41a7ce2c86b9210fa18d33fa26389099d66a0fa790368",
+      "@openzeppelin/contracts/interfaces/IERC20.sol": "0158e2d3e0e28bedd99eec13dcf1a8aa3a70a5b7e4bb2ad709609c95fcc740d1",
+      "@openzeppelin/contracts/token/ERC20/ERC20.sol": "50f34ae16a067a41c2c1091445d11d63788e54c717677cb6d6b0e4cdea2ad21d",
+      "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol": "0b7132f17d14d1d84b41b0bb429be62dafdff00fd3470f68724d8018eb07f57a",
+      "@openzeppelin/contracts/token/ERC20/IERC20.sol": "01b6f5c4fa45fd38822b286ecef6daf983d27306dd6362496fa71b3e4600b72c",
+      "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol": "c2394cb2a327f234711da34884947f4aa0f6dd2791d1d6303a0c7acfaf81bca3",
+      "@openzeppelin/contracts/utils/Context.sol": "847fda5460fee70f56f4200f59b82ae622bb03c79c77e67af010e31b7e2cc5b6",
+      "@openzeppelin/contracts/utils/cryptography/ECDSA.sol": "ba7c2d314fcd61c9783e0b3f0c664d004b76b408fda6a84edc8267d17c5012d6",
+      "@openzeppelin/contracts/utils/introspection/IERC165.sol": "9055c2994b37dea1a41b7b7926dcb510f05dbe2540b0aafc5fbee9558fffd0ca",
+      "@openzeppelin/contracts/utils/math/Math.sol": "bdfdbe133991c0c78042957ff5cd97167926fcaf6d15664f3835a076cb066457",
+      "@openzeppelin/contracts/utils/math/SafeCast.sol": "5779bc848bde39f1ad7bc02b4f708a0040888e0083b1a33f119cd94639350134",
+      "@openzeppelin/contracts/utils/Panic.sol": "270fc8401c1a13fae6a7a4a2dd6e381b95d658896701e51f0d3e2688acab3dec",
+      "@openzeppelin/contracts/utils/Pausable.sol": "2c26130748f06552c65ca74d89eaf78c9324a3cbac3ba6fdbadaa8beba0cb0b4",
+      "@openzeppelin/contracts/utils/ReentrancyGuard.sol": "94e409e8f6e3184236651a6cc2b1a6a3ea0f0a25eb85b71e524ad5791bb2fbc8",
+      "@openzeppelin/contracts/utils/StorageSlot.sol": "75704538dcb223239280c6726d9a31cf769a7816718517c997fc7d63bdb70778",
+      "src/AgroasysEscrow.sol": "396cc35d8821c985ba2658d3735d588c8158d4521f471be445ea4824cd7bc811",
+      "src/LaunchSettlementSchedule.sol": "dea425f4a5497300c222e46339328ecf2db582c464543c91bb04a4ba353f6cf7",
+      "src/MockUSDC.sol": "2e22993701e83ac3601de6b1a7c91354a399ad28f322d21a24295d0349d8e551",
+      "src/test/ClaimSecurityFixtures.sol": "c1a9a13311bb883587ae7f316484321f2aa54311f92efcf0d4434ce748e8444a"
+    },
+    "abiSha256": "4384792054d99e2063cd133c62c22aea3916982d5d9c29d2c168217e6e552277",
+    "bytecodeSha256": "70cbae211b107f76f0bb9e7fffc22f524b955a1dfdc38d300da05e6a14fb0ead",
+    "localRuntimeBytecodeSha256": "3e524675ea727b405032ff9899c257bd0df05abd23c630aa3b9365fe30093122",
+    "liveRuntimeBytecodeSha256": "b45c20d5f1d0664cc8e1d0862c3149ad6be20d89a9d90577d016f685a3b6ba32",
+    "normalizedLocalRuntimeBytecodeSha256": "3e524675ea727b405032ff9899c257bd0df05abd23c630aa3b9365fe30093122",
+    "normalizedRuntimeBytecodeSha256": "3e524675ea727b405032ff9899c257bd0df05abd23c630aa3b9365fe30093122",
+    "runtimeBytecodeMatches": true
+  }
+}

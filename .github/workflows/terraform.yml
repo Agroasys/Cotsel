@@ -6,9 +6,11 @@ on:
     paths:
       - '.github/workflows/terraform.yml'
       - 'infra/terraform/**'
-      - 'integration/base-sepolia-staging-contract.json'
-      - 'scripts/validate-base-sepolia-staging-contract.mjs'
-      - 'scripts/tests/base-sepolia-staging-contract.test.mjs'
+      - 'integration/base-sepolia-*.json'
+      - 'contracts/reports/deploy/base-sepolia/demo-*.json'
+      - 'scripts/*base-sepolia*.mjs'
+      - 'scripts/validate-base-sepolia-selection.sh'
+      - 'scripts/tests/base-sepolia-*.test.mjs'
   workflow_dispatch:
     inputs:
       action:
@@ -139,9 +141,8 @@ jobs:
 
       - name: Test saved-plan metadata and demo alerts
         run: node infra/terraform/scripts/plan-metadata-selftest.mjs && node --test infra/terraform/scripts/demo-indexer-alerts.test.mjs
-
-      - name: Test accepted Base Sepolia selection validation
-        run: node --test scripts/tests/base-sepolia-staging-contract.test.mjs
+      - name: Test accepted and demo Base Sepolia selection validation
+        run: node --test scripts/tests/base-sepolia-staging-contract.test.mjs scripts/tests/base-sepolia-demo-selection.test.mjs
 
       - name: Test origin-lockdown and egress controls
         run: node infra/terraform/scripts/origin-lockdown-selftest.mjs && node infra/terraform/scripts/evidence-archive-identity-selftest.mjs && node --test infra/terraform/scripts/staging-egress-gate.test.mjs
@@ -206,19 +207,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - name: Validate accepted Base Sepolia selection
+      - name: Validate Base Sepolia selection
         if: env.ROOT == 'staging-platform'
         env:
           BASE_SEPOLIA_ESCROW_ADDRESS: ${{ github.event.inputs.base_sepolia_escrow_address }}
           BASE_SEPOLIA_CONTRACT_START_BLOCK: ${{ github.event.inputs.base_sepolia_contract_start_block }}
           BASE_SEPOLIA_USDC_ADDRESS: ${{ github.event.inputs.base_sepolia_usdc_address }}
-        run: |
-          node scripts/validate-base-sepolia-staging-contract.mjs \
-            --manifest integration/base-sepolia-staging-contract.json \
-            --deployment contracts/reports/deploy/base-sepolia/agroasysescrow-deploy.json \
-            --address "$BASE_SEPOLIA_ESCROW_ADDRESS" \
-            --start-block "$BASE_SEPOLIA_CONTRACT_START_BLOCK" \
-            --usdc "$BASE_SEPOLIA_USDC_ADDRESS"
+          BASE_SEPOLIA_ESCROW_CODEHASH: ${{ github.event.inputs.base_sepolia_escrow_codehash }}
+          ESCROW_ABI_FINGERPRINT: ${{ github.event.inputs.escrow_abi_fingerprint }}
+          GATEWAY_IMAGE_TAG: ${{ github.event.inputs.gateway_image_tag }}
+          DEMO_MODE: ${{ vars.COTSEL_STAGING_TEST_ONLY_DEMO || 'false' }}
+        run: bash scripts/validate-base-sepolia-selection.sh
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
