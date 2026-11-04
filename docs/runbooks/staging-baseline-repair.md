@@ -27,3 +27,20 @@ preserve representative rows, reject added schema drift, and reject repeated
 repair. Run them with `REPAIR_TEST_DATABASE_URL` pointing to a disposable
 PostgreSQL 16 instance and `pnpm --filter @agroasys/shared-db run
 test:staging-repair:postgres`.
+
+## Indexer history adoption
+
+The indexer history has 17 unchecksummed entries through `1785000000000`. Their
+source files match deployed commit `c09b792db8637416b2239102f19c7ffe6d1320e3`.
+A PostgreSQL 16 replay of that prefix matches the live application schema.
+`indexer/adopt-staging-history.js` checks both the exact source-manifest digest
+and the schema fingerprint before recording checksums. It records the method as
+`schema-replay-adoption` in a separate restricted audit schema; it does not claim
+that the old deployment originally recorded those checksums.
+
+Use a dedicated candidate migration-task revision with command
+`node indexer/adopt-staging-history.js`, `COTSEL_ENVIRONMENT=staging` and
+`COTSEL_STAGING_HISTORY_ADOPTION=true`. The script accepts only the identified
+indexer staging coordinates and migration account. Keep the indexer and other
+migration tasks stopped. Require exit zero, then run the normal indexer migration
+and verify the full manifest and reader permissions.

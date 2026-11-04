@@ -17,7 +17,7 @@ async function schemaFingerprint(client) {
       (row) =>
         !row.identity.startsWith('public.migrations.') &&
         !['public.migrations', 'public.migrations_id_seq'].includes(row.identity) &&
-        !row.definition.includes('ON public.migrations '),
+        !(row.record_type === 'index' && row.definition.includes('ON public.migrations ')),
     )
     .map((row) => [
       row.record_type,
