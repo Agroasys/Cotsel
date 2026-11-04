@@ -24,7 +24,6 @@ locals {
     { name = "RPC_REQUEST_TIMEOUT_MS", value = "10000" },
     { name = "RPC_RETRY_ATTEMPTS", value = "5" },
     { name = "START_BLOCK", value = tostring(var.base_sepolia_contract_start_block) },
-    { name = "SUBSQUID_EVM_RPC_SPLIT_SIZE", value = "10" },
     { name = "VERIFY_START_BLOCK_CODE", value = "true" },
   ]
 
