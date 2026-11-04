@@ -11,6 +11,7 @@ locals {
     { name = "EXPECTED_CONTRACT_CODEHASH", value = var.base_sepolia_escrow_codehash },
     { name = "FINALITY_CONFIRMATION_BLOCKS", value = "1" },
     { name = "GRAPHQL_PORT", value = "4350" },
+    { name = "GATEWAY_URL", value = "https://portal.sqd.dev/datasets/base-sepolia" },
     { name = "NOTIFICATIONS_COOLDOWN_MS", value = "300000" },
     { name = "NOTIFICATIONS_ENABLED", value = var.demo_disable_indexer_alerts ? "false" : "true" },
     { name = "DEMO_INDEXER_ALERTS_DISABLED", value = tostring(var.demo_disable_indexer_alerts) },

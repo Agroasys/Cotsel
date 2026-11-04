@@ -102,6 +102,13 @@
       "note": "Keep the hostname aligned with the secret; never record the URL or key."
     },
     {
+      "service": "Base Sepolia historical indexing",
+      "hostname": "portal.sqd.dev",
+      "workloads": ["indexer-pipeline"],
+      "purpose": "Public SQD Portal archive through the existing Subsquid gateway client",
+      "status": "required"
+    },
+    {
       "service": "Notifications webhook",
       "hostname": null,
       "workloads": ["indexer-pipeline"],
