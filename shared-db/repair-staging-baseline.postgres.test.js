@@ -58,6 +58,14 @@ for (const service of ['gateway', 'oracle']) {
         /Unrecognized staging schema/,
       );
       await client.query('DROP TABLE unexpected_drift');
+      await assert.rejects(
+        repair(client, service, profiles[service], baseline, {
+          ...manifest,
+          schema_sha256: '0'.repeat(64),
+        }),
+        /rolling back/,
+      );
+      assert.equal(await computePublicSchemaFingerprint(client), profiles[service].before);
       await repair(client, service, profiles[service], baseline, manifest);
       assert.equal(await computePublicSchemaFingerprint(client), manifest.schema_sha256);
       const table = service === 'gateway' ? 'idempotency_keys' : 'oracle_triggers';
