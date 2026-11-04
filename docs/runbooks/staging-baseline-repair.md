@@ -39,7 +39,7 @@ and the schema fingerprint before recording checksums. It records the method as
 that the old deployment originally recorded those checksums.
 
 Use a dedicated candidate migration-task revision with command
-`node indexer/adopt-staging-history.js`, `COTSEL_ENVIRONMENT=staging` and
+`node /app/indexer/adopt-staging-history.js`, `COTSEL_ENVIRONMENT=staging` and
 `COTSEL_STAGING_HISTORY_ADOPTION=true`. The script accepts only the identified
 indexer staging coordinates and migration account. Keep the indexer and other
 migration tasks stopped. Require exit zero, then run the normal indexer migration

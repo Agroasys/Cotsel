@@ -45,13 +45,17 @@ for (const service of ['gateway', 'oracle']) {
       const manifest = require(`../${service}/src/database/migrations.json`).migrations[0];
       if (service === 'gateway') {
         await client.query(
-          "INSERT INTO idempotency_keys(actor_id,endpoint,idempotency_key,request_method,request_path,request_fingerprint,request_id) VALUES ('test','test','preserve','POST','/test','test','test')",
+          "INSERT INTO idempotency_keys(actor_id,endpoint,idempotency_key,request_method,request_path,request_fingerprint,request_id) VALUES ('','','preserve','POST','/test','test','test')",
         );
       } else {
         await client.query(
           "INSERT INTO oracle_triggers(action_key,request_id,idempotency_key,trade_id,trigger_type,status) VALUES ('test','test','preserve','1','RELEASE_STAGE_1','PENDING')",
         );
       }
+      const preservedTable = service === 'gateway' ? 'idempotency_keys' : 'oracle_triggers';
+      const originalRows = (
+        await client.query(`SELECT row_to_json(t) AS value FROM ${preservedTable} t`)
+      ).rows;
       await client.query('CREATE TABLE unexpected_drift(id integer)');
       await assert.rejects(
         repair(client, service, profiles[service], baseline, manifest),
@@ -72,6 +76,10 @@ for (const service of ['gateway', 'oracle']) {
       assert.equal(
         (await client.query(`SELECT count(*)::int AS count FROM ${table}`)).rows[0].count,
         1,
+      );
+      assert.deepEqual(
+        (await client.query(`SELECT row_to_json(t) AS value FROM ${preservedTable} t`)).rows,
+        originalRows,
       );
       await assert.rejects(
         repair(client, service, profiles[service], baseline, manifest),
