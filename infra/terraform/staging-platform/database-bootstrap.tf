@@ -125,6 +125,10 @@ locals {
     SELECT format('CREATE DATABASE %I OWNER %I', 'cotsel_treasury', 'cotsel_treasury_migrator')
     WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'cotsel_treasury')
     \gexec
+    -- The shared reconciliation database is owned by the RDS administrator,
+    -- not the migration role. Database-level grants must be applied here.
+    REVOKE ALL ON DATABASE cotsel_reconciliation FROM cotsel_reconciliation_reader;
+    GRANT CONNECT ON DATABASE cotsel_reconciliation TO cotsel_reconciliation_reader;
     SQL
 
     # Oracle consults reconciliation containment before progressing a trade.
@@ -135,9 +139,6 @@ locals {
     export PGUSER="$${RECONCILIATION_MIGRATION_USERNAME}"
     export PGPASSWORD="$${RECONCILIATION_MIGRATION_PASSWORD}"
     psql --dbname cotsel_reconciliation --set ON_ERROR_STOP=1 <<SQL
-    REVOKE ALL ON DATABASE cotsel_reconciliation FROM PUBLIC;
-    REVOKE ALL ON DATABASE cotsel_reconciliation FROM cotsel_reconciliation_reader;
-    GRANT CONNECT ON DATABASE cotsel_reconciliation TO cotsel_reconciliation_reader;
     REVOKE CREATE ON SCHEMA public FROM PUBLIC;
     REVOKE ALL ON SCHEMA public FROM cotsel_reconciliation_reader;
     GRANT USAGE ON SCHEMA public TO cotsel_reconciliation_reader;

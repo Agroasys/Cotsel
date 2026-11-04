@@ -22,7 +22,7 @@ test('each database bootstrap step uses the intended identity', () => {
     for (const [name, content] of Object.entries({
       wget: '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do if [ "$1" = "-O" ]; then touch "$2"; exit; fi; shift; done\n',
       sha256sum: '#!/bin/sh\ncat >/dev/null\n',
-      psql: '#!/bin/sh\ncat >/dev/null\nprintf "%s %s\\n" "$PGUSER" "$2" >> "$TEST_LOG"\n',
+      psql: '#!/bin/sh\nbody=$(cat)\nprintf "%s %s\\n" "$PGUSER" "$2" >> "$TEST_LOG"\ncase "$body" in *"GRANT CONNECT ON DATABASE cotsel_reconciliation"*) printf "%s\\n" "$PGUSER" >> "$TEST_GRANT_LOG";; esac\n',
     })) {
       const path = join(dir, name);
       writeFileSync(path, content);
@@ -32,6 +32,7 @@ test('each database bootstrap step uses the intended identity', () => {
       ...process.env,
       PATH: `${dir}:${process.env.PATH}`,
       TEST_LOG: join(dir, 'log'),
+      TEST_GRANT_LOG: join(dir, 'grant-log'),
       MASTER_USERNAME: 'master',
       MASTER_PASSWORD: 'test',
     };
@@ -51,6 +52,7 @@ test('each database bootstrap step uses the intended identity', () => {
     }
     const result = spawnSync('sh', ['-ec', command], { env, encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
+    assert.equal(readFileSync(env.TEST_GRANT_LOG, 'utf8').trim(), 'master');
     assert.deepEqual(readFileSync(env.TEST_LOG, 'utf8').trim().split('\n'), [
       'master postgres',
       'cotsel_reconciliation_migrator cotsel_reconciliation',
