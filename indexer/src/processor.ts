@@ -64,12 +64,15 @@ if (config.prometheusPort !== null) {
  * Select the first RPC endpoint on the configured chain and point the processor
  * at it. Fail closed if no endpoint returns the expected chain ID.
  */
-export async function applyReachableRpcEndpoint(): Promise<{ url: string; reachable: boolean }> {
+export async function applyReachableRpcEndpoint(
+  validateEndpoint?: (url: string) => Promise<void>,
+): Promise<{ url: string; reachable: boolean }> {
   const endpoints = [config.rpcEndpoint, ...config.rpcFallbackEndpoints];
   const selection = await selectReachableRpcEndpoint(
     endpoints,
     config.chainId,
     config.rpcRequestTimeoutMs ?? 3000,
+    validateEndpoint,
   );
   processor.setRpcEndpoint(rpcEndpointSettings(selection.url));
   console.log(

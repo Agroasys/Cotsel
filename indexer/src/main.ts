@@ -951,8 +951,11 @@ export async function bootstrap(
     }),
   );
 
-  selectedRpcUrl = (await applyReachableRpcEndpoint()).url;
-  await runStartupGates({ config, rpcUrl: selectedRpcUrl, quarantine, alerts, readCheckpoint });
+  selectedRpcUrl = (
+    await applyReachableRpcEndpoint(async (rpcUrl) => {
+      await runStartupGates({ config, rpcUrl, quarantine, alerts, readCheckpoint });
+    })
+  ).url;
   startupComplete = true;
 
   await processor.run(database, processBatch);

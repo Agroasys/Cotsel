@@ -1,3 +1,5 @@
+import { setTimeout as delay } from 'node:timers/promises';
+
 /**
  * Minimal RPC reachability probe for the indexer.
  *
@@ -34,6 +36,22 @@ export function redactRpcUrlForLogs(rpcUrl: string): string {
   }
 }
 
+export class RpcUnavailableError extends Error {
+  constructor(
+    message: string,
+    readonly retryAfterMs: number | null = null,
+  ) {
+    super(message);
+    this.name = 'RpcUnavailableError';
+  }
+}
+
+function retryAfterMs(value: string | null): number | null {
+  if (!value) return null;
+  const milliseconds = /^\d+$/.test(value) ? Number(value) * 1000 : Date.parse(value) - Date.now();
+  return Number.isFinite(milliseconds) ? Math.max(0, milliseconds) : null;
+}
+
 export async function callRpc(
   rpcUrl: string,
   method: string,
@@ -41,36 +59,64 @@ export async function callRpc(
   timeoutMs: number,
 ): Promise<unknown> {
   const controller = new AbortController();
+  // Retries and server-directed delays share the original call's timeout budget.
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
-    const response = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        let response: Response;
+        try {
+          response = await fetch(rpcUrl, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+            signal: controller.signal,
+          });
+        } catch {
+          throw new RpcUnavailableError('RPC transport unavailable');
+        }
+        if ([429, 502, 503, 504].includes(response.status)) {
+          await response.body?.cancel();
+          throw new RpcUnavailableError(
+            `HTTP ${response.status}`,
+            retryAfterMs(response.headers.get('retry-after')),
+          );
+        }
+        if (!response.ok) {
+          await response.body?.cancel();
+          throw new Error(`HTTP ${response.status}`);
+        }
+        let payload: JsonRpcResponse;
+        try {
+          payload = (await response.json()) as JsonRpcResponse;
+        } catch (error) {
+          if (error instanceof SyntaxError) throw error;
+          throw new RpcUnavailableError('RPC response transport unavailable');
+        }
+        if (payload?.jsonrpc !== '2.0') throw new Error('Invalid JSON-RPC response');
+        if (payload.error?.code === -32005)
+          throw new RpcUnavailableError('RPC rate limit exceeded');
+        if (payload.error) {
+          throw new Error(
+            `RPC error ${payload.error.code ?? 'UNKNOWN'}: ${payload.error.message ?? 'Unknown error'}`,
+          );
+        }
+        if (!Object.prototype.hasOwnProperty.call(payload, 'result'))
+          throw new Error('Missing JSON-RPC result');
+        return payload.result;
+      } catch (error) {
+        if (controller.signal.aborted) throw new RpcUnavailableError('RPC request timed out');
+        if (!(error instanceof RpcUnavailableError) || attempt === 2) throw error;
+        try {
+          await delay(Math.min(error.retryAfterMs ?? 500 * 2 ** attempt, timeoutMs), undefined, {
+            signal: controller.signal,
+          });
+        } catch {
+          throw new RpcUnavailableError('RPC request timed out');
+        }
+      }
     }
-
-    const payload = (await response.json()) as JsonRpcResponse;
-    if (payload?.jsonrpc !== '2.0') {
-      throw new Error('Invalid JSON-RPC response');
-    }
-
-    if (payload.error) {
-      throw new Error(
-        `RPC error ${payload.error.code ?? 'UNKNOWN'}: ${payload.error.message ?? 'Unknown error'}`,
-      );
-    }
-
-    if (!Object.prototype.hasOwnProperty.call(payload, 'result')) {
-      throw new Error('Missing JSON-RPC result');
-    }
-
-    return payload.result;
+    throw new RpcUnavailableError('RPC retry budget exhausted');
   } finally {
     clearTimeout(timeout);
   }
@@ -146,12 +192,13 @@ export async function selectReachableRpcEndpoint(
   rpcUrls: string[],
   expectedChainId: number,
   timeoutMs: number = DEFAULT_RPC_TIMEOUT_MS,
+  validateEndpoint?: (url: string) => Promise<void>,
 ): Promise<ReachableRpcEndpointSelection> {
   if (rpcUrls.length === 0) {
     throw new Error('selectReachableRpcEndpoint requires at least one RPC endpoint');
   }
 
-  let selected: ReachableRpcEndpointSelection | null = null;
+  const reachable: ReachableRpcEndpointSelection[] = [];
   let checked = 0;
   const failures: string[] = [];
 
@@ -159,7 +206,7 @@ export async function selectReachableRpcEndpoint(
     checked += 1;
     try {
       await assertRpcEndpointReachable(url, expectedChainId, timeoutMs);
-      selected ??= { url, reachable: true, checked, selectedIndex: index };
+      reachable.push({ url, reachable: true, checked, selectedIndex: index });
     } catch (error) {
       if (error instanceof RpcChainIdMismatchError) {
         throw error;
@@ -169,11 +216,19 @@ export async function selectReachableRpcEndpoint(
     }
   }
 
-  if (selected) {
-    return { ...selected, checked };
+  // Check all chain identities before full verification. Transport failures may
+  // select another endpoint; contract, finality, checkpoint and quarantine drift may not.
+  for (const candidate of reachable) {
+    try {
+      await validateEndpoint?.(candidate.url);
+      return { ...candidate, checked };
+    } catch (error) {
+      if (!(error instanceof RpcUnavailableError)) throw error;
+      failures.push(error.message);
+    }
   }
 
   throw new Error(
-    `No configured RPC endpoint passed chain and block validation for chain ${expectedChainId}. ${failures[0]}`,
+    `No configured RPC endpoint passed startup validation for chain ${expectedChainId}. ${failures[0]}`,
   );
 }

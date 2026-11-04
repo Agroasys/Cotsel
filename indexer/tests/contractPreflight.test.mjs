@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
 import { keccak256 } from 'ethers';
+import { RpcUnavailableError } from '../lib/rpc-preflight.js';
 
 import {
   assertContractPreflight,
@@ -379,4 +380,49 @@ test('the demo alert exception cannot disable contract identity or production co
     () => assertDeploymentPins({ ...DEMO_ONLY, notificationsEnabled: true }),
     /only for the selected/,
   );
+});
+
+test('historical-code throttling cannot be downgraded to partial verification', async () => {
+  const server = createServer((request, response) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      const payload = JSON.parse(body);
+      if (payload.method === 'eth_getCode' && payload.params[1] !== 'latest') {
+        response.writeHead(429, { 'retry-after': '0' });
+        response.end();
+        return;
+      }
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: payload.method === 'eth_blockNumber' ? '0x64' : CODE,
+        }),
+      );
+    });
+  });
+  const url = await listen(server);
+  let warnings = 0;
+  try {
+    await assert.rejects(
+      () =>
+        assertContractPreflight(
+          { rpcUrl: url, contractAddress: CONTRACT, startBlock: 1, timeoutMs: 300 },
+          {
+            warn() {
+              warnings++;
+            },
+          },
+        ),
+      RpcUnavailableError,
+    );
+    assert.equal(warnings, 0);
+  } finally {
+    await close(server);
+  }
 });
