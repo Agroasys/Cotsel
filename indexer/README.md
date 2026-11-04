@@ -85,7 +85,7 @@ These findings are tracked upstream in [subsquid/squid-sdk#547](https://github.c
 
 ## Chain data sources
 
-`RPC_ENDPOINT` and `RPC_FALLBACK_ENDPOINTS` identify the chain providers. They remain required for startup verification and recent blocks when an archive is configured.
+`RPC_ENDPOINT` identifies the required chain provider. `RPC_FALLBACK_ENDPOINTS` optionally supplies additional providers. RPC access remains required for startup verification and recent blocks when an archive is configured.
 
 `GATEWAY_URL` enables historical ingestion through the existing Subsquid archive client. Staging uses `https://portal.sqd.dev/datasets/base-sepolia`, a public, rate-limited endpoint. The router and worker requests use the exact `portal.sqd.dev` hostname approved by the shared staging firewall.
 
