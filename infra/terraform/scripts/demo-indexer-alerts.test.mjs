@@ -34,7 +34,7 @@ function evaluate(
   try {
     writeFileSync(
       join(dir, 'main.tf'),
-      `variable "environment" { type = string }\nvariable "base_sepolia_escrow_address" { type = string }\n${variable}\nlocals {\nfoundation_secret_arns = { "notifications-webhook" = "webhook" }\nsecret_arns = { "database/indexer/runtime" = "db", "rpc-base-sepolia-primary" = "primary", "rpc-base-sepolia-fallback" = "fallback" }\n${secretConfig}\negress_contract = jsondecode(<<JSON\n${JSON.stringify(destinations)}\nJSON\n)\n${egressConfig}\n}\n`,
+      `variable "environment" { type = string }\nvariable "base_sepolia_escrow_address" { type = string }\n${variable}\nlocals {\nfoundation_secret_arns = { "notifications-webhook" = "webhook", "indexer-archive-api-key" = "archive-key" }\nsecret_arns = { "database/indexer/runtime" = "db", "rpc-base-sepolia-primary" = "primary", "rpc-base-sepolia-fallback" = "fallback" }\n${secretConfig}\negress_contract = jsondecode(<<JSON\n${JSON.stringify(destinations)}\nJSON\n)\n${egressConfig}\n}\n`,
     );
     const args = [
       'console',

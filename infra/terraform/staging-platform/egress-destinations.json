@@ -103,9 +103,9 @@
     },
     {
       "service": "Base Sepolia historical indexing",
-      "hostname": "portal.sqd.dev",
+      "hostname": "v2.archive.subsquid.io",
       "workloads": ["indexer-pipeline"],
-      "purpose": "Public SQD Portal archive through the existing Subsquid gateway client",
+      "purpose": "SQD Gateway historical backfill; API key is injected from Secrets Manager",
       "status": "required"
     },
     {
