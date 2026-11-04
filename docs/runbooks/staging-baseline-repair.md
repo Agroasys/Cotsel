@@ -44,3 +44,8 @@ Use a dedicated candidate migration-task revision with command
 indexer staging coordinates and migration account. Keep the indexer and other
 migration tasks stopped. Require exit zero, then run the normal indexer migration
 and verify the full manifest and reader permissions.
+
+The Oracle dump replay and live metadata render five array-cast definitions differently.
+Both complete fingerprints are pinned. Regression tests compare all schema records after
+normalizing only those casts. The repair still requires the manifest baseline fingerprint
+before commit. The metadata fixture contains schema definitions and no application rows.
