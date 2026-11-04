@@ -1,9 +1,3 @@
-
---
--- PostgreSQL database dump
---
--- Dumped from database version 16.13
--- Dumped by pg_dump version 16.15
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
@@ -14,9 +8,6 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
---
--- Name: current_app_service_name(); Type: FUNCTION; Schema: public; Owner: -
---
 CREATE FUNCTION public.current_app_service_name() RETURNS text
     LANGUAGE sql STABLE
     AS $$
@@ -24,9 +15,6 @@ CREATE FUNCTION public.current_app_service_name() RETURNS text
 $$;
 SET default_tablespace = '';
 SET default_table_access_method = heap;
---
--- Name: oracle_hmac_nonces; Type: TABLE; Schema: public; Owner: -
---
 CREATE TABLE public.oracle_hmac_nonces (
     api_key character varying(128) NOT NULL,
     nonce character varying(255) NOT NULL,
@@ -34,9 +22,6 @@ CREATE TABLE public.oracle_hmac_nonces (
     created_at timestamp without time zone DEFAULT now()
 );
 ALTER TABLE ONLY public.oracle_hmac_nonces FORCE ROW LEVEL SECURITY;
---
--- Name: oracle_triggers; Type: TABLE; Schema: public; Owner: -
---
 CREATE TABLE public.oracle_triggers (
     id integer NOT NULL,
     action_key character varying(255) NOT NULL,
@@ -73,9 +58,6 @@ CREATE TABLE public.oracle_triggers (
     CONSTRAINT check_trigger_type CHECK (((trigger_type)::text = ANY ((ARRAY['RELEASE_STAGE_1'::character varying, 'CONFIRM_ARRIVAL'::character varying, 'CONFIRM_INSPECTION_AVAILABLE_STANDARD'::character varying, 'CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL'::character varying, 'FINALIZE_AFTER_INSPECTION_ACCEPTANCE'::character varying, 'FINALIZE_TRADE'::character varying])::text[])))
 );
 ALTER TABLE ONLY public.oracle_triggers FORCE ROW LEVEL SECURITY;
---
--- Name: oracle_triggers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
 CREATE SEQUENCE public.oracle_triggers_id_seq
     AS integer
     START WITH 1
@@ -83,80 +65,23 @@ CREATE SEQUENCE public.oracle_triggers_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
---
--- Name: oracle_triggers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
 ALTER SEQUENCE public.oracle_triggers_id_seq OWNED BY public.oracle_triggers.id;
---
--- Name: oracle_triggers id; Type: DEFAULT; Schema: public; Owner: -
---
 ALTER TABLE ONLY public.oracle_triggers ALTER COLUMN id SET DEFAULT nextval('public.oracle_triggers_id_seq'::regclass);
---
--- Name: oracle_hmac_nonces oracle_hmac_nonces_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
 ALTER TABLE ONLY public.oracle_hmac_nonces
     ADD CONSTRAINT oracle_hmac_nonces_pkey PRIMARY KEY (api_key, nonce);
---
--- Name: oracle_triggers oracle_triggers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
 ALTER TABLE ONLY public.oracle_triggers
     ADD CONSTRAINT oracle_triggers_pkey PRIMARY KEY (idempotency_key);
---
--- Name: idx_action_key; Type: INDEX; Schema: public; Owner: -
---
 CREATE INDEX idx_action_key ON public.oracle_triggers USING btree (action_key);
---
--- Name: idx_active_action_key_unique; Type: INDEX; Schema: public; Owner: -
---
 CREATE UNIQUE INDEX idx_active_action_key_unique ON public.oracle_triggers USING btree (action_key) WHERE ((status)::text = ANY ((ARRAY['PENDING'::character varying, 'EXECUTING'::character varying, 'SUBMITTED'::character varying, 'PENDING_APPROVAL'::character varying])::text[]));
---
--- Name: idx_created_at; Type: INDEX; Schema: public; Owner: -
---
 CREATE INDEX idx_created_at ON public.oracle_triggers USING btree (created_at DESC);
---
--- Name: idx_exhausted_needs_redrive; Type: INDEX; Schema: public; Owner: -
---
 CREATE INDEX idx_exhausted_needs_redrive ON public.oracle_triggers USING btree (status, updated_at) WHERE ((status)::text = 'EXHAUSTED_NEEDS_REDRIVE'::text);
---
--- Name: idx_oracle_hmac_nonces_expires_at; Type: INDEX; Schema: public; Owner: -
---
 CREATE INDEX idx_oracle_hmac_nonces_expires_at ON public.oracle_hmac_nonces USING btree (expires_at);
---
--- Name: idx_pending_approval; Type: INDEX; Schema: public; Owner: -
---
 CREATE INDEX idx_pending_approval ON public.oracle_triggers USING btree (status, created_at) WHERE ((status)::text = 'PENDING_APPROVAL'::text);
---
--- Name: idx_request_id; Type: INDEX; Schema: public; Owner: -
---
 CREATE INDEX idx_request_id ON public.oracle_triggers USING btree (request_id);
---
--- Name: idx_status; Type: INDEX; Schema: public; Owner: -
---
 CREATE INDEX idx_status ON public.oracle_triggers USING btree (status);
---
--- Name: idx_submitted_unconfirmed; Type: INDEX; Schema: public; Owner: -
---
 CREATE INDEX idx_submitted_unconfirmed ON public.oracle_triggers USING btree (status, submitted_at) WHERE (((status)::text = 'SUBMITTED'::text) AND (indexer_confirmed = false));
---
--- Name: idx_trade_id; Type: INDEX; Schema: public; Owner: -
---
 CREATE INDEX idx_trade_id ON public.oracle_triggers USING btree (trade_id);
---
--- Name: oracle_hmac_nonces; Type: ROW SECURITY; Schema: public; Owner: -
---
 ALTER TABLE public.oracle_hmac_nonces ENABLE ROW LEVEL SECURITY;
---
--- Name: oracle_hmac_nonces oracle_hmac_nonces_service_isolation; Type: POLICY; Schema: public; Owner: -
---
 CREATE POLICY oracle_hmac_nonces_service_isolation ON public.oracle_hmac_nonces USING ((public.current_app_service_name() = 'oracle'::text)) WITH CHECK ((public.current_app_service_name() = 'oracle'::text));
---
--- Name: oracle_triggers; Type: ROW SECURITY; Schema: public; Owner: -
---
 ALTER TABLE public.oracle_triggers ENABLE ROW LEVEL SECURITY;
---
--- Name: oracle_triggers oracle_triggers_service_isolation; Type: POLICY; Schema: public; Owner: -
---
 CREATE POLICY oracle_triggers_service_isolation ON public.oracle_triggers USING ((public.current_app_service_name() = 'oracle'::text)) WITH CHECK ((public.current_app_service_name() = 'oracle'::text));
---
--- PostgreSQL database dump complete
---
