@@ -10,7 +10,7 @@ const vars = readFileSync(new URL('variables.tf', root), 'utf8');
 const runtime = readFileSync(new URL('runtime-indexer.tf', root), 'utf8');
 const network = readFileSync(new URL('network.tf', root), 'utf8');
 const destinations = JSON.parse(readFileSync(new URL('egress-destinations.json', root), 'utf8'));
-const egressConfig = network.match(/  egress_destinations = \[[\s\S]*?\n  \]/)?.[0];
+const egressConfig = network.match(/ {2}egress_destinations = \[[\s\S]*?\n  \]/)?.[0];
 assert.ok(egressConfig, 'Egress destination configuration is missing');
 const variable = vars.match(/variable "demo_disable_indexer_alerts" \{[\s\S]*?\n\}/)?.[0];
 let secretConfig = runtime.match(
@@ -24,7 +24,12 @@ secretConfig = secretConfig.replaceAll(
 );
 const demo = '0xE8787748547A6ce40287CDE678A58e385b65d069';
 
-function evaluate(disabled, address = demo, environment = 'staging', expression = 'local.indexer_pipeline_secrets') {
+function evaluate(
+  disabled,
+  address = demo,
+  environment = 'staging',
+  expression = 'local.indexer_pipeline_secrets',
+) {
   const dir = mkdtempSync(join(tmpdir(), 'cotsel-demo-alerts-'));
   try {
     writeFileSync(
@@ -68,7 +73,6 @@ test('the alert exception cannot be enabled for another escrow or production', (
   assert.notEqual(evaluate(true, '0x1111111111111111111111111111111111111111').status, 0);
   assert.notEqual(evaluate(true, demo, 'production').status, 0);
 });
-
 
 test('the unresolved webhook is excluded from egress only for the selected demo', () => {
   const normal = evaluate(false, demo, 'staging', 'local.egress_destinations');
