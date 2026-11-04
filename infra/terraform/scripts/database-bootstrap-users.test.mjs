@@ -55,6 +55,7 @@ test('each database bootstrap step uses the intended identity', () => {
     assert.equal(readFileSync(env.TEST_GRANT_LOG, 'utf8').trim(), 'master');
     assert.deepEqual(readFileSync(env.TEST_LOG, 'utf8').trim().split('\n'), [
       'master postgres',
+      'master cotsel_reconciliation',
       'cotsel_reconciliation_migrator cotsel_reconciliation',
       'master cotsel_indexer',
       'cotsel_indexer_migrator cotsel_indexer',

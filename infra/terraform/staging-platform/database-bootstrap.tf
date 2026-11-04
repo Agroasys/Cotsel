@@ -136,12 +136,15 @@ locals {
     # or erase the control it is supposed to enforce.
     # The reconciliation migration role owns the database objects, so it also
     # applies the current and future reader grants.
-    export PGUSER="$${RECONCILIATION_MIGRATION_USERNAME}"
-    export PGPASSWORD="$${RECONCILIATION_MIGRATION_PASSWORD}"
     psql --dbname cotsel_reconciliation --set ON_ERROR_STOP=1 <<SQL
     REVOKE CREATE ON SCHEMA public FROM PUBLIC;
     REVOKE ALL ON SCHEMA public FROM cotsel_reconciliation_reader;
     GRANT USAGE ON SCHEMA public TO cotsel_reconciliation_reader;
+    SQL
+
+    export PGUSER="$${RECONCILIATION_MIGRATION_USERNAME}"
+    export PGPASSWORD="$${RECONCILIATION_MIGRATION_PASSWORD}"
+    psql --dbname cotsel_reconciliation --set ON_ERROR_STOP=1 <<SQL
     REVOKE ALL ON ALL TABLES IN SCHEMA public FROM cotsel_reconciliation_reader;
     REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM cotsel_reconciliation_reader;
     GRANT SELECT ON ALL TABLES IN SCHEMA public TO cotsel_reconciliation_reader;
