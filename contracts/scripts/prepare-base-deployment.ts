@@ -5,7 +5,10 @@ import path from 'node:path';
 import hre, { ethers } from 'hardhat';
 import { loadBaseDeploymentConfig } from './lib/baseDeploymentConfig';
 import { getDeploymentSourceIdentity } from './lib/deploymentSourceIdentity';
-import { loadHardwareWalletDeployerConfig } from './lib/hardwareWalletContractDeployment';
+import {
+  getDeployerCustodyEvidence,
+  loadHardwareWalletDeployerConfig,
+} from './lib/hardwareWalletContractDeployment';
 
 function sha256Hex(input: string): string {
   return crypto.createHash('sha256').update(input).digest('hex');
@@ -53,11 +56,13 @@ async function main(): Promise<void> {
     value: 0n,
   });
   const expectedContractAddress = ethers.getCreateAddress({ from: deployerAddress, nonce });
+  const custodyEvidence = getDeployerCustodyEvidence();
   const request = {
     generatedAt: new Date().toISOString(),
     commitSha: sourceIdentity.commitSha,
     worktreeClean: sourceIdentity.worktreeClean,
-    custody: 'hardware-wallet',
+    custody: custodyEvidence.deployerCustody,
+    custodyRequired: custodyEvidence.deployerCustodyRequired,
     network: {
       hardhatName: hre.network.name,
       displayName: config.target.networkName,
@@ -82,7 +87,7 @@ async function main(): Promise<void> {
       requiredApprovals: config.requiredApprovals,
     },
     signingInstruction:
-      'Review every field, then sign and broadcast this exact contract-creation transaction with the approved deployer hardware wallet.',
+      'Review every field, then sign and broadcast this exact contract-creation transaction with the approved deployer wallet. Hardware custody is required for production.',
   };
 
   fs.mkdirSync(config.evidenceOutDir, { recursive: true });
