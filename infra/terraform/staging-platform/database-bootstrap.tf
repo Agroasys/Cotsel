@@ -150,6 +150,8 @@ locals {
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO cotsel_reconciliation_reader;
     SQL
 
+    export PGUSER="$${MASTER_USERNAME}"
+    export PGPASSWORD="$${MASTER_PASSWORD}"
     psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 <<SQL
     BEGIN;
     GRANT cotsel_indexer_app, cotsel_indexer_migrator TO CURRENT_USER;
