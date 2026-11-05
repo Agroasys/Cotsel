@@ -194,7 +194,7 @@ Role descriptions define decision authority. The working lead delivers this issu
 
 ${bullets(dependencies, 'No predecessor delivery issue. The programme charter and pinned-release rules still apply.')}
 
-Record any required provider access, legal or compliance decision, cloud permission, and external deployment record before implementation or acceptance. An unresolved external dependency remains explicit and cannot be replaced by Cotsel-local evidence.
+Identify required provider access, legal or compliance decisions, cloud permissions, and deployment records. Record the exact integration, deployment, or acceptance step each missing item blocks. Continue independent implementation and local validation. Do not claim release acceptance until required external evidence exists; Cotsel-local evidence cannot replace it.
 
 ## Supporting existing Cotsel issues
 
