@@ -102,19 +102,54 @@
       "note": "Keep the hostname aligned with the secret; never record the URL or key."
     },
     {
-      "service": "Base Sepolia historical indexing",
-      "hostname": "v2.archive.subsquid.io",
-      "workloads": ["indexer-pipeline"],
-      "purpose": "SQD Gateway historical backfill; API key is injected from Secrets Manager",
-      "status": "required"
-    },
-    {
       "service": "Notifications webhook",
       "hostname": null,
       "workloads": ["indexer-pipeline"],
       "purpose": "notifications-webhook foundation secret",
       "status": "unresolved",
       "note": "Record the bare hostname from the secret."
+    },
+    {
+      "service": "Base Sepolia historical indexing worker",
+      "hostname": "bhs01.sqd-archive.net",
+      "workloads": ["indexer-pipeline"],
+      "purpose": "Authenticated SQD Gateway historical backfill; hostname observed with the installed SDK",
+      "status": "required"
+    },
+    {
+      "service": "Base Sepolia historical indexing worker",
+      "hostname": "bhs02.sqd-archive.net",
+      "workloads": ["indexer-pipeline"],
+      "purpose": "Authenticated SQD Gateway historical backfill; hostname observed with the installed SDK",
+      "status": "required"
+    },
+    {
+      "service": "Base Sepolia historical indexing worker",
+      "hostname": "lm03.sqd-archive.net",
+      "workloads": ["indexer-pipeline"],
+      "purpose": "Authenticated SQD Gateway historical backfill; hostname observed with the installed SDK",
+      "status": "required"
+    },
+    {
+      "service": "Base Sepolia historical indexing worker",
+      "hostname": "lm05.sqd-archive.net",
+      "workloads": ["indexer-pipeline"],
+      "purpose": "Authenticated SQD Gateway historical backfill; hostname observed with the installed SDK",
+      "status": "required"
+    },
+    {
+      "service": "Base Sepolia historical indexing worker",
+      "hostname": "rb01.sqd-archive.net",
+      "workloads": ["indexer-pipeline"],
+      "purpose": "Authenticated SQD Gateway historical backfill; hostname observed with the installed SDK",
+      "status": "required"
+    },
+    {
+      "service": "Base Sepolia historical indexing router",
+      "hostname": "v2.archive.subsquid.io",
+      "workloads": ["indexer-pipeline"],
+      "purpose": "Authenticated SQD Gateway historical backfill; hostname observed with the installed SDK",
+      "status": "required"
     }
   ]
 }
