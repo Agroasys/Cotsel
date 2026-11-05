@@ -315,6 +315,18 @@ for (const route of routes.issues) {
     `${route.key} owns no requirement`,
   );
   const body = renderRouteBody(route);
+  assert.ok(
+    body.includes('Continue independent implementation and local validation.'),
+    `${route.key} must permit work outside an external dependency`,
+  );
+  assert.ok(
+    body.includes('Do not claim release acceptance until required external evidence exists'),
+    `${route.key} must preserve the release acceptance boundary`,
+  );
+  assert.ok(
+    !body.includes('before implementation or acceptance'),
+    `${route.key} must not treat external acceptance as a blanket implementation gate`,
+  );
   const primarySection = body
     .split('## Contributing evidence obligations')[0]
     .split('## Release-gate evidence obligations')[0];
