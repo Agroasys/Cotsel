@@ -1,0 +1,24 @@
+{
+  "github_advisory_id": "GHSA-g3hv-75wg-m249",
+  "module_name": "minimatch",
+  "severity": "moderate",
+  "vulnerable_versions": ">=7.0.0 <11.0.1",
+  "patched_versions": ">=11.0.1",
+  "overview": "minimatch 10.2.6 contains an attacker-controlled pattern amplification in firstPhasePreProcess() when optimizationLevel >= 2.\n\nresearcher: Reid Downing (b1nv0id)\nfiles: \n\n- src/index.ts: 690-770\n- src/index.ts: 780-796\n\nissue:\ninput-controlled growth of globParts during first-phase preprocessing, followed by quadratic second-phase processing.\n\nthe **/../ transformation clones a globparts entry and appends the clone to the same globparts array:\n```\nparts.splice(gs, 1)\nconst other = parts.slice(0)\nother[gs] = '**'\nglobParts.push(other)\n```\nthis occurs inside a do...while (didSomething) fixpoint loop, allowing generated entries to be processed again.\n\nthe expanded globparts array is subsequently processed by secondPhasePreProcess(), which performs pairwise comparisons:\n```\nfor (let i = 0; i < globParts.length - 1; i++) {\n  for (let j = i + 1; j < globParts.length; j++) {\n    this.partsMatch(...)\n  }\n}\n```\nan attacker who can supply a glob pattern can therefore cause additional pattern entries to be generated during preprocessing, followed by quadratic pairwise processing, resulting in excessive cpu and memory consumption.",
+  "findings": [
+    {
+      "version": "10.2.6",
+      "paths": [".>eslint>minimatch"]
+    },
+    {
+      "version": "9.0.9",
+      "paths": [
+        "auth>jest>@jest/core>@jest/transform>babel-plugin-istanbul>test-exclude>glob>minimatch"
+      ]
+    },
+    {
+      "version": "10.2.5",
+      "paths": ["auth>nodemon>minimatch"]
+    }
+  ]
+}
