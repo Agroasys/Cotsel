@@ -1,0 +1,14 @@
+# Base Sepolia demo only. Combine with the selected contract and pinned release inputs.
+# Review current gas fees, runtime evidence and balances before enabling execution.
+gasless_execution_enabled = false
+
+gasless_execution_policy = {
+  max_gas_limit                          = 1500000
+  max_fee_per_gas_wei                    = "50000000"
+  max_native_cost_wei                    = "100000000000000"
+  min_executor_balance_wei               = "1000000000000000"
+  low_balance_alert_wei                  = "1500000000000000"
+  capacity_target_tx_per_day             = 20
+  capacity_burst_multiplier_basis_points = 20000
+  capacity_safety_margin_basis_points    = 12500
+}

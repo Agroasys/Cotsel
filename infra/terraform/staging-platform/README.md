@@ -185,6 +185,20 @@ until the durable nonce migration, one-writer topology, signing denials, and
 Base Sepolia rehearsal have been accepted. Terraform rejects enabling gasless
 execution with more than one gateway writer.
 
+Gasless activation also requires `gasless_execution_policy`. The same gas limit,
+fee ceiling and native spend cap configure the gateway and dedicated relayer.
+The gateway enforces its minimum balance, alert threshold and burst-hour policy
+with fail-closed capacity checks. A missing policy fails Terraform validation;
+an insufficient balance or capacity floor fails application validation or readiness.
+
+`demo-gasless-policy.tfvars.example` provides a Base Sepolia test policy for
+20 sponsored actions per day, a two-times burst and a 25% safety margin. Its
+0.05-gwei fee ceiling and 0.0001-test-ETH transaction cap are explicit limits,
+not current gas-price claims. Verify current fees before activation. The 0.001-test-ETH
+minimum and 0.0015-test-ETH alert threshold cover the computed 0.0001875-test-ETH
+burst-hour floor. Keep execution disabled until the demo execution window is ready.
+This example does not change pilot capacity or custody acceptance.
+
 Runtime recovery uses separate saved plans. Set
 `COTSEL_STAGING_INDEXER_DESIRED_COUNT=1` first and verify migration state,
 provider health, and catch-up. Next set

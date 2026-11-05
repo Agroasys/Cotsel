@@ -1,4 +1,15 @@
 locals {
+  gasless_policy_environment = var.gasless_execution_policy == null ? [] : [
+    { name = "GATEWAY_GASLESS_MAX_GAS_LIMIT", value = tostring(var.gasless_execution_policy.max_gas_limit) },
+    { name = "GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI", value = var.gasless_execution_policy.max_fee_per_gas_wei },
+    { name = "GATEWAY_GASLESS_MAX_NATIVE_COST_WEI", value = var.gasless_execution_policy.max_native_cost_wei },
+    { name = "GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI", value = var.gasless_execution_policy.min_executor_balance_wei },
+    { name = "GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI", value = var.gasless_execution_policy.low_balance_alert_wei },
+    { name = "GATEWAY_GASLESS_CAPACITY_TARGET_TX_PER_DAY", value = tostring(var.gasless_execution_policy.capacity_target_tx_per_day) },
+    { name = "GATEWAY_GASLESS_CAPACITY_BURST_MULTIPLIER_BASIS_POINTS", value = tostring(var.gasless_execution_policy.capacity_burst_multiplier_basis_points) },
+    { name = "GATEWAY_GASLESS_CAPACITY_SAFETY_MARGIN_BASIS_POINTS", value = tostring(var.gasless_execution_policy.capacity_safety_margin_basis_points) },
+    { name = "GATEWAY_GASLESS_CAPACITY_FAIL_CLOSED", value = "true" },
+  ]
   gateway_environment = concat([
     { name = "AWS_REGION", value = var.region },
     { name = "COTSEL_ENVIRONMENT", value = "staging" },
@@ -34,7 +45,7 @@ locals {
     { name = "GATEWAY_USDC_ADDRESS", value = var.base_sepolia_usdc_address },
     { name = "NODE_ENV", value = "production" },
     { name = "PORT", value = "3600" },
-    ], local.relayer_kms_enabled ? [
+    ], local.gasless_policy_environment, local.relayer_kms_enabled ? [
     { name = "GATEWAY_GASLESS_KMS_EXPECTED_ADDRESS", value = var.relayer_kms_expected_address },
     { name = "GATEWAY_GASLESS_MANAGED_SIGNER_URL", value = "http://relayer.cotsel-staging.internal:3300" },
   ] : [])
