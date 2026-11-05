@@ -191,8 +191,12 @@ variable "gasless_execution_enabled" {
   default     = false
 
   validation {
-    condition     = !var.gasless_execution_enabled || var.gasless_execution_policy != null
-    error_message = "Gasless activation requires an explicit execution spending and capacity policy."
+    condition = !var.gasless_execution_enabled || (
+      var.gasless_execution_policy != null &&
+      var.gateway_desired_count == 1 &&
+      var.relayer_kms_expected_address != ""
+    )
+    error_message = "Gasless activation requires an explicit execution spending and capacity policy, exactly one gateway writer, and a reviewed relayer KMS address."
   }
 }
 

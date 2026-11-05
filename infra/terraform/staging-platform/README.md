@@ -188,7 +188,8 @@ execution with more than one gateway writer.
 Gasless activation also requires `gasless_execution_policy`. The same gas limit,
 fee ceiling and native spend cap configure the gateway and dedicated relayer.
 The gateway enforces its minimum balance, alert threshold and burst-hour policy
-with fail-closed capacity checks. A missing policy fails Terraform validation;
+with fail-closed capacity checks. A missing policy, missing reviewed relayer address or writer count other than one
+fails Terraform validation;
 an insufficient balance or capacity floor fails application validation or readiness.
 
 `demo-gasless-policy.tfvars.example` provides a Base Sepolia test policy for
