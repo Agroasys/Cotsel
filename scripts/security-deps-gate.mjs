@@ -51,7 +51,7 @@ const locallyPatchedAdvisories = new Map([
       severity: 'moderate',
       versions: new Set(['3.1.5', '5.1.9', '9.0.9', '10.2.5', '10.2.6']),
       patchedVersions: '>=11.0.1',
-      vulnerableVersions: '<11.0.1',
+      vulnerableVersions: '>=7.0.0 <11.0.1',
       overviewHash: '864649cfe8b481d0f1de3513fe2ce8d7be9dc660d35c7d1497e3275d29616c75',
       upstreamCommit: '77a0f5c4b80bdc641c3c930a1d9edf5ad2db57f8',
       disposition:

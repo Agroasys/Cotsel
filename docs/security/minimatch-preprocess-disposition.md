@@ -2,12 +2,14 @@
 
 Audience: dependency and Security reviewers. Scope: GHSA-g3hv-75wg-m249 for the exact installed artifacts listed below.
 
-The [upstream advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249) lists versions below 11.0.1. Its described defect concerns pattern multiplication and pairwise deduplication in the level-two preprocessing algorithm. The [upstream repair](https://github.com/isaacs/minimatch/commit/77a0f5c4b80bdc641c3c930a1d9edf5ad2db57f8) bounds those operations.
+The [upstream advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249) lists versions from 7.0.0 through versions below 11.0.1. Its described defect concerns pattern multiplication and pairwise deduplication in the level-two preprocessing algorithm. The [upstream repair](https://github.com/isaacs/minimatch/commit/77a0f5c4b80bdc641c3c930a1d9edf5ad2db57f8) bounds those operations.
 
 | Installed version     | Repository disposition                                                                                                                                        | Verification                                                                                                                                                                    |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 9.0.9, 10.2.5, 10.2.6 | Backport the upstream repair in CommonJS and ESM distributions.                                                                                               | Check resolved patched consumers, capped pattern multiplication, large-set deduplication behavior and ordinary matching.                                                        |
 | 3.1.5, 5.1.9          | The inspected sources do not implement the reported preprocessing algorithm. This is a repository applicability assessment, not an upstream range correction. | Verify exact source hashes, absence of the two preprocessing methods and optimization option, ordinary matching, and a repeated globstar/parent pattern without multiplication. |
+
+The upstream range was narrowed on November 4, 2026. The advisory description and repair commit are unchanged. The release gate pins the current audit range `>=7.0.0 <11.0.1`; it rejects the previous broader range and other metadata changes. Legacy versions remain tested as compatibility checks, although the current advisory excludes them.
 
 The legacy `minimatch.js` SHA-256 values are:
 

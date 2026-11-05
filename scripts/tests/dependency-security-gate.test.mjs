@@ -86,3 +86,25 @@ for (const [label, changes] of [
     assert.equal(result.status, 1, result.stdout + result.stderr);
     assert.match(result.stderr, /Release gate failed:/);
   });
+
+const minimatchAdvisory = JSON.parse(
+  fs.readFileSync(new URL('./fixtures/minimatch-current-advisory.json', import.meta.url), 'utf8'),
+);
+test('reviewed narrowed minimatch advisory passes with installed-artifact proof', () => {
+  const result = run({ all: report(minimatchAdvisory) });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+for (const [label, changes] of [
+  ['previous broader range', { vulnerable_versions: '<11.0.1' }],
+  ['changed overview', { overview: minimatchAdvisory.overview + ' changed' }],
+  ['unverified installed version', { findings: [{ version: '10.2.7' }] }],
+])
+  test(`minimatch rejects ${label}`, () => {
+    const result = run({ all: report({ ...minimatchAdvisory, ...changes }) });
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /unexpected dependency advisory: GHSA-g3hv-75wg-m249/);
+  });
+test('reviewed minimatch advisory still requires installed-artifact proof', () => {
+  const result = run({ all: report(minimatchAdvisory), compatExit: 1 });
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+});
