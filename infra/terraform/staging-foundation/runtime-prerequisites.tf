@@ -4,6 +4,7 @@ locals {
   runtime_prerequisite_secret_names = toset([
     "database/indexer/reader",
     "database/reconciliation/reader",
+    "indexer-archive-api-key",
     "notifications-webhook",
   ])
 
@@ -180,6 +181,7 @@ data "aws_iam_policy_document" "indexer_execution" {
     resources = [
       local.runtime_secret_arns["database/indexer/reader"],
       local.runtime_secret_arns["database/indexer/runtime"],
+      local.runtime_secret_arns["indexer-archive-api-key"],
       local.runtime_secret_arns["notifications-webhook"],
       local.runtime_secret_arns["rpc-base-sepolia-fallback"],
       local.runtime_secret_arns["rpc-base-sepolia-primary"],

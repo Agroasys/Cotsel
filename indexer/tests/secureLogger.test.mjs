@@ -74,3 +74,41 @@ test('installed root sink redacts dependency error records before stderr', () =>
   assert.match(result.stderr, /connection failure/);
   assert.match(result.stderr, /Got 429/);
 });
+
+test('archive HTTP debug logs never expose Gateway authorization headers', () => {
+  const secret = 'demo-gateway-key-must-never-appear';
+  const script = `
+    require('./lib/secureLogger.js');
+    const { createRequire } = require('node:module');
+    const { createServer } = require('node:http');
+    const { createLogger } = require('@subsquid/logger');
+    const dependencyRequire = createRequire(require.resolve('@subsquid/evm-processor'));
+    const { HttpClient } = dependencyRequire('@subsquid/http-client');
+    const server = createServer((_request, response) => {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ height: 1 }));
+    });
+    (async () => {
+      await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+      try {
+        const client = new HttpClient({ log: createLogger('sqd:processor:archive') });
+        await client.get('http://127.0.0.1:' + server.address().port + '/height', {
+          headers: { Authorization: 'Bearer ' + process.env.SQD_API_KEY, Token: process.env.SQD_API_KEY },
+        });
+      } finally {
+        await new Promise(resolve => server.close(resolve));
+      }
+    })().catch(() => { process.exitCode = 1; });
+  `;
+  const result = spawnSync(process.execPath, ['-e', script], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    timeout: 10000,
+    env: { ...process.env, SQD_API_KEY: secret, SQD_DEBUG: 'sqd:processor:archive' },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stderr, new RegExp(secret));
+  assert.match(result.stderr, /http request/);
+  assert.match(result.stderr, /httpRequestHeaders/);
+});

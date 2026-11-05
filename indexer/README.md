@@ -83,6 +83,14 @@ These findings are tracked upstream in [subsquid/squid-sdk#547](https://github.c
 | `docker compose up -d db`                    | Start Postgres                                    |
 | `docker compose logs -f`                     | Tail logs                                         |
 
+## Chain data sources
+
+`RPC_ENDPOINT` identifies the required chain provider. `RPC_FALLBACK_ENDPOINTS` optionally supplies additional providers. RPC access remains required for startup verification and recent blocks when an archive is configured.
+
+`GATEWAY_URL` enables historical ingestion through the existing Subsquid archive client. Staging uses `https://v2.archive.subsquid.io/network/base-sepolia`. `SQD_API_KEY` supplies its Gateway-only credential from AWS Secrets Manager. Keep the key out of URLs, source files and diagnostic output. The public Portal API uses a different protocol and cannot replace this URL with the installed client. Gateway routing uses worker hosts recorded in the staging egress inventory. If the provider changes routing, qualify the new exact hostnames and update the shared firewall before deployment.
+
+The archive uses the existing start block and stored checkpoint. Contract, ABI, chain, finality, quarantine and checkpoint checks remain active. Remove `GATEWAY_URL` to return to RPC-only ingestion without discarding the checkpoint. Historical catch-up can take substantially longer through RPC alone.
+
 ## Probes
 
 The pipeline serves `GET /health` (liveness) and `GET /ready` (readiness) on
