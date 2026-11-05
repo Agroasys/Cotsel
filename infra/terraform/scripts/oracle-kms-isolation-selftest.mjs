@@ -112,7 +112,13 @@ assert.match(
 assert.match(relayerService, /enable_execute_command\s+= false/);
 assert.match(relayerService, /desired_count\s+= var\.relayer_desired_count/);
 assert.match(relayerService, /relayer_activation_requires_reviewed_kms_address/);
-assert.match(relayerService, /gasless_execution_has_one_gateway_writer/);
+const gaslessActivation = variables.match(
+  /variable "gasless_execution_enabled" \{[\s\S]*?\n\}/,
+)?.[0];
+assert.ok(gaslessActivation, 'Gasless activation input validation is missing');
+assert.match(gaslessActivation, /var\.gateway_desired_count == 1/);
+assert.match(gaslessActivation, /var\.relayer_kms_expected_address != ""/);
+assert.doesNotMatch(relayerService, /check "gasless_execution_has_one_gateway_writer"/);
 assert.match(runtimePrerequisites, /gateway_to_relayer/);
 
 assert.match(

@@ -53,13 +53,6 @@ locals {
   }))
 }
 
-check "gasless_execution_has_one_gateway_writer" {
-  assert {
-    condition     = !var.gasless_execution_enabled || (local.relayer_kms_enabled && var.gateway_desired_count == 1)
-    error_message = "Gasless execution requires an attested relayer address and exactly one gateway writer until multi-writer runtime evidence is accepted."
-  }
-}
-
 check "relayer_activation_requires_reviewed_kms_address" {
   assert {
     condition     = var.relayer_desired_count == 0 || local.relayer_kms_enabled

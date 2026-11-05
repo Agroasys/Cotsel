@@ -9,7 +9,12 @@ const root = new URL('../staging-platform/', import.meta.url);
 const variables = readFileSync(new URL('variables.tf', root), 'utf8');
 const gateway = readFileSync(new URL('runtime-gateway-auth.tf', root), 'utf8');
 const relayer = readFileSync(new URL('relayer-service.tf', root), 'utf8');
-const policyVariables = ['gasless_execution_enabled', 'gasless_execution_policy']
+const policyVariables = [
+  'gasless_execution_enabled',
+  'gasless_execution_policy',
+  'gateway_desired_count',
+  'relayer_kms_expected_address',
+]
   .map((name) => {
     const block = variables.match(new RegExp(`variable "${name}" \\{[\\s\\S]*?\\n\\}`))?.[0];
     assert.ok(block, `${name} variable is missing`);
@@ -32,7 +37,7 @@ const policy = {
   capacity_burst_multiplier_basis_points: 20000,
   capacity_safety_margin_basis_points: 12500,
 };
-function evaluate(value, enabled = true) {
+function evaluate(value, enabled = true, settings = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'cotsel-gasless-policy-'));
   try {
     writeFileSync(
@@ -41,7 +46,13 @@ function evaluate(value, enabled = true) {
     );
     writeFileSync(
       join(directory, 'input.tfvars.json'),
-      JSON.stringify({ gasless_execution_enabled: enabled, gasless_execution_policy: value }),
+      JSON.stringify({
+        gasless_execution_enabled: enabled,
+        gasless_execution_policy: value,
+        gateway_desired_count: 1,
+        relayer_kms_expected_address: '0xA03f8177164E48d9Efb2C9cBd719b80f01002C9F',
+        ...settings,
+      }),
     );
     const result = spawnSync(
       'terraform',
@@ -75,7 +86,10 @@ test('explicit policy renders matching gateway and relayer spend caps', () => {
   assert.equal(env.GATEWAY_GASLESS_CAPACITY_FAIL_CLOSED, 'true');
 });
 test('disabled execution preserves the existing defaults without a policy', () => {
-  const result = evaluate(null, false);
+  const result = evaluate(null, false, {
+    gateway_desired_count: 0,
+    relayer_kms_expected_address: '',
+  });
   assert.equal(result.status, 0, result.stderr);
   const output = result.configuration;
   assert.deepEqual(output.gateway, []);
@@ -101,4 +115,16 @@ for (const [name, changed] of [
     const result = evaluate({ ...policy, ...changed });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /Invalid value for variable/);
+  });
+
+for (const [name, settings] of [
+  ['no gateway writer', { gateway_desired_count: 0 }],
+  ['multiple gateway writers', { gateway_desired_count: 2 }],
+  ['missing reviewed KMS address', { relayer_kms_expected_address: '' }],
+])
+  test(`activation blocks ${name}`, () => {
+    const result = evaluate(policy, true, settings);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Invalid value for variable/);
+    assert.match(result.stderr, /exactly one gateway writer/);
   });
