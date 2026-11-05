@@ -189,6 +189,59 @@ variable "gasless_execution_enabled" {
   description = "Enables gas-sponsored execution only after durable nonce and relayer runtime evidence is accepted."
   type        = bool
   default     = false
+
+  validation {
+    condition     = !var.gasless_execution_enabled || var.gasless_execution_policy != null
+    error_message = "Gasless activation requires an explicit execution spending and capacity policy."
+  }
+}
+
+variable "gasless_execution_policy" {
+  description = "Shared gateway and relayer spend caps, plus the gateway balance and burst-hour capacity policy. Null preserves the stopped execution defaults. Wei values are canonical decimal strings."
+  type = object({
+    max_gas_limit                          = number
+    max_fee_per_gas_wei                    = string
+    max_native_cost_wei                    = string
+    min_executor_balance_wei               = string
+    low_balance_alert_wei                  = string
+    capacity_target_tx_per_day             = number
+    capacity_burst_multiplier_basis_points = number
+    capacity_safety_margin_basis_points    = number
+  })
+  default = null
+
+  validation {
+    condition = var.gasless_execution_policy == null ? true : alltrue([
+      for value in [
+        var.gasless_execution_policy.max_fee_per_gas_wei,
+        var.gasless_execution_policy.max_native_cost_wei,
+        var.gasless_execution_policy.min_executor_balance_wei,
+        var.gasless_execution_policy.low_balance_alert_wei,
+      ] : can(regex("^[1-9][0-9]*$", value))
+    ])
+    error_message = "Every gasless wei limit must be a positive canonical decimal string."
+  }
+
+  validation {
+    condition = var.gasless_execution_policy == null ? true : alltrue([
+      for value in [
+        var.gasless_execution_policy.max_gas_limit,
+        var.gasless_execution_policy.capacity_target_tx_per_day,
+        var.gasless_execution_policy.capacity_burst_multiplier_basis_points,
+        var.gasless_execution_policy.capacity_safety_margin_basis_points,
+      ] : value > 0 && floor(value) == value
+    ]) && var.gasless_execution_policy.capacity_safety_margin_basis_points >= 10000
+    error_message = "Gas and capacity settings must be positive integers, with a safety margin of at least 10000 basis points."
+  }
+
+  validation {
+    condition = var.gasless_execution_policy == null ? true : try(
+      tonumber(var.gasless_execution_policy.max_native_cost_wei) >= var.gasless_execution_policy.max_gas_limit * tonumber(var.gasless_execution_policy.max_fee_per_gas_wei) &&
+      tonumber(var.gasless_execution_policy.low_balance_alert_wei) >= tonumber(var.gasless_execution_policy.min_executor_balance_wei),
+      false,
+    )
+    error_message = "The native spend cap must cover gas times fee, and the alert threshold must cover the minimum balance."
+  }
 }
 
 variable "backend_settlement_callback_url" {
