@@ -1,12 +1,60 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { releaseImageBuildRequired } from '../release-image-build-scope.mjs';
 
 const workflow = (name) =>
   readFile(new URL(`../../.github/workflows/${name}`, import.meta.url), 'utf8');
 
 const dependabotConfig = () =>
   readFile(new URL('../../.github/dependabot.yml', import.meta.url), 'utf8');
+
+test('skips candidate images only for the known issue-governance tools', () => {
+  const issuePaths = [
+    'scripts/readiness/render-cotsel-production-readiness-issue.mjs',
+    'scripts/readiness/validate-cotsel-production-readiness.mjs',
+  ];
+  assert.equal(releaseImageBuildRequired('pull_request', issuePaths), false);
+  for (const event of ['push', 'workflow_dispatch', undefined]) {
+    assert.equal(releaseImageBuildRequired(event, issuePaths), true);
+  }
+  assert.equal(releaseImageBuildRequired('pull_request', []), true);
+  for (const path of [
+    'gateway/src/server.ts',
+    'docs/architecture.md', // Gateway copies docs into its build stage.
+    'gateway/Dockerfile',
+    'pnpm-lock.yaml',
+    '.github/workflows/release-images.yml',
+    'scripts/release-image-build-scope.mjs',
+    'scripts/readiness/unknown.mjs',
+  ]) {
+    assert.equal(releaseImageBuildRequired('pull_request', [...issuePaths, path]), true, path);
+  }
+});
+
+test('reads NUL-delimited paths and preserves the release workflow boundary', async () => {
+  const result = spawnSync(
+    process.execPath,
+    [new URL('../release-image-build-scope.mjs', import.meta.url).pathname],
+    {
+      env: { ...process.env, GITHUB_EVENT_NAME: 'pull_request' },
+      input: 'scripts/readiness/render-cotsel-production-readiness-issue.mjs\0',
+      encoding: 'utf8',
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'build_required=false\n');
+  const contents = await workflow('release-images.yml');
+  assert.match(contents, /git diff --no-renames --name-only -z "\$PR_BASE_SHA" "\$PR_HEAD_SHA" --/);
+  assert.match(
+    contents,
+    /if \[ "\$GITHUB_EVENT_NAME" != "pull_request" \]; then\n\s+echo "build_required=true"/,
+  );
+  assert.match(contents, /if: needs\.registry-ready\.outputs\.build_required == 'true'/);
+  assert.match(contents, /build_required: \$\{\{ steps\.scope\.outputs\.build_required \}\}/);
+  assert.match(contents, /fetch-depth: 0/);
+});
 
 test('uses events first and only one daily governance reconciliation', async () => {
   const contents = await workflow('cotsel-production-readiness-project-governance.yml');

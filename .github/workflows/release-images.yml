@@ -31,9 +31,27 @@ jobs:
   registry-ready:
     name: release/registry-ready
     runs-on: ubuntu-latest
+    outputs:
+      build_required: ${{ steps.scope.outputs.build_required }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Determine image build scope
+        id: scope
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            echo "build_required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --no-renames --name-only -z "$PR_BASE_SHA" "$PR_HEAD_SHA" -- |
+            node scripts/release-image-build-scope.mjs >> "$GITHUB_OUTPUT"
 
       - name: Validate the authoritative release inventory
         run: node --test scripts/tests/release-candidate-inventory.test.mjs
@@ -69,6 +87,7 @@ jobs:
   build:
     name: build/${{ matrix.service }}
     needs: registry-ready
+    if: needs.registry-ready.outputs.build_required == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
