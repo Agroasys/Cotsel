@@ -1,6 +1,14 @@
 'use strict';
 
-const { createHttpRateLimiter } = require('./rateLimit');
+const { createHttpRateLimiter, normalizeRoutePath } = require('./rateLimit');
+
+test('normalizes trailing separators without backtracking over attacker-controlled paths', () => {
+  const path = `/admin/${'/'.repeat(100000)}x`;
+  expect(normalizeRoutePath(`${path}///`)).toBe(path);
+  expect(normalizeRoutePath('////')).toBe('/');
+  expect(normalizeRoutePath('/')).toBe('/');
+  expect(normalizeRoutePath('')).toBe('');
+});
 
 function createMockResponse() {
   const response = {};

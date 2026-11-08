@@ -6,6 +6,11 @@ import {
 } from '../src/runtime';
 
 describe('settlement runtime registry', () => {
+  test('normalizes long slash runs and canonical explorer paths without regex backtracking', () => {
+    const prefix = `https://example.test/${'/'.repeat(100000)}x`;
+    expect(buildExplorerTxUrl(`${prefix}///`, '0xabc')).toBe(`${prefix}/tx/0xabc`);
+    expect(buildExplorerTxUrl(`${prefix}/tx///`, '0xabc')).toBe(`${prefix}/tx/0xabc`);
+  });
   test('lists the active Base runtimes', () => {
     expect(listBaseSettlementRuntimes().map((runtime) => runtime.key)).toEqual([
       'base-sepolia',

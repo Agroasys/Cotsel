@@ -74,6 +74,9 @@ export function loadConfig(): AuthConfig {
     process.env.COTSEL_ENVIRONMENT?.trim() || (nodeEnv === 'production' ? '' : 'local');
   const sessionTtlSeconds = envNumber('SESSION_TTL_SECONDS', 3600);
   const sessionAbsoluteLifetimeSeconds = envNumber('SESSION_ABSOLUTE_LIFETIME_SECONDS', 86400);
+  const rateLimitEnabled = envBoolean('AUTH_RATE_LIMIT_ENABLED', true);
+  const rateLimitRedisUrl = process.env.AUTH_RATE_LIMIT_REDIS_URL?.trim() || undefined;
+  const rateLimitFailOpen = envBoolean('AUTH_RATE_LIMIT_FAIL_OPEN', false);
 
   if (trustedSessionExchangeEnabled) {
     assert(
@@ -119,6 +122,11 @@ export function loadConfig(): AuthConfig {
     /^[a-z][a-z0-9-]{0,31}$/.test(environment),
     'COTSEL_ENVIRONMENT must be a lowercase environment name',
   );
+  if (nodeEnv === 'production') {
+    assert(rateLimitEnabled, 'AUTH_RATE_LIMIT_ENABLED must be true in production');
+    assert(!rateLimitFailOpen, 'AUTH_RATE_LIMIT_FAIL_OPEN must be false in production');
+    assert(rateLimitRedisUrl, 'AUTH_RATE_LIMIT_REDIS_URL is required in production');
+  }
   assert(
     adminGrantMaxTtlSeconds >= 3600 && adminGrantMaxTtlSeconds <= 15552000,
     'AUTH_ADMIN_GRANT_MAX_TTL_SECONDS must be between 3600 and 15552000',
@@ -141,9 +149,9 @@ export function loadConfig(): AuthConfig {
     sessionAbsoluteLifetimeSeconds,
     corsAllowedOrigins: parseAllowedOrigins(process.env.AUTH_CORS_ALLOWED_ORIGINS),
     corsAllowNoOrigin: envBoolean('AUTH_CORS_ALLOW_NO_ORIGIN', false),
-    rateLimitEnabled: envBoolean('AUTH_RATE_LIMIT_ENABLED', true),
-    rateLimitRedisUrl: process.env.AUTH_RATE_LIMIT_REDIS_URL?.trim() || undefined,
-    rateLimitFailOpen: envBoolean('AUTH_RATE_LIMIT_FAIL_OPEN', false),
+    rateLimitEnabled,
+    rateLimitRedisUrl,
+    rateLimitFailOpen,
     trustedSessionExchangeEnabled,
     trustedSessionExchangeApiKeysJson,
     trustedSessionExchangeKeyPoliciesJson,

@@ -65,7 +65,11 @@ function normalizeOptionalUrl(value?: string | null): string | null {
     return null;
   }
 
-  return normalized.replace(/\/+$/, '');
+  let end = normalized.length;
+  while (end > 0 && normalized[end - 1] === '/') {
+    end -= 1;
+  }
+  return normalized.slice(0, end);
 }
 
 function normalizeOptionalTxExplorerBase(value?: string | null): string | null {
@@ -74,9 +78,7 @@ function normalizeOptionalTxExplorerBase(value?: string | null): string | null {
     return null;
   }
 
-  return normalized.endsWith('/tx') || normalized.endsWith('/tx/')
-    ? `${normalized.replace(/\/+$/, '')}/`
-    : `${normalized}/tx/`;
+  return normalized.endsWith('/tx') ? `${normalized}/` : `${normalized}/tx/`;
 }
 
 function normalizeUrlList(values?: string[] | null): string[] {

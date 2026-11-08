@@ -48,6 +48,30 @@ function loadConfigModule(): typeof import('../src/config') {
 }
 
 describe('auth config', () => {
+  test('production cannot disable throttling, fail open, or omit its shared store', () => {
+    const production = {
+      NODE_ENV: 'production',
+      COTSEL_ENVIRONMENT: 'staging',
+      AUTH_RATE_LIMIT_ENABLED: 'true',
+      AUTH_RATE_LIMIT_FAIL_OPEN: 'false',
+      AUTH_RATE_LIMIT_REDIS_URL: 'rediss://localhost:6379',
+    };
+    for (const [variable, value, error] of [
+      ['AUTH_RATE_LIMIT_ENABLED', 'false', 'AUTH_RATE_LIMIT_ENABLED must be true'],
+      ['AUTH_RATE_LIMIT_FAIL_OPEN', 'true', 'AUTH_RATE_LIMIT_FAIL_OPEN must be false'],
+      ['AUTH_RATE_LIMIT_REDIS_URL', undefined, 'AUTH_RATE_LIMIT_REDIS_URL is required'],
+    ] as const) {
+      withEnv({ ...production, [variable]: value }, () => {
+        expect(() => loadConfigModule().loadConfig()).toThrow(error);
+      });
+    }
+    withEnv(production, () => {
+      expect(loadConfigModule().loadConfig().rateLimitEnabled).toBe(true);
+    });
+    withEnv({ AUTH_RATE_LIMIT_ENABLED: 'false', AUTH_RATE_LIMIT_FAIL_OPEN: 'true' }, () => {
+      expect(loadConfigModule().loadConfig().rateLimitEnabled).toBe(false);
+    });
+  });
   test('browser no-origin CORS is disabled by default', () => {
     withEnv({}, () => {
       const { loadConfig } = loadConfigModule();

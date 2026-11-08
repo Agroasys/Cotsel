@@ -180,7 +180,7 @@ function pickTrustedSessionKey(keys, preferredId) {
   const activeKeys = [];
   const skipped = [];
 
-  for (const key of keys) {
+  for (const [index, key] of keys.entries()) {
     const reasons = [];
     if (!isPlainObject(key)) {
       reasons.push('entry is not an object');
@@ -200,10 +200,7 @@ function pickTrustedSessionKey(keys, preferredId) {
       activeKeys.push(key);
     } else {
       skipped.push({
-        id:
-          isPlainObject(key) && typeof key.id === 'string' && key.id.length > 0
-            ? key.id
-            : '<unknown>',
+        index,
         reasons,
       });
     }
@@ -215,7 +212,7 @@ function pickTrustedSessionKey(keys, preferredId) {
     );
     for (const item of skipped) {
       console.warn(
-        `[trusted-dashboard-session] Ignored key id="${item.id}": ${item.reasons.join(', ')}.`,
+        `[trusted-dashboard-session] Ignored key entry ${item.index + 1}: ${item.reasons.join(', ')}.`,
       );
     }
   }
@@ -224,7 +221,7 @@ function pickTrustedSessionKey(keys, preferredId) {
     const preferred = activeKeys.find((key) => key.id === preferredId) ?? null;
     if (!preferred) {
       console.warn(
-        `[trusted-dashboard-session] Preferred TRUSTED_SESSION_EXCHANGE_API_KEY_ID "${preferredId}" was not found among active valid keys.`,
+        '[trusted-dashboard-session] Preferred TRUSTED_SESSION_EXCHANGE_API_KEY_ID was not found among active valid keys.',
       );
     }
     return preferred;
@@ -415,9 +412,8 @@ async function main() {
   let timeoutMs;
   try {
     timeoutMs = normalizeTimeoutMs(rawTimeoutMs);
-  } catch (error) {
-    const errorDetails = error instanceof Error ? error.message : String(error);
-    fail(`Invalid timeout value from ${timeoutSource}: ${String(rawTimeoutMs)} (${errorDetails})`);
+  } catch {
+    fail(`Invalid timeout value from ${timeoutSource}: expected a positive finite duration.`);
   }
   const trustedSessionExchangePath = resolveTrustedSessionExchangePath(args, runtimeEnv);
   const authBaseUrl =
