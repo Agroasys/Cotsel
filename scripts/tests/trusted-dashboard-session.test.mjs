@@ -6,6 +6,43 @@ import path from 'node:path';
 
 const ROOT_DIR = path.resolve(import.meta.dirname, '../..');
 
+test('credential-selection and timeout failures never echo environment or key identifiers', () => {
+  const sensitive = 'sensitive-config-value-that-must-not-be-logged';
+  const cases = [
+    { DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS: sensitive },
+    {
+      TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON: JSON.stringify([
+        { id: sensitive, secret: 'test-secret', active: false },
+      ]),
+    },
+    {
+      TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON: JSON.stringify([
+        { id: 'test-key', secret: 'test-secret', active: true },
+      ]),
+      DASHBOARD_TRUSTED_SESSION_API_KEY_ID: sensitive,
+    },
+  ];
+  for (const environment of cases) {
+    const result = spawnSync(
+      process.execPath,
+      [
+        'scripts/trusted-dashboard-session.mjs',
+        '--account-id',
+        'test-account',
+        '--role',
+        'admin',
+        '--profile-file',
+        '.env.missing-for-test',
+      ],
+      { cwd: ROOT_DIR, env: { PATH: process.env.PATH, ...environment }, encoding: 'utf8' },
+    );
+    assert.equal(result.status, 1);
+    assert.ok(result.stderr.length > 0);
+    assert.ok(!`${result.stdout}${result.stderr}`.includes(sensitive));
+    assert.ok(!`${result.stdout}${result.stderr}`.includes('test-secret'));
+  }
+});
+
 test('trusted dashboard session helper fails closed without service-auth keys', () => {
   const result = spawnSync(
     process.execPath,

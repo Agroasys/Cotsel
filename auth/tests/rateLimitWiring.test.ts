@@ -41,6 +41,9 @@ function buildApp(): Promise<{ app: express.Express; close: () => Promise<void> 
     },
   };
   const adminController = {
+    async listAuthorityProfiles(_req: Request, res: Response) {
+      res.status(200).json({ success: true });
+    },
     async provision(_req: Request, res: Response) {
       res.status(200).json({ success: true });
     },
@@ -95,6 +98,19 @@ function buildApp(): Promise<{ app: express.Express; close: () => Promise<void> 
 }
 
 describe('auth rate-limit wiring', () => {
+  test('the globally mounted limiter protects the flagged admin profile read handler', async () => {
+    const { app, close } = await buildApp();
+    try {
+      await withServer(app, async (baseUrl) => {
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          expect((await request(baseUrl, '/api/auth/v1/admin/profiles')).status).toBe(200);
+        }
+        expect((await request(baseUrl, '/api/auth/v1/admin/profiles')).status).toBe(429);
+      });
+    } finally {
+      await close();
+    }
+  });
   test('session refresh uses the broader session throttle', async () => {
     const { app, close } = await buildApp();
 

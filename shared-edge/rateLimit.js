@@ -30,7 +30,11 @@ function normalizeRoutePath(pathname) {
     return pathname;
   }
 
-  const normalized = pathname.replace(/\/+$/, '');
+  let end = pathname.length;
+  while (end > 0 && pathname[end - 1] === '/') {
+    end -= 1;
+  }
+  const normalized = pathname.slice(0, end);
   return normalized.length === 0 ? '/' : normalized;
 }
 

@@ -25,6 +25,13 @@ test('AWS staging runs application services with production security semantics',
     /name = "GATEWAY_RATE_LIMIT_REDIS_URL", value = "rediss:\/\/\$\{local\.redis_primary_endpoint\}:6379"/,
   );
   assert.doesNotMatch(source, /name = "GATEWAY_RATE_LIMIT_ENABLED", value = "false"/);
+  assert.match(source, /name = "AUTH_RATE_LIMIT_ENABLED", value = "true"/);
+  assert.match(source, /name = "AUTH_RATE_LIMIT_FAIL_OPEN", value = "false"/);
+  assert.match(
+    source,
+    /name = "AUTH_RATE_LIMIT_REDIS_URL", value = "rediss:\/\/\$\{local\.redis_primary_endpoint\}:6379"/,
+  );
+  assert.doesNotMatch(source, /name = "AUTH_RATE_LIMIT_ENABLED", value = "false"/);
 });
 
 test('ECS publishes redacted reviewed configuration identities', async () => {
