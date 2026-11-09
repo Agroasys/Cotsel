@@ -1,11 +1,71 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import { releaseCandidateInventory } from '../lib/release-candidate-inventory.mjs';
 import { verifyImageSbomBinding } from '../verify-image-sbom-binding.mjs';
 
 const workflowPath = new URL('../../.github/workflows/release-images.yml', import.meta.url);
+const downloadConfig = fileURLToPath(new URL('../../.github/sbom-download/', import.meta.url));
+const execute = promisify(execFile);
+
+async function probeInstallerDownload(failures) {
+  const directory = await mkdtemp(join(tmpdir(), 'cotsel-sbom-retry-'));
+  const artifact = join(directory, 'artifact');
+  let requests = 0;
+  const server = createServer((_req, res) => {
+    requests += 1;
+    res.statusCode = requests <= failures ? 504 : 200;
+    res.end(res.statusCode === 200 ? 'release bytes' : 'gateway timeout');
+  });
+  try {
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address();
+    // Match the pinned Syft installer's curl invocation and final-status check.
+    const { stdout } = await execute(
+      'curl',
+      [
+        '--noproxy',
+        '127.0.0.1',
+        '-w',
+        '%{http_code}',
+        '-sL',
+        '-o',
+        artifact,
+        `http://127.0.0.1:${port}`,
+      ],
+      { env: { ...process.env, CURL_HOME: downloadConfig }, timeout: 20000 },
+    );
+    return { status: stdout.trim(), requests, bytes: await readFile(artifact, 'utf8') };
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+test('SBOM installer retries transient 504 responses without changing downloaded bytes', async () => {
+  const workflow = await readFile(workflowPath, 'utf8');
+  assert.match(workflow, /CURL_HOME: \$\{\{ github\.workspace \}\}\/\.github\/sbom-download/u);
+  assert.deepEqual(await probeInstallerDownload(2), {
+    status: '200',
+    requests: 3,
+    bytes: 'release bytes',
+  });
+});
+
+test('SBOM installer stops after three retries and preserves a persistent failure status', async () => {
+  assert.deepEqual(await probeInstallerDownload(Infinity), {
+    status: '504',
+    requests: 4,
+    bytes: 'gateway timeout',
+  });
+});
 
 const sbomBinding = () => {
   const sbom = { spdxVersion: 'SPDX-2.3', packages: [{ name: 'image-runtime', versionInfo: '1' }] };

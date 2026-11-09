@@ -276,6 +276,9 @@ jobs:
 
       - name: Generate SPDX image SBOM
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c
+        env:
+          # Retry transient installer downloads; persistent errors still fail the action.
+          CURL_HOME: ${{ github.workspace }}/.github/sbom-download
         with:
           syft-version: v1.54.1
           image: ${{ steps.identity.outputs.reference }}
