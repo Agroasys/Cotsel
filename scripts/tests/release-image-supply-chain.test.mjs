@@ -1,11 +1,94 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import { releaseCandidateInventory } from '../lib/release-candidate-inventory.mjs';
 import { verifyImageSbomBinding } from '../verify-image-sbom-binding.mjs';
 
 const workflowPath = new URL('../../.github/workflows/release-images.yml', import.meta.url);
+const downloadConfig = fileURLToPath(new URL('../../.github/sbom-download/', import.meta.url));
+const execute = promisify(execFile);
+
+async function probeInstallerDownload(failures) {
+  const directory = await mkdtemp(join(tmpdir(), 'cotsel-sbom-retry-'));
+  const artifact = join(directory, 'artifact');
+  let requests = 0;
+  const server = createServer((_req, res) => {
+    requests += 1;
+    res.statusCode = requests <= failures ? 504 : 200;
+    res.end(res.statusCode === 200 ? 'release bytes' : 'gateway timeout');
+  });
+  try {
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address();
+    // Match the pinned Syft installer's curl invocation and final-status check.
+    const { stdout } = await execute(
+      'curl',
+      [
+        '--noproxy',
+        '127.0.0.1',
+        '-w',
+        '%{http_code}',
+        '-sL',
+        '-o',
+        artifact,
+        `http://127.0.0.1:${port}`,
+      ],
+      { env: { ...process.env, CURL_HOME: downloadConfig }, timeout: 20000 },
+    );
+    return { status: stdout.trim(), requests, bytes: await readFile(artifact, 'utf8') };
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+test('SBOM installer retries transient 504 responses without changing downloaded bytes', async () => {
+  const workflow = await readFile(workflowPath, 'utf8');
+  assert.match(workflow, /CURL_HOME: \$\{\{ github\.workspace \}\}\/\.github\/sbom-download/u);
+  assert.deepEqual(await probeInstallerDownload(2), {
+    status: '200',
+    requests: 3,
+    bytes: 'release bytes',
+  });
+});
+
+test('SBOM installer stops after three retries and preserves a persistent failure status', async () => {
+  assert.deepEqual(await probeInstallerDownload(Infinity), {
+    status: '504',
+    requests: 4,
+    bytes: 'gateway timeout',
+  });
+});
+
+test('image jobs reuse only the pinned Syft tool prepared for the same run and source', async () => {
+  const workflow = await readFile(workflowPath, 'utf8');
+  const producer = workflow.slice(
+    workflow.indexOf('  registry-ready:'),
+    workflow.indexOf('\n  build:'),
+  );
+  const consumers = workflow.slice(workflow.indexOf('\n  build:'));
+  assert.match(
+    producer,
+    /anchore\/sbom-action\/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c/u,
+  );
+  assert.match(producer, /syft-version: v1\.54\.1/u);
+  assert.match(producer, /actions\/cache\/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9/u);
+  assert.match(consumers, /needs: registry-ready/u);
+  assert.match(consumers, /actions\/cache\/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9/u);
+  const keys = [...workflow.matchAll(/key: (syft-v1\.54\.1[^\n]+)/gu)].map((match) => match[1]);
+  assert.equal(keys.length, 2);
+  assert.equal(keys[0], keys[1]);
+  assert.match(keys[0], /\$\{\{ github\.run_id \}\}-\$\{\{ github\.sha \}\}$/u);
+  assert.match(consumers, /fail-on-cache-miss: true/u);
+  assert.doesNotMatch(workflow, /restore-keys:/u);
+});
 
 const sbomBinding = () => {
   const sbom = { spdxVersion: 'SPDX-2.3', packages: [{ name: 'image-runtime', versionInfo: '1' }] };
@@ -101,7 +184,7 @@ test('published images require provenance, an SBOM, and verified keyless signatu
 
   assert.match(workflow, /provenance: mode=max/);
   assert.match(workflow, /anchore\/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c/);
-  assert.match(workflow, /sigstore\/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6/);
+  assert.match(workflow, /sigstore\/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532/);
   assert.match(workflow, /cosign sign --yes "\$IMAGE_REFERENCE"/);
   assert.match(workflow, /cosign verify \\/);
   assert.match(workflow, /sbom-image-\$\{\{ matrix\.service \}\}\.spdx\.json/);
