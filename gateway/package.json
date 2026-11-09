@@ -37,7 +37,7 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "ajv": "^8.20.0",
     "express-rate-limit": "8.7.2",
