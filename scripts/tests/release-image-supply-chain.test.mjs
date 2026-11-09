@@ -67,6 +67,29 @@ test('SBOM installer stops after three retries and preserves a persistent failur
   });
 });
 
+test('image jobs reuse only the pinned Syft tool prepared for the same run and source', async () => {
+  const workflow = await readFile(workflowPath, 'utf8');
+  const producer = workflow.slice(
+    workflow.indexOf('  registry-ready:'),
+    workflow.indexOf('\n  build:'),
+  );
+  const consumers = workflow.slice(workflow.indexOf('\n  build:'));
+  assert.match(
+    producer,
+    /anchore\/sbom-action\/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c/u,
+  );
+  assert.match(producer, /syft-version: v1\.54\.1/u);
+  assert.match(producer, /actions\/cache\/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9/u);
+  assert.match(consumers, /needs: registry-ready/u);
+  assert.match(consumers, /actions\/cache\/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9/u);
+  const keys = [...workflow.matchAll(/key: (syft-v1\.54\.1[^\n]+)/gu)].map((match) => match[1]);
+  assert.equal(keys.length, 2);
+  assert.equal(keys[0], keys[1]);
+  assert.match(keys[0], /\$\{\{ github\.run_id \}\}-\$\{\{ github\.sha \}\}$/u);
+  assert.match(consumers, /fail-on-cache-miss: true/u);
+  assert.doesNotMatch(workflow, /restore-keys:/u);
+});
+
 const sbomBinding = () => {
   const sbom = { spdxVersion: 'SPDX-2.3', packages: [{ name: 'image-runtime', versionInfo: '1' }] };
   const sourceCommit = 'a'.repeat(40);
