@@ -1,0 +1,411 @@
+{
+  "schemaVersion": 1,
+  "description": "WP-8 settlement signals derived from existing structured service logs. Each signal turns a stable log field value into a dimensionless CloudWatch metric. Matchers may only use public_operational telemetry fields, so no identifier, address, or amount ever becomes a metric dimension. scripts/settlement-observability.test.mjs proves every matched literal still exists in the emitting service source.",
+  "namespace": "Cotsel/Settlement",
+  "signals": [
+    {
+      "id": "indexer_poison_log_quarantined",
+      "domain": "indexer",
+      "logGroup": "indexer-pipeline",
+      "sourceDirs": ["indexer/src"],
+      "conditions": [
+        {
+          "field": "msg",
+          "equals": [
+            "Quarantining unprojectable escrow log and holding the checkpoint",
+            "Failed to durably quarantine escrow log; halting anyway"
+          ]
+        }
+      ],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "An escrow log could not be projected; the checkpoint is held until an explicit replay."
+    },
+    {
+      "id": "indexer_startup_blocked",
+      "domain": "indexer",
+      "logGroup": "indexer-pipeline",
+      "sourceDirs": ["indexer/src"],
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["quarantine.startup_blocked", "indexer.bootstrap_failed"]
+        }
+      ],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "The indexer refused to start because of unresolved quarantine or a failed chain/ABI gate."
+    },
+    {
+      "id": "reconciliation_drift_critical",
+      "domain": "reconciliation",
+      "logGroup": "reconciliation",
+      "sourceDirs": ["reconciliation/src"],
+      "conditions": [
+        { "field": "message", "equals": ["Reconciliation drift detected"] },
+        { "field": "severity", "equals": ["CRITICAL"] }
+      ],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "A reconciliation run classified chain-versus-indexer drift as CRITICAL."
+    },
+    {
+      "id": "reconciliation_drift_detected",
+      "domain": "reconciliation",
+      "logGroup": "reconciliation",
+      "sourceDirs": ["reconciliation/src"],
+      "conditions": [{ "field": "message", "equals": ["Reconciliation drift detected"] }],
+      "description": "Every drift finding of any severity. Dashboard trend only; CRITICAL findings page separately."
+    },
+    {
+      "id": "reconciliation_coverage_gap",
+      "domain": "reconciliation",
+      "logGroup": "reconciliation",
+      "sourceDirs": ["reconciliation/src"],
+      "conditions": [
+        {
+          "field": "message",
+          "equals": [
+            "Holding the reconciliation cursor on an unresolved coverage gap",
+            "Indexer id enumeration reached its bound before completing",
+            "Reconciliation run inconclusive; publishing no drift and holding the cursor"
+          ]
+        }
+      ],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "Reconciliation could not prove complete chain coverage and is holding its cursor."
+    },
+    {
+      "id": "reconciliation_run_abandoned",
+      "domain": "reconciliation",
+      "logGroup": "reconciliation",
+      "sourceDirs": ["reconciliation/src"],
+      "conditions": [
+        {
+          "field": "message",
+          "equals": [
+            "Reconciliation run abandoned: its lease expired without a heartbeat",
+            "Reconciliation lease lost; the run will publish nothing",
+            "Could not sweep abandoned reconciliation runs"
+          ]
+        }
+      ],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "A reconciliation run lost or abandoned its lease; a successor must claim it."
+    },
+    {
+      "id": "reconciliation_containment_breach",
+      "domain": "reconciliation",
+      "logGroup": "reconciliation",
+      "sourceDirs": ["reconciliation/src"],
+      "conditions": [{ "field": "message", "equals": ["Contained trade is not paused on chain"] }],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "A trade under reconciliation containment is not paused on chain."
+    },
+    {
+      "id": "reconciliation_run_failed",
+      "domain": "reconciliation",
+      "logGroup": "reconciliation",
+      "sourceDirs": ["reconciliation/src"],
+      "conditions": [
+        { "field": "message", "equals": ["Reconciliation run failed", "Daemon run failed"] }
+      ],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "A reconciliation run or daemon cycle failed."
+    },
+    {
+      "id": "treasury_ingestion_runs",
+      "domain": "treasury",
+      "logGroup": "treasury",
+      "sourceDirs": ["treasury/src"],
+      "conditions": [{ "field": "metric", "equals": ["treasury_ingestion_runs_total"] }],
+      "alarm": {
+        "severity": "critical",
+        "kind": "heartbeat",
+        "service": "treasury",
+        "periodSeconds": 300,
+        "evaluationPeriods": 3
+      },
+      "description": "Every ingestion tick emits one record. Silence for 15 minutes means the worker stopped while health may still be green (FAIL-10)."
+    },
+    {
+      "id": "treasury_ingestion_blocked",
+      "domain": "treasury",
+      "logGroup": "treasury",
+      "sourceDirs": ["treasury/src"],
+      "conditions": [
+        { "field": "metric", "equals": ["treasury_ingestion_runs_total"] },
+        { "field": "outcome", "equals": ["FAILED", "BLOCKED"] }
+      ],
+      "alarm": { "severity": "high", "kind": "event", "threshold": 3, "periodSeconds": 900 },
+      "description": "Treasury ingestion ticks are failing or blocked."
+    },
+    {
+      "id": "treasury_ingestion_stale",
+      "domain": "treasury",
+      "logGroup": "treasury",
+      "sourceDirs": ["treasury/src"],
+      "conditions": [
+        { "field": "metric", "equals": ["treasury_ingestion_freshness"] },
+        { "field": "level", "equals": ["error"] }
+      ],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "Treasury chain evidence is stale or lagging past its threshold; export and close are blocked."
+    },
+    {
+      "id": "treasury_ingestion_age_seconds",
+      "domain": "treasury",
+      "logGroup": "treasury",
+      "sourceDirs": ["treasury/src"],
+      "conditions": [{ "field": "metric", "equals": ["treasury_ingestion_freshness"] }],
+      "valueField": "ageSeconds",
+      "unit": "Seconds",
+      "description": "Age of the newest ingested treasury chain evidence, against TREASURY_INGEST_MAX_AGE_SECONDS."
+    },
+    {
+      "id": "treasury_ingestion_lag_blocks",
+      "domain": "treasury",
+      "logGroup": "treasury",
+      "sourceDirs": ["treasury/src"],
+      "conditions": [{ "field": "metric", "equals": ["treasury_ingestion_freshness"] }],
+      "valueField": "lagBlocks",
+      "unit": "None",
+      "description": "Blocks between the finalized head and treasury ingestion, against TREASURY_INGEST_MAX_LAG_BLOCKS."
+    },
+    {
+      "id": "treasury_reorg_orphan",
+      "domain": "treasury",
+      "logGroup": "treasury",
+      "sourceDirs": ["treasury/src"],
+      "conditions": [
+        {
+          "field": "message",
+          "equals": [
+            "Treasury ledger entry orphaned by chain reorganization",
+            "Treasury ingestion stopped: canonical block hash is unavailable"
+          ]
+        }
+      ],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "A treasury ledger entry lost its canonical block, or canonical identity is unavailable."
+    },
+    {
+      "id": "gateway_transaction_outcome_unknown",
+      "domain": "transactions",
+      "logGroup": "gateway",
+      "sourceDirs": ["gateway/src"],
+      "conditions": [
+        {
+          "field": "message",
+          "equals": [
+            "Gasless transaction remains unresolved without rebroadcast",
+            "Provider-returned transaction hash requires independent investigation",
+            "Gasless transaction outcome reconciliation failed"
+          ]
+        }
+      ],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "A gasless financial transaction has an unknown or disputed outcome and must not be rebroadcast."
+    },
+    {
+      "id": "gateway_transaction_persistence_failed",
+      "domain": "transactions",
+      "logGroup": "gateway",
+      "sourceDirs": ["gateway/src"],
+      "conditions": [
+        {
+          "field": "message",
+          "equals": [
+            "Failed to persist gasless broadcast-unknown transition",
+            "Failed to persist gasless confirmation-pending transition",
+            "Failed to persist gasless provider hash mismatch",
+            "Failed to persist terminal gasless transaction outcome",
+            "Failed to project a durable gasless transaction outcome"
+          ]
+        }
+      ],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "The gateway could not durably record a gasless transaction state transition."
+    },
+    {
+      "id": "managed_signer_rejected",
+      "domain": "transactions",
+      "logGroup": "gateway",
+      "sourceDirs": ["gateway/src"],
+      "conditions": [
+        { "field": "message", "equals": ["Managed signer transaction rejected before broadcast"] }
+      ],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "The gateway managed signer response did not match canonical intent and was refused."
+    },
+    {
+      "id": "oracle_signer_rejected",
+      "domain": "transactions",
+      "logGroup": "oracle",
+      "sourceDirs": ["oracle/src"],
+      "conditions": [
+        { "field": "message", "equals": ["Managed signer transaction rejected before broadcast"] }
+      ],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "The Oracle managed signer response did not match canonical intent and was refused."
+    },
+    {
+      "id": "settlement_callback_stalled",
+      "domain": "transactions",
+      "logGroup": "gateway",
+      "sourceDirs": ["gateway/src"],
+      "conditions": [
+        {
+          "field": "message",
+          "equals": ["Settlement callback polling stalled", "Settlement callback polling failed"]
+        }
+      ],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "Durable settlement callback dispatch to Agroasys has stalled."
+    },
+    {
+      "id": "settlement_callback_delivery_failed",
+      "domain": "transactions",
+      "logGroup": "gateway",
+      "sourceDirs": ["gateway/src"],
+      "conditions": [{ "field": "message", "equals": ["Settlement callback delivery failed"] }],
+      "alarm": { "severity": "high", "kind": "event", "threshold": 3, "periodSeconds": 900 },
+      "description": "Settlement callback deliveries to Agroasys are failing and retrying."
+    },
+    {
+      "id": "oracle_execution_unresolved",
+      "domain": "oracle",
+      "logGroup": "oracle",
+      "sourceDirs": ["oracle/src"],
+      "conditions": [
+        {
+          "field": "message",
+          "equals": [
+            "Original Oracle execution remains unresolved",
+            "Oracle confirmation lacks attributable original dispatch evidence"
+          ]
+        }
+      ],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "An Oracle milestone execution has an unresolved or unattributable on-chain outcome."
+    },
+    {
+      "id": "oracle_containment_unreadable",
+      "domain": "oracle",
+      "logGroup": "oracle",
+      "sourceDirs": ["oracle/src"],
+      "conditions": [
+        {
+          "field": "message",
+          "equals": ["Containment guard could not be read; refusing to progress the trade"]
+        }
+      ],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "The Oracle could not read the containment guard and failed closed."
+    },
+    {
+      "id": "oracle_contained_trade_refused",
+      "domain": "oracle",
+      "logGroup": "oracle",
+      "sourceDirs": ["oracle/src"],
+      "conditions": [{ "field": "message", "equals": ["Refusing to progress a contained trade"] }],
+      "description": "The Oracle correctly refused a contained trade. Dashboard trend only."
+    },
+    {
+      "id": "oracle_exhausted_retries",
+      "domain": "oracle",
+      "logGroup": "oracle",
+      "sourceDirs": ["oracle/src"],
+      "conditions": [{ "field": "metric", "equals": ["oracle_exhausted_retries_total"] }],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "An Oracle trigger exhausted retries and needs an operator re-drive."
+    },
+    {
+      "id": "oracle_pending_approval",
+      "domain": "oracle",
+      "logGroup": "oracle",
+      "sourceDirs": ["oracle/src"],
+      "conditions": [{ "field": "metric", "equals": ["oracle_pending_approval_total"] }],
+      "description": "Oracle triggers entering maker-checker approval. Dashboard trend only."
+    },
+    {
+      "id": "oracle_approved",
+      "domain": "oracle",
+      "logGroup": "oracle",
+      "sourceDirs": ["oracle/src"],
+      "conditions": [{ "field": "metric", "equals": ["oracle_approved_total"] }],
+      "description": "Oracle triggers approved. Dashboard trend only."
+    },
+    {
+      "id": "oracle_rejected",
+      "domain": "oracle",
+      "logGroup": "oracle",
+      "sourceDirs": ["oracle/src"],
+      "conditions": [{ "field": "metric", "equals": ["oracle_rejected_total"] }],
+      "description": "Oracle triggers rejected. Dashboard trend only."
+    },
+    {
+      "id": "relayer_replay_rejected",
+      "domain": "transactions",
+      "logGroup": "relayer",
+      "sourceDirs": ["relayer/src"],
+      "conditions": [{ "field": "message", "equals": ["Relayer authentication replay rejected"] }],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "The gasless relayer rejected a replayed authenticated request."
+    },
+    {
+      "id": "relayer_request_failed",
+      "domain": "transactions",
+      "logGroup": "relayer",
+      "sourceDirs": ["relayer/src"],
+      "conditions": [{ "field": "message", "equals": ["Relayer request failed"] }],
+      "alarm": { "severity": "high", "kind": "event", "threshold": 3, "periodSeconds": 900 },
+      "description": "Relayer requests are failing."
+    },
+    {
+      "id": "gateway_errors",
+      "domain": "services",
+      "logGroup": "gateway",
+      "sourceDirs": ["gateway/src"],
+      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "description": "Gateway error-level records. Dashboard trend only."
+    },
+    {
+      "id": "oracle_errors",
+      "domain": "services",
+      "logGroup": "oracle",
+      "sourceDirs": ["oracle/src"],
+      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "description": "Oracle error-level records. Dashboard trend only."
+    },
+    {
+      "id": "reconciliation_errors",
+      "domain": "services",
+      "logGroup": "reconciliation",
+      "sourceDirs": ["reconciliation/src"],
+      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "description": "Reconciliation error-level records. Dashboard trend only."
+    },
+    {
+      "id": "treasury_errors",
+      "domain": "services",
+      "logGroup": "treasury",
+      "sourceDirs": ["treasury/src"],
+      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "description": "Treasury error-level records. Dashboard trend only."
+    },
+    {
+      "id": "auth_errors",
+      "domain": "services",
+      "logGroup": "auth",
+      "sourceDirs": ["auth/src"],
+      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "description": "Auth error-level records. Dashboard trend only."
+    },
+    {
+      "id": "ricardian_errors",
+      "domain": "services",
+      "logGroup": "ricardian",
+      "sourceDirs": ["ricardian/src"],
+      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "description": "Ricardian error-level records. Dashboard trend only."
+    }
+  ]
+}

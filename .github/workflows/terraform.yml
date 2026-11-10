@@ -140,7 +140,7 @@ jobs:
           node infra/terraform/scripts/staging-foundation-selftest.mjs
 
       - name: Test saved-plan metadata and demo alerts
-        run: node infra/terraform/scripts/plan-metadata-selftest.mjs && node --test infra/terraform/scripts/gasless-execution-policy.test.mjs infra/terraform/scripts/demo-indexer-alerts.test.mjs infra/terraform/scripts/database-bootstrap-users.test.mjs infra/terraform/scripts/database-entitlement-scope.test.mjs
+        run: node infra/terraform/scripts/plan-metadata-selftest.mjs && node --test infra/terraform/scripts/gasless-execution-policy.test.mjs infra/terraform/scripts/demo-indexer-alerts.test.mjs infra/terraform/scripts/database-bootstrap-users.test.mjs infra/terraform/scripts/database-entitlement-scope.test.mjs infra/terraform/scripts/settlement-observability.test.mjs
       - name: Test accepted and demo Base Sepolia selection validation
         run: node --test scripts/tests/base-sepolia-staging-contract.test.mjs scripts/tests/base-sepolia-demo-selection.test.mjs
 
@@ -279,7 +279,7 @@ jobs:
         run: node infra/terraform/scripts/check-destructive-changes.mjs < "infra/terraform/$ROOT/plan.json"
 
       - name: Test saved-plan metadata and demo alerts
-        run: node infra/terraform/scripts/plan-metadata-selftest.mjs && node --test infra/terraform/scripts/gasless-execution-policy.test.mjs infra/terraform/scripts/demo-indexer-alerts.test.mjs infra/terraform/scripts/database-bootstrap-users.test.mjs infra/terraform/scripts/database-entitlement-scope.test.mjs
+        run: node infra/terraform/scripts/plan-metadata-selftest.mjs && node --test infra/terraform/scripts/gasless-execution-policy.test.mjs infra/terraform/scripts/demo-indexer-alerts.test.mjs infra/terraform/scripts/database-bootstrap-users.test.mjs infra/terraform/scripts/database-entitlement-scope.test.mjs infra/terraform/scripts/settlement-observability.test.mjs
 
       - name: Remove rendered plan JSON
         if: always()
