@@ -147,7 +147,7 @@
         { "field": "level", "equals": ["error"] }
       ],
       "alarm": { "severity": "critical", "kind": "event" },
-      "description": "Treasury chain evidence is stale or lagging past its threshold; export and close are blocked."
+      "description": "Treasury chain evidence is stale or lagging past its threshold, sampled on every ingestion worker tick and on each export; export and close are blocked."
     },
     {
       "id": "treasury_ingestion_age_seconds",

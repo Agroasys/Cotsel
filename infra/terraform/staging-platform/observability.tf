@@ -91,7 +91,10 @@ locals {
     "slow-short" = { period = 1800, burn_rate = 6 }
   }
 
-  gateway_error_ratio_expression = "IF(requests > 0, (FILL(target_5xx, 0) + FILL(edge_5xx, 0)) / requests, 0)"
+  # ALB RequestCount excludes requests the load balancer answered itself, such as 503s
+  # with no healthy target, so load-balancer 5xx are added to the denominator. Otherwise a
+  # full gateway outage drives RequestCount to zero and neither burn alarm fires.
+  gateway_error_ratio_expression = "IF((FILL(requests, 0) + FILL(edge_5xx, 0)) > 0, (FILL(target_5xx, 0) + FILL(edge_5xx, 0)) / (FILL(requests, 0) + FILL(edge_5xx, 0)), 0)"
 
   gateway_readiness_probe_enabled = var.gateway_desired_count > 0
 }

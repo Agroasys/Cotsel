@@ -72,13 +72,18 @@ All three lists default to empty. Alarms still evaluate and show on the
 dashboard, but **no one is paged until the Operations Lead names subscribed,
 confirmed destinations (#672).** The `settlement_observability` output reports
 `critical_alarms_routed` and `high_alarms_routed`, so an unrouted deployment is
-visible in every plan. An unrouted deployment does not satisfy E-5 or P-4.
+visible in every plan. `edge_alarms_routed` does the same for the readiness
+probe, which routes only through `edge_alarm_topic_arns`. An unrouted deployment
+does not satisfy E-5 or P-4.
 
 ## Gateway SLO
 
 Objective: `gateway_availability_slo_percent` (default 99.9% monthly, decision
 #199). The error ratio is ALB target 5xx plus load-balancer 5xx, divided by ALB
-requests.
+requests plus load-balancer 5xx. ALB `RequestCount` leaves out requests the load
+balancer answered itself, such as 503s with no healthy target. Without the
+load-balancer 5xx in the denominator, a full outage would read as zero requests
+and neither burn alarm would fire.
 
 | Alarm                   | Rule                                                                    | Severity |
 | ----------------------- | ----------------------------------------------------------------------- | -------- |
@@ -89,6 +94,14 @@ requests.
 A 14.4x burn spends 2% of a 30-day budget in one hour. The short window clears
 the alarm quickly once the fault stops. The four component alarms
 (`cotsel-staging-gateway-slo-burn-*`) route nowhere on their own.
+
+The readiness probe goes through the same load balancer, so its requests count
+toward the SLO. On staging, where real traffic is thin, the probe can be most of
+the traffic. A readiness `503` that lasts five minutes then raises
+`gateway_slo_fast_burn` (CRITICAL) as well as `gateway_readiness_probe` (HIGH).
+This is intended: a failing `/readyz` means the gateway has failed closed and
+refuses financial operations, which is a real outage for users. Treat the two
+alarms as one incident and work it from the CRITICAL row.
 
 ## Alarm responses
 
@@ -113,7 +126,7 @@ failing record. Capture the evidence listed in
 | `reconciliation_run_failed`              | HIGH     | Read the failing run's error and confirm the next daemon cycle succeeds                                       | `reconciliation.md`                        |
 | `treasury_ingestion_runs`                | CRITICAL | Ingestion has emitted nothing for 15 minutes. Export and close are blocked; restore the worker, then backfill | `treasury-ingestion-freshness.md`          |
 | `treasury_ingestion_blocked`             | HIGH     | Read the run outcome; repair the RPC or canonical-evidence dependency                                         | `treasury-ingestion-freshness.md`          |
-| `treasury_ingestion_stale`               | CRITICAL | Evidence is stale and export and close are blocked. Repair ingestion before any close                         | `treasury-ingestion-freshness.md`          |
+| `treasury_ingestion_stale`               | CRITICAL | Evidence is stale or lagging; export and close will block. Repair ingestion before any close                  | `treasury-ingestion-freshness.md`          |
 | `treasury_reorg_orphan`                  | CRITICAL | Hold export for the affected period and re-derive canonical evidence                                          | `treasury-canonical-chain-evidence.md`     |
 | `gateway_transaction_outcome_unknown`    | CRITICAL | Do not rebroadcast. Resolve the outcome by hash                                                               | `gasless-transaction-outcome-recovery.md`  |
 | `gateway_transaction_persistence_failed` | CRITICAL | Check gateway database health; the transition must be recovered before new gasless work                       | `gasless-transaction-outcome-recovery.md`  |

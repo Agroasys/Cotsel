@@ -12,6 +12,12 @@ jest.mock('../src/database/queries/ingestion', () => ({
   recordIngestionRun: mockRecordIngestionRun,
 }));
 
+const mockRecordIngestionFreshness = jest.fn();
+jest.mock('../src/metrics/counters', () => ({
+  ...jest.requireActual('../src/metrics/counters'),
+  recordIngestionFreshness: mockRecordIngestionFreshness,
+}));
+
 jest.mock('../src/database/connection', () => ({
   pool: { connect: jest.fn(), query: jest.fn() },
 }));
@@ -27,6 +33,7 @@ process.env.INDEXER_GRAPHQL_URL =
 
 import { TreasuryIngestionWorker } from '../src/core/ingestionWorker';
 import type { TreasuryIngestionResult } from '../src/core/ingestion';
+import type { IngestionFreshnessAssessment } from '../src/core/ingestionFreshness';
 
 const WORKER_IDENTITY = 'treasury-test:1';
 
@@ -69,9 +76,21 @@ function createPool(options?: { acquired?: boolean }) {
   };
 }
 
+function staleAssessment(): IngestionFreshnessAssessment {
+  return {
+    status: 'STALE',
+    ageSeconds: 1200,
+    maxAgeSeconds: 900,
+    lagBlocks: 40,
+    maxLagBlocks: 100,
+    consecutiveFailureCount: 3,
+  } as IngestionFreshnessAssessment;
+}
+
 function makeWorker(
   ingestOnce: () => Promise<TreasuryIngestionResult>,
   poolOptions?: { acquired?: boolean },
+  assess: jest.Mock = jest.fn(async () => staleAssessment()),
 ) {
   const harness = createPool(poolOptions);
   const worker = new TreasuryIngestionWorker({
@@ -79,9 +98,10 @@ function makeWorker(
     pool: harness.pool,
     intervalMs: 1000,
     workerIdentity: WORKER_IDENTITY,
+    freshness: { assess },
   });
 
-  return { worker, ...harness };
+  return { worker, assess, ...harness };
 }
 
 /**
@@ -295,5 +315,42 @@ describe('TreasuryIngestionWorker', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(ingestOnce.mock.calls.length).toBe(callsAfterStop);
+  });
+
+  /**
+   * WP-8: the freshness sample must not depend on an export running. Each tick
+   * records it, against the head the run read, so the alarm and the dashboard
+   * see staleness while it develops.
+   */
+  it('samples ingestion freshness on every scheduled tick', async () => {
+    const { worker, assess } = makeWorker(async () => completedResult());
+
+    worker.start();
+    await worker.stop();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(assess).toHaveBeenCalledWith({ stableBlockNumber: 1000 });
+    expect(mockRecordIngestionFreshness).toHaveBeenCalledWith({
+      status: 'STALE',
+      ageSeconds: 1200,
+      maxAgeSeconds: 900,
+      lagBlocks: 40,
+      maxLagBlocks: 100,
+      consecutiveFailureCount: 3,
+    });
+  });
+
+  it('keeps the loop alive when freshness cannot be sampled', async () => {
+    const assess = jest.fn(async () => {
+      throw new Error('cursor store unreachable');
+    });
+    const { worker } = makeWorker(async () => completedResult(), undefined, assess);
+
+    worker.start();
+    await worker.stop();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(assess).toHaveBeenCalledTimes(1);
+    expect(mockRecordIngestionFreshness).not.toHaveBeenCalled();
   });
 });

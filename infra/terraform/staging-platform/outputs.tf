@@ -206,6 +206,7 @@ output "settlement_observability" {
     readiness_health_check = try(aws_route53_health_check.gateway_readiness[0].id, null)
     critical_alarms_routed = length(var.critical_alarm_topic_arns) > 0
     high_alarms_routed     = length(var.high_alarm_topic_arns) > 0
+    edge_alarms_routed     = length(var.edge_alarm_topic_arns) > 0
 
     alarm_names = sort(concat(
       [for alarm in aws_cloudwatch_metric_alarm.settlement_event : alarm.alarm_name],
