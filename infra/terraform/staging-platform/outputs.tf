@@ -196,3 +196,28 @@ output "relayer_reviewed_config_sha256" {
   description = "Digest of the relayer environment, secret references, and dedicated task role."
   value       = local.relayer_reviewed_config_sha256
 }
+
+output "settlement_observability" {
+  description = "WP-8 settlement dashboard, saved correlation query, and alarm names for evidence capture."
+  value = {
+    dashboard_name         = aws_cloudwatch_dashboard.settlement.dashboard_name
+    metric_namespace       = local.observability_namespace
+    correlation_query_name = aws_cloudwatch_query_definition.correlation_trace.name
+    readiness_health_check = try(aws_route53_health_check.gateway_readiness[0].id, null)
+    critical_alarms_routed = length(var.critical_alarm_topic_arns) > 0
+    high_alarms_routed     = length(var.high_alarm_topic_arns) > 0
+    edge_alarms_routed     = length(var.edge_alarm_topic_arns) > 0
+
+    alarm_names = sort(concat(
+      [for alarm in aws_cloudwatch_metric_alarm.settlement_event : alarm.alarm_name],
+      [for alarm in aws_cloudwatch_metric_alarm.settlement_heartbeat : alarm.alarm_name],
+      [for alarm in aws_cloudwatch_metric_alarm.service_running_tasks : alarm.alarm_name],
+      [for alarm in aws_cloudwatch_metric_alarm.gateway_readiness_probe : alarm.alarm_name],
+      [
+        aws_cloudwatch_composite_alarm.gateway_slo_fast_burn.alarm_name,
+        aws_cloudwatch_composite_alarm.gateway_slo_slow_burn.alarm_name,
+        aws_cloudwatch_metric_alarm.gateway_latency_p99.alarm_name,
+      ],
+    ))
+  }
+}

@@ -30,13 +30,15 @@ import {
   type IngestionRunOutcome,
   type IngestionRunTriggerSource,
 } from '../database/queries/ingestion';
-import { recordIngestionRunOutcome } from '../metrics/counters';
+import { recordIngestionFreshness, recordIngestionRunOutcome } from '../metrics/counters';
 import { Logger } from '../utils/logger';
 import {
   INGESTION_CURSORS,
   TreasuryIngestionService,
   type TreasuryIngestionResult,
 } from './ingestion';
+import { TreasuryIngestionFreshnessService } from './ingestionFreshness';
+import type { IngestionFreshnessReader } from './exportEligibilityContext';
 
 const INGESTION_LOCK_NAMESPACE = 91401;
 const INGESTION_LOCK_KEY = 'treasury:ingestion';
@@ -63,6 +65,7 @@ export class TreasuryIngestionWorker {
   private readonly pool: PoolLike;
   private readonly intervalMs: number;
   private readonly workerIdentity: string;
+  private readonly freshness: IngestionFreshnessReader;
   private timer: NodeJS.Timeout | null = null;
   private inFlight: Promise<IngestionWorkerRun> | null = null;
   private stopped = false;
@@ -72,11 +75,13 @@ export class TreasuryIngestionWorker {
     pool?: PoolLike;
     intervalMs?: number;
     workerIdentity?: string;
+    freshness?: IngestionFreshnessReader;
   }) {
     this.ingestion = deps?.ingestion ?? new TreasuryIngestionService();
     this.pool = deps?.pool ?? pool;
     this.intervalMs = deps?.intervalMs ?? config.ingestionIntervalMs;
     this.workerIdentity = deps?.workerIdentity ?? resolveWorkerIdentity();
+    this.freshness = deps?.freshness ?? new TreasuryIngestionFreshnessService();
   }
 
   /**
@@ -113,14 +118,18 @@ export class TreasuryIngestionWorker {
       return;
     }
 
+    let stableBlockNumber: number | null = null;
     try {
-      await this.runOnce('WORKER');
+      const run = await this.runOnce('WORKER');
+      stableBlockNumber = run.result?.stableBlockNumber ?? null;
     } catch (error: unknown) {
       // runOnce already records and logs; this only keeps the loop alive.
       Logger.error('Treasury ingestion tick failed', {
         error: error instanceof Error ? error.message : error,
       });
     }
+
+    await this.recordFreshness(stableBlockNumber);
 
     if (this.stopped) {
       return;
@@ -132,6 +141,30 @@ export class TreasuryIngestionWorker {
     // The HTTP server owns the process lifetime. An ingestion timer that also
     // held it open would keep a shutting-down pod alive for a whole interval.
     this.timer.unref?.();
+  }
+
+  /**
+   * Every tick samples freshness, whatever the run's outcome and on every
+   * replica. Export records the same sample, but only when an export runs and
+   * has entries; sampling it here makes staleness visible as it develops,
+   * rather than when someone first tries to export against stale evidence.
+   */
+  private async recordFreshness(stableBlockNumber: number | null): Promise<void> {
+    try {
+      const ingestion = await this.freshness.assess({ stableBlockNumber });
+      recordIngestionFreshness({
+        status: ingestion.status,
+        ageSeconds: ingestion.ageSeconds,
+        maxAgeSeconds: ingestion.maxAgeSeconds,
+        lagBlocks: ingestion.lagBlocks,
+        maxLagBlocks: ingestion.maxLagBlocks,
+        consecutiveFailureCount: ingestion.consecutiveFailureCount,
+      });
+    } catch (error: unknown) {
+      Logger.error('Treasury ingestion freshness could not be sampled', {
+        error: error instanceof Error ? error.message : error,
+      });
+    }
   }
 
   async runOnce(triggerSource: IngestionRunTriggerSource): Promise<IngestionWorkerRun> {

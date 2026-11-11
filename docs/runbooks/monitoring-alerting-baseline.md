@@ -82,6 +82,10 @@ Pilot defaults approved in decision issue `#199`.
 | `auth_rate_limit_fail_closed`          | auth           | `auth.rate_limiter_fail_closed` security event emitted                    | HIGH     | auth structured logs                                             | Verify Redis availability and blocked protected path          | Ops/Engineering On-Call               | `scripts/cotsel.sh logs auth`                                                                                                                                                                                                                                                                                                                                                |
 | `auth_or_gateway_rate_limit_fail_open` | auth           | `auth.rate_limiter_fail_open` or `gateway.rate_limiter_fail_open` emitted | CRITICAL | auth/gateway structured logs                                     | Confirm fail-open was explicitly configured and restore Redis | Incident Commander                    | `scripts/cotsel.sh logs auth && scripts/cotsel.sh logs gateway`                                                                                                                                                                                                                                                                                                              |
 
+## Deployed Staging Alarms
+
+The AWS staging platform deploys these signals as CloudWatch alarms, a settlement dashboard, gateway SLO burn-rate alarms, and an external readiness probe. See `docs/runbooks/settlement-observability.md` for the alarm catalog, routing inputs, and responses.
+
 ## Severity Routing and Escalation Policy
 
 Approved pilot routing from decision issue `#199`:
