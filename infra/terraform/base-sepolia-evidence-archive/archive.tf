@@ -396,8 +396,8 @@ resource "aws_cloudtrail" "evidence" {
     }
 
     field_selector {
-      field  = "eventSource"
-      equals = ["kms.amazonaws.com", "s3.amazonaws.com"]
+      field      = "eventSource"
+      not_equals = ["rdsdata.amazonaws.com"]
     }
   }
 
