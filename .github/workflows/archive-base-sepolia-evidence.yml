@@ -322,12 +322,16 @@ jobs:
           for attempt in $(seq 1 30); do
             aws logs filter-log-events --log-group-name "$AUDIT_LOG_GROUP" \
               --start-time "$START_MS" --filter-pattern '"AccessDenied"' > "$EVENTS_FILE"
-            if jq -e --arg role "$WRITER_ROLE_ARN" '
+            if jq -e --arg role "$WRITER_ROLE_ARN" \
+              --arg bucket "$ARCHIVE_BUCKET" --arg key "$OBJECT_KEY" \
+              --arg version "$OBJECT_VERSION_ID" '
               [.events[].message | fromjson |
                 select(.userIdentity.sessionContext.sessionIssuer.arn == $role) |
-                select(.errorCode | test("AccessDenied")) |
+                select(.requestParameters.bucketName == $bucket and
+                  .requestParameters.key == $key and .requestParameters.versionId == $version) |
+                select((.errorCode // "") | test("AccessDenied")) |
                 .eventName] as $names |
-              (["GetObject", "DeleteObject", "PutObjectRetention", "PutObjectLegalHold"] - $names | length) == 0
+              (["GetObject", "DeleteObject", "PutObjectLockRetention", "PutObjectLockLegalHold"] - $names | length) == 0
             ' "$EVENTS_FILE" >/dev/null; then
               FOUND=true
               break
