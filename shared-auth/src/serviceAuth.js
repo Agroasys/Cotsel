@@ -54,8 +54,21 @@ function forbidden(res, message, onAuthFailure) {
   authError(res, 403, 'AUTH_FORBIDDEN', message, onAuthFailure);
 }
 
-function unavailable(res, onAuthFailure) {
-  authError(res, 503, 'AUTH_UNAVAILABLE', 'Authentication service unavailable', onAuthFailure);
+function unavailable(req, res, error, options, onAuthFailure) {
+  const incoming = firstHeader(req, ['x-correlation-id', 'x-request-id']);
+  const correlationId =
+    incoming && /^[A-Za-z0-9._:-]{8,128}$/.test(incoming) ? incoming : crypto.randomUUID();
+  if (typeof options.onNonceStoreError === 'function') {
+    options.onNonceStoreError(correlationId, error);
+  }
+  onAuthFailure('AUTH_UNAVAILABLE');
+  if (typeof res.setHeader === 'function') res.setHeader('x-correlation-id', correlationId);
+  res.status(503).json({
+    success: false,
+    code: 'AUTH_UNAVAILABLE',
+    error: 'Authentication service unavailable',
+    correlationId,
+  });
 }
 
 function requestPathAndQuery(req) {
@@ -299,8 +312,8 @@ function createServiceAuthMiddleware(options) {
         unauthorized(res, 'AUTH_NONCE_REPLAY', 'Replay detected for nonce', onAuthFailure);
         return;
       }
-    } catch {
-      unavailable(res, onAuthFailure);
+    } catch (error) {
+      unavailable(req, res, error, options, onAuthFailure);
       return;
     }
 

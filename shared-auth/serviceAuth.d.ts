@@ -23,6 +23,8 @@ export interface ServiceAuthMiddlewareOptions {
   consumeNonce: (apiKey: string, nonce: string, ttlSeconds: number) => Promise<boolean>;
   onAuthFailure?: (reason: string) => void;
   onReplayReject?: () => void;
+  /** Record sanitized diagnostics under the ID returned for nonce-store outages. */
+  onNonceStoreError?: (correlationId: string, error: unknown) => void;
 }
 
 export interface CanonicalRequestParts {

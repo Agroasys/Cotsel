@@ -60,3 +60,13 @@ export function sendInternalFailure(
   error: unknown,
   options: InternalFailureOptions,
 ): string;
+
+/** Install after all parsers, authentication middleware and routes. */
+export function createInternalErrorHandler(
+  options: InternalFailureOptions,
+): (
+  error: unknown,
+  req: CorrelatedRequest,
+  res: InternalFailureResponse & { headersSent?: boolean },
+  next: (error: unknown) => void,
+) => void;

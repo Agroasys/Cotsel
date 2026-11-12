@@ -23,6 +23,9 @@ export function generateIdempotencyKey(actionKey: string): string {
 // so a JSON string and the Buffer it was sent as produce the same digest.
 export type RequestBodyBytes = string | Buffer;
 
+/** A caller-safe refusal created only by request signature verification. */
+export class RequestSignatureError extends Error {}
+
 export function generateRequestHash(
   timestamp: string,
   body: RequestBodyBytes,
@@ -59,22 +62,24 @@ export function verifyRequestSignature(
   secret: string,
   maxAgeMinutes: number = 5,
 ): boolean {
-  const requestTime = new Date(parseInt(timestamp));
-  const now = new Date();
-  const ageMinutes = (now.getTime() - requestTime.getTime()) / (1000 * 60);
+  const requestTime = Number(timestamp);
+  if (!/^\d+$/.test(timestamp) || !Number.isSafeInteger(requestTime) || requestTime <= 0) {
+    throw new RequestSignatureError('Invalid request timestamp');
+  }
+  const ageMinutes = (Date.now() - requestTime) / (1000 * 60);
 
   if (ageMinutes > maxAgeMinutes) {
-    throw new Error(`Request timestamp too old: ${ageMinutes.toFixed(1)} minutes`);
+    throw new RequestSignatureError(`Request timestamp too old: ${ageMinutes.toFixed(1)} minutes`);
   }
 
   if (ageMinutes < -1) {
-    throw new Error('Request timestamp is in the future');
+    throw new RequestSignatureError('Request timestamp is in the future');
   }
 
   const expectedHash = generateRequestHash(timestamp, body, secret);
 
-  if (signature.length !== expectedHash.length) {
-    throw new Error('Invalid HMAC signature');
+  if (!/^[a-fA-F0-9]{64}$/.test(signature)) {
+    throw new RequestSignatureError('Invalid HMAC signature');
   }
 
   const isValid = crypto.timingSafeEqual(
@@ -83,7 +88,7 @@ export function verifyRequestSignature(
   );
 
   if (!isValid) {
-    throw new Error('Invalid HMAC signature');
+    throw new RequestSignatureError('Invalid HMAC signature');
   }
 
   Logger.info('Request signature verified', {

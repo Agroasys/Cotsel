@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { createCorsOptions } from '@agroasys/shared-edge';
+import { createInternalErrorHandler } from '@agroasys/shared-http';
 import { config } from './config';
 import { RicardianController } from './api/controller';
 import { createRouter } from './api/routes';
@@ -84,6 +85,13 @@ async function bootstrap(): Promise<void> {
       authMiddleware,
       rateLimitMiddleware: rateLimiter.middleware,
       readinessCheck: testConnection,
+    }),
+  );
+
+  app.use(
+    createInternalErrorHandler({
+      log: (correlationId, error) =>
+        Logger.error('Unhandled request failure', { correlationId, error }),
     }),
   );
 

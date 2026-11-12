@@ -12,6 +12,10 @@ const {
 
 function createResponseRecorder() {
   return {
+    headers: {},
+    setHeader(name, value) {
+      this.headers[name] = value;
+    },
     statusCode: 200,
     body: undefined,
     status(code) {
@@ -24,6 +28,57 @@ function createResponseRecorder() {
     },
   };
 }
+
+test('nonce storage failures keep the auth envelope and carry a logged correlation ID', async () => {
+  const timestamp = '1700000000';
+  const nonce = 'nonce-error-fixture';
+  const secret = 'fixture-secret';
+  const signature = signServiceAuthCanonicalString(
+    secret,
+    buildServiceAuthCanonicalString({
+      method: 'POST',
+      path: '/internal/settlement',
+      query: 'mode=test',
+      bodySha256: '4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93',
+      timestamp,
+      nonce,
+    }),
+  );
+  const error = new Error('database at https://db.invalid/fixture-secret');
+  const logged = [];
+  const middleware = createServiceAuthMiddleware({
+    enabled: true,
+    maxSkewSeconds: 30,
+    nonceTtlSeconds: 60,
+    nowSeconds: () => Number(timestamp),
+    lookupApiKey: () => ({ id: 'gateway', secret, active: true }),
+    consumeNonce: async () => {
+      throw error;
+    },
+    onNonceStoreError: (correlationId, cause) => logged.push({ correlationId, cause }),
+  });
+  const req = createRequest({
+    headers: {
+      'x-api-key': 'gateway',
+      'x-agroasys-timestamp': timestamp,
+      'x-agroasys-nonce': nonce,
+      'x-agroasys-signature': signature,
+      'x-correlation-id': 'nonce-error-fixture',
+    },
+  });
+  const res = createResponseRecorder();
+  await middleware(req, res, () => assert.fail('must not authenticate'));
+  assert.equal(res.statusCode, 503);
+  assert.deepEqual(res.body, {
+    success: false,
+    code: 'AUTH_UNAVAILABLE',
+    error: 'Authentication service unavailable',
+    correlationId: 'nonce-error-fixture',
+  });
+  assert.equal(res.headers['x-correlation-id'], 'nonce-error-fixture');
+  assert.deepEqual(logged, [{ correlationId: 'nonce-error-fixture', cause: error }]);
+  assert.equal(JSON.stringify(res.body).includes('fixture-secret'), false);
+});
 
 function createRequest(overrides = {}) {
   const headers = new Map();

@@ -9,6 +9,7 @@ const {
   correlationIdFor,
   isCallerSafeError,
   sendInternalFailure,
+  createInternalErrorHandler,
 } = require('./index');
 
 function recordingResponse() {
@@ -28,6 +29,21 @@ function recordingResponse() {
     },
   };
 }
+
+test('the final error boundary delegates an already-started response without writing', () => {
+  const res = recordingResponse();
+  res.headersSent = true;
+  const error = new Error('stream failed');
+  const forwarded = [];
+  createInternalErrorHandler({ log: () => assert.fail('must not write another response') })(
+    error,
+    { headers: {} },
+    res,
+    (cause) => forwarded.push(cause),
+  );
+  assert.deepEqual(forwarded, [error]);
+  assert.deepEqual(res.recorded, { headers: {} });
+});
 
 test('correlationIdFor reuses a well-formed inbound header', () => {
   assert.equal(

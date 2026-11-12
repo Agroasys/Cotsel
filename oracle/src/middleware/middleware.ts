@@ -8,6 +8,7 @@ import {
   deriveRequestNonce,
   hashSignature,
   RequestBodyBytes,
+  RequestSignatureError,
   verifyRequestSignature,
 } from '../utils/crypto';
 
@@ -38,7 +39,7 @@ function declaresNoBody(req: Request): boolean {
 }
 
 function isInvalidSignatureError(error: unknown): boolean {
-  return error instanceof Error && error.message === 'Invalid HMAC signature';
+  return error instanceof RequestSignatureError && error.message === 'Invalid HMAC signature';
 }
 
 // Verifies the signature over the received bytes and returns the body form
@@ -154,24 +155,26 @@ export async function hmacMiddleware(
 
     next();
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const isTimestampOrSignatureError =
-      errorMessage.includes('Request timestamp') || errorMessage.includes('Invalid HMAC signature');
-
-    if (!isTimestampOrSignatureError) {
-      Logger.error('HMAC nonce persistence failed', {
-        error: errorMessage,
-        ip: req.ip,
+    if (!(error instanceof RequestSignatureError)) {
+      sendInternalFailure(req, res, error, {
+        statusCode: 503,
+        code: 'ServiceUnavailable',
+        message: 'Authentication nonce store unavailable',
+        log: (correlationId, cause) =>
+          Logger.error('HMAC nonce persistence failed', {
+            correlationId,
+            error: cause instanceof Error ? cause.message : String(cause),
+            ip: req.ip,
+          }),
       });
-      res.status(503).json(failure('ServiceUnavailable', 'Authentication nonce store unavailable'));
       return;
     }
 
     Logger.warn('HMAC verification failed', {
-      error: errorMessage,
+      error: error.message,
       ip: req.ip,
     });
-    res.status(401).json(failure('Unauthorized', errorMessage));
+    res.status(401).json(failure('Unauthorized', error.message));
   }
 }
 

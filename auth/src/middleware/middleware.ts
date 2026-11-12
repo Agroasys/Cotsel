@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Request, Response, NextFunction } from 'express';
-import { failure } from '@agroasys/shared-http';
+import { failure, sendInternalFailure } from '@agroasys/shared-http';
 import { ApiErrorResponse, UserSession } from '../types';
 import { Logger } from '../utils/logger';
 
@@ -30,10 +30,19 @@ export function createSessionMiddleware(resolve: ResolveFn) {
       return;
     }
 
-    const session = await resolve(sessionId).catch((err: unknown) => {
-      Logger.error('Session resolution error', err);
-      return null;
-    });
+    let session: UserSession | null;
+    try {
+      session = await resolve(sessionId);
+    } catch (error: unknown) {
+      sendInternalFailure(req, res, error, {
+        statusCode: 503,
+        code: 'ServiceUnavailable',
+        message: 'Session service unavailable',
+        log: (correlationId, cause) =>
+          Logger.error('Session resolution error', { correlationId, error: cause }),
+      });
+      return;
+    }
 
     if (!session) {
       Logger.warn('Invalid or expired session', { ip: req.ip });
@@ -61,10 +70,12 @@ export function requireRole(...roles: string[]) {
 
 export function errorHandler(
   err: Error,
-  _req: Request,
+  req: Request,
   res: Response<ApiErrorResponse>,
   _next: NextFunction,
 ): void {
-  Logger.error('Unhandled error', err);
-  res.status(500).json(failure('InternalServerError', 'An unexpected error occurred'));
+  sendInternalFailure(req, res, err, {
+    code: 'InternalServerError',
+    log: (correlationId, cause) => Logger.error('Unhandled error', { correlationId, error: cause }),
+  });
 }

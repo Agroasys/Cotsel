@@ -10,6 +10,7 @@ import {
   type ServiceAuthMiddlewareOptions,
 } from '@agroasys/shared-auth/serviceAuth';
 import crypto from 'crypto';
+import { Logger } from '../logging/logger';
 
 export {
   parseServiceApiKeys,
@@ -65,7 +66,11 @@ export function createServiceAuthHeaders(input: {
 }
 
 export function createServiceAuthMiddleware(options: ServiceAuthMiddlewareOptions) {
-  return createSharedServiceAuthMiddleware(options);
+  return createSharedServiceAuthMiddleware({
+    ...options,
+    onNonceStoreError: (correlationId, error) =>
+      Logger.error('Authentication nonce store unavailable', { correlationId, error }),
+  });
 }
 
 export function createServiceApiKeyLookup(

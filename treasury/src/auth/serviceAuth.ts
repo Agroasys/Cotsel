@@ -8,6 +8,7 @@ import {
   type ServiceAuthMiddlewareOptions,
 } from '@agroasys/shared-auth/serviceAuth';
 import { incrementAuthFailure, incrementReplayReject } from '../metrics/counters';
+import { Logger } from '../utils/logger';
 
 export {
   buildServiceAuthCanonicalString,
@@ -23,5 +24,7 @@ export function createServiceAuthMiddleware(options: ServiceAuthMiddlewareOption
     ...options,
     onAuthFailure: incrementAuthFailure,
     onReplayReject: incrementReplayReject,
+    onNonceStoreError: (correlationId, error) =>
+      Logger.error('Authentication nonce store unavailable', { correlationId, error }),
   });
 }

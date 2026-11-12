@@ -177,6 +177,16 @@ describe('oracle hmac middleware', () => {
     );
   });
 
+  test('a non-hexadecimal signature is rejected before nonce persistence', async () => {
+    const req = createSignedRequest({ signature: 'z'.repeat(64) });
+    const res = createMockResponse();
+    const next = jest.fn();
+    await hmacMiddleware(req as Request, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test.each([
     [
       'key order',

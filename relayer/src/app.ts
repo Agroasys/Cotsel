@@ -112,6 +112,8 @@ export function createRelayerApp(config: RelayerConfig, dependencies: RelayerApp
     consumeNonce: dependencies.authNonceStore.consume.bind(dependencies.authNonceStore),
     onAuthFailure: (reason) => logger.warn('Relayer authentication rejected', { reason }),
     onReplayReject: () => logger.warn('Relayer authentication replay rejected'),
+    onNonceStoreError: (correlationId, error) =>
+      logger.error('Authentication nonce store unavailable', { correlationId, error }),
   });
   app.use('/api/signers/gasless-relayer', authenticate);
 
