@@ -7,6 +7,12 @@ The account-owner governance root creates the reader, audit log, alarm, topic, a
 
 Do not use this root for customer settlement, controlled-pilot intake, or Base mainnet evidence.
 
+The trail records regional management write events and archive-object data events.
+It excludes RDS Data API management events and retains KMS management events.
+CloudTrail trails do not support management-event source inclusion filters.
+Denial alerts match only the exact archive bucket and bound archive key.
+Monitor the additional management-event copy through the approved archive budget.
+
 ## Prerequisites
 
 Before you create an archive plan, confirm these controls:
