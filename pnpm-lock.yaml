@@ -482,6 +482,9 @@ importers:
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
+      express-rate-limit:
+        specifier: 8.7.2
+        version: 8.7.2(express@5.3.0)
       jest:
         specifier: ^30.5.2
         version: 30.5.2(@types/node@26.6.6)(ts-node@10.9.2(@types/node@26.6.6)(typescript@6.0.3))

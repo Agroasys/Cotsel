@@ -1,4 +1,5 @@
 import express from 'express';
+import { MemoryStore, rateLimit } from 'express-rate-limit';
 import type { Server } from 'node:http';
 import {
   authMiddleware,
@@ -18,11 +19,17 @@ describe('Oracle HMAC HTTP failure boundary', () => {
   let url: string;
   let reached: jest.Mock;
   let errorLog: jest.SpyInstance;
+  const rateLimitStore = new MemoryStore();
 
   beforeAll(async () => {
     const app = express();
     reached = jest.fn();
-    app.use(createRawBodyJsonParser(), authMiddleware, hmacMiddleware);
+    app.use(
+      rateLimit({ windowMs: 60_000, limit: 10, store: rateLimitStore }),
+      createRawBodyJsonParser(),
+      authMiddleware,
+      hmacMiddleware,
+    );
     app.post('/action', (_req, res) => {
       reached();
       res.json({ success: true });
@@ -34,8 +41,10 @@ describe('Oracle HMAC HTTP failure boundary', () => {
     url = `http://127.0.0.1:${address.port}/action`;
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+    jest.mocked(consumeHmacNonce).mockReset();
+    await rateLimitStore.resetAll();
     errorLog = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
   afterEach(() => errorLog.mockRestore());
@@ -91,4 +100,14 @@ describe('Oracle HMAC HTTP failure boundary', () => {
       expect(reached).not.toHaveBeenCalled();
     },
   );
+
+  test('bounds authentication attempts before signature and nonce work', async () => {
+    jest.mocked(consumeHmacNonce).mockResolvedValue(true);
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect((await request()).status).toBe(200);
+    }
+    expect((await request()).status).toBe(429);
+    expect(consumeHmacNonce).toHaveBeenCalledTimes(10);
+    expect(reached).toHaveBeenCalledTimes(10);
+  });
 });
