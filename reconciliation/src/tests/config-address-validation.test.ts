@@ -133,3 +133,14 @@ test('Postgres SSL mode is explicit and validated', () => {
     );
   });
 });
+
+for (const profile of ['staging', 'production', 'Staging']) {
+  test(`rejects ${profile} with a development NODE_ENV before loading runtime`, () => {
+    withEnv({ COTSEL_ENVIRONMENT: profile, NODE_ENV: 'development' }, () => {
+      assert.throws(
+        () => loadConfigModule(),
+        new RegExp(`NODE_ENV must be production when COTSEL_ENVIRONMENT=${profile.toLowerCase()}`),
+      );
+    });
+  });
+}

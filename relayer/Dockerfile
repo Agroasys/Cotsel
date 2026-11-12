@@ -27,6 +27,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY relayer relayer
 COPY sdk sdk
 COPY shared-auth shared-auth
+COPY shared-edge shared-edge
 COPY shared-telemetry shared-telemetry
 
 RUN pnpm --filter @agroasys/sdk run build && pnpm --filter @agroasys/relayer run build
@@ -71,6 +72,7 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
 COPY --from=builder /app/relayer/dist /app/relayer/dist
 COPY --from=builder /app/sdk/dist /app/sdk/dist
 COPY --from=builder /app/shared-auth /app/shared-auth
+COPY --from=builder /app/shared-edge /app/shared-edge
 COPY --from=builder /app/shared-telemetry /app/shared-telemetry
 
 RUN addgroup -S agro && adduser -S agro -G agro \

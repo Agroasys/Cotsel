@@ -59,12 +59,23 @@ describe('auth config', () => {
     },
   );
 
-  test.each(['staging', 'production'])(
+  test.each(['staging', 'production', 'Staging', ' PRODUCTION '])(
     '%s cannot bypass production controls with a development NODE_ENV',
     (environment) => {
       withEnv({ COTSEL_ENVIRONMENT: environment, NODE_ENV: 'development' }, () => {
         expect(() => loadConfigModule().loadConfig()).toThrow(
-          `NODE_ENV must be production when COTSEL_ENVIRONMENT=${environment}`,
+          `NODE_ENV must be production when COTSEL_ENVIRONMENT=${environment.trim().toLowerCase()}`,
+        );
+      });
+    },
+  );
+
+  test.each(['prod', 'stage', 'unknown'])(
+    'rejects unsupported deployment profile %s',
+    (profile) => {
+      withEnv({ COTSEL_ENVIRONMENT: profile }, () => {
+        expect(() => loadConfigModule().loadConfig()).toThrow(
+          'COTSEL_ENVIRONMENT must be one of: local, staging, production',
         );
       });
     },
@@ -176,7 +187,9 @@ describe('auth config', () => {
 
     withEnv({ COTSEL_ENVIRONMENT: 'Staging Env' }, () => {
       const { loadConfig } = loadConfigModule();
-      expect(() => loadConfig()).toThrow('COTSEL_ENVIRONMENT must be a lowercase environment name');
+      expect(() => loadConfig()).toThrow(
+        'COTSEL_ENVIRONMENT must be one of: local, staging, production',
+      );
     });
 
     for (const value of ['3599', '15552001']) {

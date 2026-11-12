@@ -30,6 +30,7 @@ COPY notifications notifications
 COPY reconciliation reconciliation
 COPY sdk sdk
 COPY shared-db shared-db
+COPY shared-edge shared-edge
 COPY shared-telemetry shared-telemetry
 
 RUN pnpm --filter @agroasys/sdk run build \
@@ -83,6 +84,7 @@ RUN apk add --no-cache --virtual .build-deps python3 make g++ \
 COPY --from=builder /app/notifications/dist /app/notifications/dist
 COPY --from=builder /app/sdk/dist /app/sdk/dist
 COPY --from=builder /app/shared-db /app/shared-db
+COPY --from=builder /app/shared-edge /app/shared-edge
 COPY --from=builder /app/shared-telemetry /app/shared-telemetry
 COPY --from=builder /app/reconciliation/dist /app/reconciliation/dist
 

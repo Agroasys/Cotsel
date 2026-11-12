@@ -1,3 +1,4 @@
+import { deploymentProfile } from '@agroasys/shared-edge/deploymentProfile';
 import { strict as assert } from 'node:assert';
 import { getAddress, isAddress } from 'ethers';
 
@@ -50,6 +51,7 @@ function address(name: string): string {
 
 export function loadRelayerConfig(): RelayerConfig {
   const nodeEnv = process.env.NODE_ENV?.trim() || 'development';
+  deploymentProfile(nodeEnv);
   const custodyMode = required('RELAYER_SIGNER_CUSTODY_MODE');
   assert(custodyMode === 'kms', 'RELAYER_SIGNER_CUSTODY_MODE must be kms');
   for (const name of [

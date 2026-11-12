@@ -1,3 +1,4 @@
+import { deploymentProfile } from '@agroasys/shared-edge';
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
@@ -113,22 +114,10 @@ function parseUrlList(raw: string | undefined): string[] {
     .map((value) => value.replace(/\/$/, ''));
 }
 
-function deploymentProfile(): DeploymentProfile {
-  const raw = process.env.COTSEL_ENVIRONMENT?.trim().toLowerCase();
-  if (!raw) {
-    return 'local';
-  }
-  assert(
-    raw === 'local' || raw === 'staging' || raw === 'production',
-    'COTSEL_ENVIRONMENT must be one of: local, staging, production',
-  );
-  return raw;
-}
-
 export function loadConfig(): IndexerConfig {
   try {
     const config: IndexerConfig = {
-      cotselEnvironment: deploymentProfile(),
+      cotselEnvironment: deploymentProfile(process.env.NODE_ENV || 'development'),
       dbHost: validateEnv('DB_HOST'),
       dbPort: validateEnvNumber('DB_PORT', 1, MAX_PORT),
       dbName: validateEnv('DB_NAME'),

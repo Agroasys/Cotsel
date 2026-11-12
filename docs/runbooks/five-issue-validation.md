@@ -32,6 +32,8 @@ pnpm --filter ./ricardian test --json --outputFile=/absolute/evidence/ricardian.
 pnpm --filter ./relayer test
 pnpm --filter @agroasys/shared-auth test
 pnpm --filter @agroasys/shared-http test
+pnpm --filter @agroasys/shared-edge test
+pnpm --filter ./reconciliation test
 bash scripts/tests/validate-env-runtime-service-auth.test.sh
 bash scripts/tests/validate-env-production-auth.test.sh
 node --test scripts/tests/strict-runtime-env.test.mjs scripts/tests/staging-production-config.test.mjs
@@ -50,8 +52,10 @@ Do not enable financial-action tests against an unapproved shared environment.
 | #683  | Safe HTTP/parser/provider/database errors, correlation, sanitized telemetry, and no authenticated handler after failure            | Equivalent injections through the deployed ingress and service paths                      | Security reviewer                  |
 | #676  | Single-successor refresh, insert-failure rollback, lock-wait expiry, verifier rejection, lifetime bounds, and cutover recovery     | Hosted exchange, disabled users, role drift, revocation, expiry, and compatible consumers | Security and Integration reviewers |
 
-Staging and production service profiles require `NODE_ENV=production`, including direct service launches.
-Local and test profiles retain their existing behavior. Auth numeric settings reject fractions, exponents, suffixes, and unsafe integers.
+Auth, Gateway, Oracle, Treasury, Ricardian, Relayer, Indexer, and Reconciliation validate deployment profiles before startup.
+`COTSEL_ENVIRONMENT` accepts `local`, `staging`, or `production`, with case and surrounding whitespace normalized.
+Unsupported profiles fail startup. Staging and production profiles require `NODE_ENV=production`, including direct launches.
+An unset deployment profile retains local behavior. Auth still requires an explicit environment under `NODE_ENV=production`. Auth numeric settings reject fractions, exponents, suffixes, and unsafe integers.
 
 ## Complete validation and review
 

@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import { ethers } from 'ethers';
-import { parseAllowedOrigins } from '@agroasys/shared-edge';
+import { deploymentProfile, parseAllowedOrigins } from '@agroasys/shared-edge';
 import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
 import { parsePostgresSslMode } from '@agroasys/shared-db';
 import { resolveSettlementRuntime } from '@agroasys/sdk';
@@ -86,11 +86,8 @@ function parseUrlList(raw: string | undefined): string[] {
 export function loadConfig(): OracleConfig {
   try {
     const nodeEnv = process.env.NODE_ENV || 'development';
-    const cotselEnvironment = optionalEnv('COTSEL_ENVIRONMENT') || nodeEnv;
-    assert(
-      !['staging', 'production'].includes(cotselEnvironment) || nodeEnv === 'production',
-      `NODE_ENV must be production when COTSEL_ENVIRONMENT=${cotselEnvironment}`,
-    );
+    const profile = deploymentProfile(nodeEnv);
+    const cotselEnvironment = optionalEnv('COTSEL_ENVIRONMENT') ? profile : nodeEnv;
     const notificationsEnabled = validateEnvBool('NOTIFICATIONS_ENABLED', false);
     const notificationsWebhookUrl = process.env.NOTIFICATIONS_WEBHOOK_URL;
     const indexerGraphqlRequestTimeoutMs = validateEnvNumber('INDEXER_GQL_TIMEOUT_MS', 10000);

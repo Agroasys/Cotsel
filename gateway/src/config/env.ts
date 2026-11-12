@@ -4,7 +4,7 @@ import { parseRetainedSettlementRails } from './retainedSettlementRails';
  */
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
-import { parseAllowedOrigins } from '@agroasys/shared-edge';
+import { deploymentProfile, parseAllowedOrigins } from '@agroasys/shared-edge';
 import { resolveSettlementRuntime } from '@agroasys/sdk';
 import {
   assertAddress,
@@ -45,11 +45,7 @@ function assertDownstreamServiceAuth(
 
 export function loadConfig(): GatewayConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
-  const deploymentEnvironment = process.env.COTSEL_ENVIRONMENT?.trim();
-  assert(
-    !['staging', 'production'].includes(deploymentEnvironment ?? '') || nodeEnv === 'production',
-    `NODE_ENV must be production when COTSEL_ENVIRONMENT=${deploymentEnvironment}`,
-  );
+  deploymentProfile(nodeEnv);
   const buildTime = process.env.GATEWAY_BUILD_TIME?.trim() || new Date().toISOString();
   const authBaseUrl = env('GATEWAY_AUTH_BASE_URL').replace(/\/$/, '');
   const indexerGraphqlUrl = env('GATEWAY_INDEXER_GRAPHQL_URL').replace(/\/$/, '');

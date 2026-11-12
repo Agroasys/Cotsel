@@ -52,3 +52,21 @@ test.each([
 ] as const)('rejects %s', (_name, overrides) => {
   withEnv(overrides, () => expect(() => loadRelayerConfig()).toThrow());
 });
+
+test.each(['staging', 'production', 'Staging'])(
+  'rejects %s with a development NODE_ENV before selecting local Redis policy',
+  (profile) => {
+    withEnv(
+      {
+        COTSEL_ENVIRONMENT: profile,
+        NODE_ENV: 'development',
+        RELAYER_REDIS_URL: 'redis://localhost:6379',
+      },
+      () => {
+        expect(() => loadRelayerConfig()).toThrow(
+          `NODE_ENV must be production when COTSEL_ENVIRONMENT=${profile.toLowerCase()}`,
+        );
+      },
+    );
+  },
+);

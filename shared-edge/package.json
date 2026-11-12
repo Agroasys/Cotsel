@@ -12,7 +12,9 @@
     "rateLimit.js",
     "rateLimit.d.ts",
     "readiness.js",
-    "readiness.d.ts"
+    "readiness.d.ts",
+    "deploymentProfile.js",
+    "deploymentProfile.d.ts"
   ],
   "dependencies": {
     "ioredis": "^6.0.0"

@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
-import { parseAllowedOrigins } from '@agroasys/shared-edge';
+import { deploymentProfile, parseAllowedOrigins } from '@agroasys/shared-edge';
 import { parsePostgresSslMode, type PostgresSslMode } from '@agroasys/shared-db';
 import { parseServiceApiKeys, ServiceApiKey } from './auth/serviceAuth';
 
@@ -106,11 +106,7 @@ function parseAllowlist(raw: string | undefined): string[] {
 
 export function loadConfig(): RicardianConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
-  const deploymentEnvironment = process.env.COTSEL_ENVIRONMENT?.trim();
-  assert(
-    !['staging', 'production'].includes(deploymentEnvironment ?? '') || nodeEnv === 'production',
-    `NODE_ENV must be production when COTSEL_ENVIRONMENT=${deploymentEnvironment}`,
-  );
+  deploymentProfile(nodeEnv);
   const authEnabled = envBool('AUTH_ENABLED', nodeEnv === 'production');
   const apiKeys = parseServiceApiKeys(process.env.API_KEYS_JSON);
   const hmacSecret = process.env.HMAC_SECRET?.trim();

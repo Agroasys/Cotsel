@@ -28,7 +28,8 @@
     "dotenv": "^18.0.9",
     "pg": "^8.23.1",
     "@agroasys/notifications": "^1.0.0",
-    "@agroasys/shared-telemetry": "workspace:*"
+    "@agroasys/shared-telemetry": "workspace:*",
+    "@agroasys/shared-edge": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

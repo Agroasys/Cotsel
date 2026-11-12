@@ -1,3 +1,4 @@
+import { deploymentProfile } from '@agroasys/shared-edge/deploymentProfile';
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import {
@@ -154,6 +155,7 @@ function coverageBoundaryPreference(): CoverageBoundaryPreference {
 }
 
 export function loadConfig(): ReconciliationConfig {
+  deploymentProfile(process.env.NODE_ENV || 'development');
   const notificationsEnabled = envBool('NOTIFICATIONS_ENABLED', false);
   const notificationsWebhookUrl = process.env.NOTIFICATIONS_WEBHOOK_URL;
 
