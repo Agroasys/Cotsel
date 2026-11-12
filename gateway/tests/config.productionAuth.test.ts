@@ -1,6 +1,18 @@
 import { loadConfig } from '../src/config/env';
+import { withEnv } from './helpers/gatewayConfigTestHarness';
 
 describe('gateway production authentication config', () => {
+  test.each(['staging', 'production'])(
+    '%s cannot bypass downstream authentication with a development NODE_ENV',
+    (environment) => {
+      withEnv({ COTSEL_ENVIRONMENT: environment, NODE_ENV: 'development' }, () => {
+        expect(() => loadConfig()).toThrow(
+          `NODE_ENV must be production when COTSEL_ENVIRONMENT=${environment}`,
+        );
+      });
+    },
+  );
+
   test('cannot explicitly enable insecure downstream authentication', () => {
     const snapshot = { ...process.env };
     process.env = {

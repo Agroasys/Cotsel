@@ -48,6 +48,20 @@ function loadConfigModule(): typeof import('../src/config') {
 }
 
 describe('ricardian nonce store config', () => {
+  test.each(['staging', 'production'])(
+    '%s cannot bypass authentication by selecting a development NODE_ENV',
+    (environment) => {
+      withEnv(
+        { COTSEL_ENVIRONMENT: environment, NODE_ENV: 'development', AUTH_ENABLED: 'false' },
+        () => {
+          expect(() => loadConfigModule()).toThrow(
+            `NODE_ENV must be production when COTSEL_ENVIRONMENT=${environment}`,
+          );
+        },
+      );
+    },
+  );
+
   test('production rejects in-memory nonce store', () => {
     withEnv({ NODE_ENV: 'production', NONCE_STORE: 'inmemory' }, () => {
       expect(() => loadConfigModule()).toThrow(

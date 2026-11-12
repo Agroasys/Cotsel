@@ -177,6 +177,11 @@ function resolveNonceStoreMode(nodeEnv: string): NonceStoreMode {
 
 export function loadConfig(): TreasuryConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
+  const deploymentEnvironment = process.env.COTSEL_ENVIRONMENT?.trim();
+  assert(
+    !['staging', 'production'].includes(deploymentEnvironment ?? '') || nodeEnv === 'production',
+    `NODE_ENV must be production when COTSEL_ENVIRONMENT=${deploymentEnvironment}`,
+  );
   const authEnabled = envBool('AUTH_ENABLED', nodeEnv === 'production');
   const apiKeys = parseServiceApiKeys(process.env.API_KEYS_JSON);
   const configuredMutationApiKeys = parseAllowlist(process.env.TREASURY_INTERNAL_MUTATION_API_KEYS);

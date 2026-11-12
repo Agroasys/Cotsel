@@ -48,6 +48,28 @@ function loadConfigModule(): typeof import('../src/config') {
 }
 
 describe('auth config', () => {
+  test.each(['3600junk', '3600.5', '3.6e3'])(
+    'rejects ambiguous session lifetime configuration %s',
+    (value) => {
+      for (const variable of ['SESSION_TTL_SECONDS', 'SESSION_ABSOLUTE_LIFETIME_SECONDS']) {
+        withEnv({ [variable]: value }, () => {
+          expect(() => loadConfigModule().loadConfig()).toThrow(`${variable} must be an integer`);
+        });
+      }
+    },
+  );
+
+  test.each(['staging', 'production'])(
+    '%s cannot bypass production controls with a development NODE_ENV',
+    (environment) => {
+      withEnv({ COTSEL_ENVIRONMENT: environment, NODE_ENV: 'development' }, () => {
+        expect(() => loadConfigModule().loadConfig()).toThrow(
+          `NODE_ENV must be production when COTSEL_ENVIRONMENT=${environment}`,
+        );
+      });
+    },
+  );
+
   test('production cannot disable throttling, fail open, or omit its shared store', () => {
     const production = {
       NODE_ENV: 'production',
@@ -158,7 +180,7 @@ describe('auth config', () => {
     });
 
     for (const value of ['3599', '15552001']) {
-      withEnv({ COTSEL_ENVIRONMENT: 'staging', AUTH_ADMIN_GRANT_MAX_TTL_SECONDS: value }, () => {
+      withEnv({ COTSEL_ENVIRONMENT: 'local', AUTH_ADMIN_GRANT_MAX_TTL_SECONDS: value }, () => {
         const { loadConfig } = loadConfigModule();
         expect(() => loadConfig()).toThrow(
           'AUTH_ADMIN_GRANT_MAX_TTL_SECONDS must be between 3600 and 15552000',

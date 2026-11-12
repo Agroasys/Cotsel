@@ -87,6 +87,10 @@ export function loadConfig(): OracleConfig {
   try {
     const nodeEnv = process.env.NODE_ENV || 'development';
     const cotselEnvironment = optionalEnv('COTSEL_ENVIRONMENT') || nodeEnv;
+    assert(
+      !['staging', 'production'].includes(cotselEnvironment) || nodeEnv === 'production',
+      `NODE_ENV must be production when COTSEL_ENVIRONMENT=${cotselEnvironment}`,
+    );
     const notificationsEnabled = validateEnvBool('NOTIFICATIONS_ENABLED', false);
     const notificationsWebhookUrl = process.env.NOTIFICATIONS_WEBHOOK_URL;
     const indexerGraphqlRequestTimeoutMs = validateEnvNumber('INDEXER_GQL_TIMEOUT_MS', 10000);
