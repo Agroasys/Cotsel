@@ -74,6 +74,17 @@ describe('INDEXER_GQL_TIMEOUT_MS validation', () => {
 });
 
 describe('oracle runtime config', () => {
+  test.each(['staging', 'production', 'Staging', ' PRODUCTION '])(
+    '%s cannot bypass production controls with a development NODE_ENV',
+    (environment) => {
+      withEnv({ COTSEL_ENVIRONMENT: environment, NODE_ENV: 'development' }, () => {
+        expect(() => loadConfigModule()).toThrow(
+          `NODE_ENV must be production when COTSEL_ENVIRONMENT=${environment.trim().toLowerCase()}`,
+        );
+      });
+    },
+  );
+
   test('resolves base-sepolia defaults from settlement runtime key', () => {
     withEnv(
       {

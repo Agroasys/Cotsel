@@ -54,8 +54,33 @@ function forbidden(res, message, onAuthFailure) {
   authError(res, 403, 'AUTH_FORBIDDEN', message, onAuthFailure);
 }
 
-function unavailable(res, onAuthFailure) {
-  authError(res, 503, 'AUTH_UNAVAILABLE', 'Authentication service unavailable', onAuthFailure);
+function unavailable(req, res, error, options, onAuthFailure) {
+  // Keep authentication independent of the HTTP response package. Match shared-http/response.js
+  // correlationIdFor: header order, validation and invalid-header fallback.
+  // serviceAuth.test.js exercises the same contract, including request-id fallback.
+  const incoming = ['x-correlation-id', 'x-request-id']
+    .map((header) => req.header(header))
+    .find((value) => typeof value === 'string' && /^[A-Za-z0-9._:-]{8,128}$/.test(value));
+  const correlationId = incoming || crypto.randomUUID();
+  try {
+    if (typeof options.onNonceStoreError === 'function') {
+      options.onNonceStoreError(correlationId, error);
+    }
+  } catch {
+    // A diagnostic callback must not prevent the authentication refusal.
+  }
+  try {
+    onAuthFailure('AUTH_UNAVAILABLE');
+  } catch {
+    // Metrics callbacks cannot prevent the stable unavailable response either.
+  }
+  if (typeof res.setHeader === 'function') res.setHeader('x-correlation-id', correlationId);
+  res.status(503).json({
+    success: false,
+    code: 'AUTH_UNAVAILABLE',
+    error: 'Authentication service unavailable',
+    correlationId,
+  });
 }
 
 function requestPathAndQuery(req) {
@@ -299,8 +324,8 @@ function createServiceAuthMiddleware(options) {
         unauthorized(res, 'AUTH_NONCE_REPLAY', 'Replay detected for nonce', onAuthFailure);
         return;
       }
-    } catch {
-      unavailable(res, onAuthFailure);
+    } catch (error) {
+      unavailable(req, res, error, options, onAuthFailure);
       return;
     }
 

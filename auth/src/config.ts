@@ -3,7 +3,7 @@
  */
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
-import { parseAllowedOrigins } from '@agroasys/shared-edge';
+import { deploymentProfile, parseAllowedOrigins } from '@agroasys/shared-edge';
 import { parsePostgresSslMode } from '@agroasys/shared-db';
 import { AuthConfig } from './types';
 
@@ -21,8 +21,8 @@ function envNumber(name: string, fallback?: number): number {
     return fallback;
   }
   const required = raw ?? env(name);
-  const num = parseInt(required, 10);
-  assert(!isNaN(num), `${name} must be a number`);
+  const num = Number(required);
+  assert(/^-?\d+$/.test(required) && Number.isSafeInteger(num), `${name} must be an integer`);
   return num;
 }
 
@@ -50,6 +50,7 @@ function csvEnv(name: string): string[] {
 
 export function loadConfig(): AuthConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
+  const deploymentEnvironment = deploymentProfile(nodeEnv);
   const trustedSessionExchangeEnabled = envBoolean('TRUSTED_SESSION_EXCHANGE_ENABLED', false);
   const trustedSessionExchangeMaxSkewSeconds = envNumber(
     'TRUSTED_SESSION_EXCHANGE_MAX_SKEW_SECONDS',
@@ -70,8 +71,11 @@ export function loadConfig(): AuthConfig {
   const adminControlNonceTtlSeconds = envNumber('AUTH_ADMIN_CONTROL_NONCE_TTL_SECONDS', 600);
   const adminBreakGlassMaxTtlSeconds = envNumber('AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS', 3600);
   const adminGrantMaxTtlSeconds = envNumber('AUTH_ADMIN_GRANT_MAX_TTL_SECONDS', 2592000);
-  const environment =
-    process.env.COTSEL_ENVIRONMENT?.trim() || (nodeEnv === 'production' ? '' : 'local');
+  const environment = process.env.COTSEL_ENVIRONMENT?.trim()
+    ? deploymentEnvironment
+    : nodeEnv === 'production'
+      ? ''
+      : 'local';
   const sessionTtlSeconds = envNumber('SESSION_TTL_SECONDS', 3600);
   const sessionAbsoluteLifetimeSeconds = envNumber('SESSION_ABSOLUTE_LIFETIME_SECONDS', 86400);
   const rateLimitEnabled = envBoolean('AUTH_RATE_LIMIT_ENABLED', true);

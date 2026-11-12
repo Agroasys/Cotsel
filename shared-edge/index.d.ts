@@ -1,3 +1,4 @@
 export * from './cors';
 export * from './rateLimit';
 export * from './readiness';
+export * from './deploymentProfile';

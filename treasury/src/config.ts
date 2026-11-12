@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
-import { parseAllowedOrigins } from '@agroasys/shared-edge';
+import { deploymentProfile, parseAllowedOrigins } from '@agroasys/shared-edge';
 import { parsePostgresSslMode, type PostgresSslMode } from '@agroasys/shared-db';
 import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
 import { parseServiceApiKeys, ServiceApiKey } from './auth/serviceAuth';
@@ -177,6 +177,7 @@ function resolveNonceStoreMode(nodeEnv: string): NonceStoreMode {
 
 export function loadConfig(): TreasuryConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
+  deploymentProfile(nodeEnv);
   const authEnabled = envBool('AUTH_ENABLED', nodeEnv === 'production');
   const apiKeys = parseServiceApiKeys(process.env.API_KEYS_JSON);
   const configuredMutationApiKeys = parseAllowlist(process.env.TREASURY_INTERNAL_MUTATION_API_KEYS);

@@ -89,6 +89,8 @@ async function bootstrap(): Promise<void> {
         nonceTtlSeconds: config.trustedSessionExchangeNonceTtlSeconds,
         lookupApiKey: createServiceApiKeyLookup(config.trustedSessionExchangeApiKeysJson),
         consumeNonce: trustedSessionExchangeNonceStore.consume,
+        onNonceStoreError: (correlationId, error) =>
+          Logger.error('Trusted exchange nonce store unavailable', { correlationId, error }),
       })
     : undefined;
   const adminControlMiddleware = config.adminControlEnabled
@@ -101,6 +103,8 @@ async function bootstrap(): Promise<void> {
           config.adminControlAllowedApiKeyIds,
         ),
         consumeNonce: adminControlNonceStore.consume,
+        onNonceStoreError: (correlationId, error) =>
+          Logger.error('Admin control nonce store unavailable', { correlationId, error }),
         onAuthFailure: (reason) => {
           incrementServiceAuthDenied();
           Logger.warn('Admin control service-auth denied', {

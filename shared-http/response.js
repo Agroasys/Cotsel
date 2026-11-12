@@ -90,6 +90,42 @@ function sendInternalFailure(req, res, error, options) {
   return correlationId;
 }
 
+/** Final Express error boundary, including failures raised before routing. */
+function createInternalErrorHandler(options) {
+  return function internalErrorHandler(error, req, res, next) {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    if (error instanceof HttpError) {
+      res.status(error.statusCode).json(failure(error.code, error.message, error.details));
+      return;
+    }
+    if (isCallerSafeError(error)) {
+      res.status(400).json(failure('ValidationError', error.message));
+      return;
+    }
+    const bodyFailures = {
+      'entity.parse.failed': [400, 'BadRequest', 'Malformed JSON request body'],
+      'entity.too.large': [413, 'PayloadTooLarge', 'Request body is too large'],
+      'encoding.unsupported': [415, 'UnsupportedMediaType', 'Unsupported request encoding'],
+      'charset.unsupported': [415, 'UnsupportedMediaType', 'Unsupported request charset'],
+      'entity.verify.failed': [403, 'Forbidden', 'Request body verification failed'],
+      'request.aborted': [400, 'BadRequest', 'Request body was interrupted'],
+      'request.size.invalid': [400, 'BadRequest', 'Request body length is invalid'],
+    };
+    const bodyFailure =
+      error && Object.hasOwn(bodyFailures, error.type) && bodyFailures[error.type];
+    if (bodyFailure) {
+      const [statusCode, code, message] = bodyFailure;
+      // Parser errors can contain the submitted body in their message or stack.
+      sendInternalFailure(req, res, new Error(message), { ...options, statusCode, code, message });
+      return;
+    }
+    sendInternalFailure(req, res, error, options);
+  };
+}
+
 module.exports = {
   HttpError,
   INTERNAL_ERROR_MESSAGE,
@@ -97,6 +133,7 @@ module.exports = {
   CallerSafeError,
   isCallerSafeError,
   sendInternalFailure,
+  createInternalErrorHandler,
   success,
   failure,
   timestamp,

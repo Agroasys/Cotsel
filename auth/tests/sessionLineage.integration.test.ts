@@ -86,6 +86,68 @@ describe('session lineage persistence integration', () => {
   const integrationTest = dockerAvailable ? test : test.skip;
 
   integrationTest(
+    'ordinary session logs exclude bearer material and upstream identity',
+    async () => {
+      await withPostgres(async (pool) => {
+        const service = createService(pool);
+        const accountId = 'agroasys-user:private-lineage-fixture';
+        const email = 'private-lineage@example.invalid';
+        const walletAddress = '0x1111111111111111111111111111111111111111';
+        const logs = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+        try {
+          const first = await service.issueTrustedSession(
+            { accountId, role: 'buyer', email, walletAddress },
+            ANY_ROLE_AUTHORITY,
+          );
+          const next = await service.refresh(first.sessionId);
+          await service.revoke(next.sessionId);
+          const output = JSON.stringify(logs.mock.calls);
+          expect(output).toContain('Trusted session issued');
+          expect(output).toContain('Session refreshed');
+          expect(output).toContain('Session revoked');
+          for (const forbidden of [
+            accountId,
+            email,
+            walletAddress,
+            first.sessionId,
+            next.sessionId,
+            hashSessionToken(first.sessionId),
+            hashSessionToken(next.sessionId),
+          ]) {
+            expect(output).not.toContain(forbidden);
+          }
+        } finally {
+          logs.mockRestore();
+        }
+      });
+    },
+    120000,
+  );
+
+  integrationTest.each([
+    ['deactivation', 'UPDATE user_profiles SET active = FALSE WHERE account_id = $1'],
+    ['role drift', "UPDATE user_profiles SET role = 'supplier' WHERE account_id = $1"],
+  ])(
+    'persisted %s blocks session resolution and refresh',
+    async (_reason, mutation) => {
+      await withPostgres(async (pool) => {
+        const service = createService(pool);
+        const accountId = 'agroasys-user:changed-lineage-fixture';
+        const session = await issue(pool, accountId);
+        await pool.query(mutation, [accountId]);
+        await expect(service.resolve(session.sessionId)).resolves.toBeNull();
+        await expect(service.refresh(session.sessionId)).rejects.toThrow(
+          'invalid, expired, or revoked',
+        );
+        const rows = await pool.query('SELECT revoked_at FROM user_sessions');
+        expect(rows.rows).toHaveLength(1);
+        expect(rows.rows[0].revoked_at).not.toBeNull();
+      });
+    },
+    120000,
+  );
+
+  integrationTest(
     'stores only a token verifier that cannot itself authenticate',
     async () => {
       await withPostgres(async (pool) => {

@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import type { Request, Response, NextFunction } from 'express';
 import { createCorsOptions, createHttpRateLimiter } from '@agroasys/shared-edge';
+import { createInternalErrorHandler } from '@agroasys/shared-http';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
 import { config } from './config';
 import { createRouter } from './api/routes';
@@ -156,6 +157,13 @@ async function bootstrap(): Promise<void> {
       providerCallbackMiddleware,
       readinessCheck,
       ingestionFreshnessCheck: () => ingestionFreshness.assess(),
+    }),
+  );
+
+  app.use(
+    createInternalErrorHandler({
+      log: (correlationId, error) =>
+        Logger.error('Unhandled request failure', { correlationId, error }),
     }),
   );
 

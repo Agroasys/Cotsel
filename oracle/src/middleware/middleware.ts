@@ -1,5 +1,5 @@
 import express, { Request, RequestHandler, Response, NextFunction } from 'express';
-import { failure, sendInternalFailure } from '@agroasys/shared-http';
+import { createInternalErrorHandler, failure, sendInternalFailure } from '@agroasys/shared-http';
 import { config } from '../config';
 import { consumeHmacNonce } from '../database/queries';
 import { Logger } from '../utils/logger';
@@ -8,6 +8,7 @@ import {
   deriveRequestNonce,
   hashSignature,
   RequestBodyBytes,
+  RequestSignatureError,
   verifyRequestSignature,
 } from '../utils/crypto';
 
@@ -38,7 +39,7 @@ function declaresNoBody(req: Request): boolean {
 }
 
 function isInvalidSignatureError(error: unknown): boolean {
-  return error instanceof Error && error.message === 'Invalid HMAC signature';
+  return error instanceof RequestSignatureError && error.message === 'Invalid HMAC signature';
 }
 
 // Verifies the signature over the received bytes and returns the body form
@@ -154,24 +155,26 @@ export async function hmacMiddleware(
 
     next();
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const isTimestampOrSignatureError =
-      errorMessage.includes('Request timestamp') || errorMessage.includes('Invalid HMAC signature');
-
-    if (!isTimestampOrSignatureError) {
-      Logger.error('HMAC nonce persistence failed', {
-        error: errorMessage,
-        ip: req.ip,
+    if (!(error instanceof RequestSignatureError)) {
+      sendInternalFailure(req, res, error, {
+        statusCode: 503,
+        code: 'ServiceUnavailable',
+        message: 'Authentication nonce store unavailable',
+        log: (correlationId, cause) =>
+          Logger.error('HMAC nonce persistence failed', {
+            correlationId,
+            error: cause instanceof Error ? cause.message : String(cause),
+            ip: req.ip,
+          }),
       });
-      res.status(503).json(failure('ServiceUnavailable', 'Authentication nonce store unavailable'));
       return;
     }
 
     Logger.warn('HMAC verification failed', {
-      error: errorMessage,
+      error: error.message,
       ip: req.ip,
     });
-    res.status(401).json(failure('Unauthorized', errorMessage));
+    res.status(401).json(failure('Unauthorized', error.message));
   }
 }
 
@@ -183,14 +186,19 @@ function isUnsupportedEncodingError(err: unknown): boolean {
   );
 }
 
+const internalErrorHandler = createInternalErrorHandler({
+  code: 'InternalServerError',
+  log: (correlationId, cause) => Logger.error('Unhandled error', { correlationId, error: cause }),
+});
+
 export function errorHandler(
   err: unknown,
   req: Request,
   res: Response<ErrorResponse>,
-  _next: NextFunction,
+  next: NextFunction,
 ): void {
   // Raised by createRawBodyJsonParser for a compressed body (WP-2 H-22).
-  if (isUnsupportedEncodingError(err)) {
+  if (!res.headersSent && isUnsupportedEncodingError(err)) {
     Logger.warn('Rejected compressed request body', { route: req.path, ip: req.ip });
     res
       .status(415)
@@ -198,15 +206,5 @@ export function errorHandler(
     return;
   }
 
-  // WP-10 I-06: the raw error is logged under the correlation ID, never returned.
-  sendInternalFailure(req, res, err, {
-    code: 'InternalServerError',
-    log: (correlationId, cause) =>
-      Logger.error('Unhandled error', {
-        correlationId,
-        route: req.path,
-        error: cause instanceof Error ? cause.message : String(cause),
-        stack: cause instanceof Error ? cause.stack : undefined,
-      }),
-  });
+  internalErrorHandler(err, req, res, next);
 }

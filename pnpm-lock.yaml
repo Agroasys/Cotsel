@@ -509,6 +509,9 @@ importers:
       '@agroasys/shared-db':
         specifier: ^1.0.0
         version: link:../shared-db
+      '@agroasys/shared-edge':
+        specifier: workspace:*
+        version: link:../shared-edge
       '@agroasys/shared-telemetry':
         specifier: workspace:*
         version: link:../shared-telemetry
@@ -543,6 +546,9 @@ importers:
       '@agroasys/shared-auth':
         specifier: workspace:*
         version: link:../shared-auth
+      '@agroasys/shared-edge':
+        specifier: workspace:*
+        version: link:../shared-edge
       '@agroasys/shared-telemetry':
         specifier: workspace:*
         version: link:../shared-telemetry

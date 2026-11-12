@@ -104,6 +104,7 @@ test('rejects a readiness port that collides with the Prometheus port', () => {
 test('warns when the selected staging demo starts without alert delivery', () => {
   const result = loadConfig({
     COTSEL_ENVIRONMENT: 'staging',
+    NODE_ENV: 'production',
     CHAIN_ID: '84532',
     CONTRACT_ADDRESS: '0xE8787748547A6ce40287CDE678A58e385b65d069',
     EXPECTED_CONTRACT_CODEHASH: `0x${'ab'.repeat(32)}`,
@@ -118,6 +119,7 @@ test('warns when the selected staging demo starts without alert delivery', () =>
 test('rejects the demo alert exception in production', () => {
   const result = loadConfig({
     COTSEL_ENVIRONMENT: 'production',
+    NODE_ENV: 'production',
     CHAIN_ID: '84532',
     CONTRACT_ADDRESS: '0xE8787748547A6ce40287CDE678A58e385b65d069',
     EXPECTED_CONTRACT_CODEHASH: `0x${'ab'.repeat(32)}`,
@@ -128,3 +130,14 @@ test('rejects the demo alert exception in production', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /only for the selected Base Sepolia staging escrow/);
 });
+
+for (const profile of ['staging', 'production', 'Staging']) {
+  test(`rejects ${profile} with a development NODE_ENV before startup`, () => {
+    const result = loadConfig({ COTSEL_ENVIRONMENT: profile, NODE_ENV: 'development' });
+    assert.equal(result.status, 1);
+    assert.match(
+      result.stderr,
+      new RegExp(`NODE_ENV must be production when COTSEL_ENVIRONMENT=${profile.toLowerCase()}`),
+    );
+  });
+}

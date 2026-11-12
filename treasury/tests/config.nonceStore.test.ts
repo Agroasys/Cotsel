@@ -48,6 +48,20 @@ function loadConfigModule(): typeof import('../src/config') {
 }
 
 describe('treasury nonce store config', () => {
+  test.each(['staging', 'production', 'Staging', ' PRODUCTION '])(
+    '%s cannot bypass authentication by selecting a development NODE_ENV',
+    (environment) => {
+      withEnv(
+        { COTSEL_ENVIRONMENT: environment, NODE_ENV: 'development', AUTH_ENABLED: 'false' },
+        () => {
+          expect(() => loadConfigModule()).toThrow(
+            `NODE_ENV must be production when COTSEL_ENVIRONMENT=${environment.trim().toLowerCase()}`,
+          );
+        },
+      );
+    },
+  );
+
   test.each(['5000', '1e5', '6000x', '1000001'])('rejects invalid export job limit %s', (limit) => {
     withEnv({ TREASURY_EXPORT_MAX_ROWS: limit }, () => {
       expect(() => loadConfigModule()).toThrow('TREASURY_EXPORT_MAX_ROWS');

@@ -179,7 +179,7 @@ Log a reference, hash, or masked suffix of that value instead.
 
 WP-10 I-06. A response never carries internal failure text: no stack trace,
 SQL or query text, host or RPC URL, signer or provider output, or secret. The
-full error goes to the service log under the `correlationId` the caller is given.
+service records sanitized diagnostics under the `correlationId` the caller receives.
 
 | Failure                                                          | Response                                                                                                           |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -204,6 +204,19 @@ full error goes to the service log under the `correlationId` the caller is given
 - Oracle trigger results keep domain refusal text. Network and contract failures
   return `Oracle <type> failure; detail is recorded on the trigger`; the full
   text stays in the trigger's `last_error` and the logs.
+- Auth session-store outages return `503 ServiceUnavailable`, with a correlation
+  ID. An invalid or revoked session still returns `401 Unauthorized`.
+- Shared service-auth nonce-store outages preserve `AUTH_UNAVAILABLE` and the
+  existing envelope. They add a correlation ID to the body and response header.
+  Each service records sanitized diagnostics under that ID.
+- Treasury and Ricardian install a final error handler after parsers and routes.
+  Malformed JSON returns `400 BadRequest`; oversized bodies return
+  `413 PayloadTooLarge`; unsupported encodings return `415 UnsupportedMediaType`.
+  Parser diagnostics omit the submitted body. Unexpected failures return
+  `500 InternalError`. Already-started responses pass to Express for connection cleanup.
+- Oracle signature refusals use a dedicated error type. Database error text cannot
+  select an authentication refusal. Timestamps must contain a positive safe
+  integer in milliseconds. Invalid hexadecimal signatures fail before nonce storage.
 
 ## Service adoption status
 

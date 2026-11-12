@@ -9,6 +9,7 @@ const {
   correlationIdFor,
   isCallerSafeError,
   sendInternalFailure,
+  createInternalErrorHandler,
 } = require('./index');
 
 function recordingResponse() {
@@ -28,6 +29,75 @@ function recordingResponse() {
     },
   };
 }
+
+test('the final boundary preserves explicitly caller-safe refusals without internal-error logging', () => {
+  for (const [error, status, code, message, details] of [
+    [
+      new HttpError(409, 'Conflict', 'Already submitted', { state: 'pending' }),
+      409,
+      'Conflict',
+      'Already submitted',
+      { state: 'pending' },
+    ],
+    [
+      new CallerSafeError('limit is invalid'),
+      400,
+      'ValidationError',
+      'limit is invalid',
+      undefined,
+    ],
+  ]) {
+    const res = recordingResponse();
+    createInternalErrorHandler({
+      log: () => assert.fail('caller refusal is not an internal fault'),
+    })(error, { headers: {} }, res, () => assert.fail('must handle caller refusal'));
+    assert.equal(res.recorded.status, status);
+    assert.equal(res.recorded.body.error, code);
+    assert.equal(res.recorded.body.message, message);
+    assert.deepEqual(res.recorded.body.details, details);
+  }
+});
+
+test('the final error boundary delegates an already-started response without writing', () => {
+  const res = recordingResponse();
+  res.headersSent = true;
+  const error = new Error('stream failed');
+  const forwarded = [];
+  createInternalErrorHandler({ log: () => assert.fail('must not write another response') })(
+    error,
+    { headers: {} },
+    res,
+    (cause) => forwarded.push(cause),
+  );
+  assert.deepEqual(forwarded, [error]);
+  assert.deepEqual(res.recorded, { headers: {} });
+});
+
+test('body-parser refusals preserve client status without logging submitted body text', () => {
+  for (const [type, status] of [
+    ['entity.parse.failed', 400],
+    ['entity.too.large', 413],
+    ['encoding.unsupported', 415],
+    ['charset.unsupported', 415],
+    ['entity.verify.failed', 403],
+    ['request.aborted', 400],
+    ['request.size.invalid', 400],
+  ]) {
+    const res = recordingResponse();
+    const logged = [];
+    const error = Object.assign(new Error('submitted-body-fixture-secret'), { type });
+    createInternalErrorHandler({ log: (_id, cause) => logged.push(cause) })(
+      error,
+      { headers: {} },
+      res,
+      () => assert.fail('must handle the client failure'),
+    );
+    assert.equal(res.recorded.status, status, type);
+    assert.equal(JSON.stringify(res.recorded.body).includes('fixture-secret'), false);
+    assert.equal(logged[0].message.includes('fixture-secret'), false);
+    assert.equal(logged[0].stack.includes('fixture-secret'), false);
+  }
+});
 
 test('correlationIdFor reuses a well-formed inbound header', () => {
   assert.equal(
