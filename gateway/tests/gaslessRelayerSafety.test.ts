@@ -253,26 +253,36 @@ describe('gasless relayer safety controls', () => {
     const firstHandoffId = await createHandoff(store, 'c');
     const secondHandoffId = await createHandoff(store, 'd');
 
-    const first = service.executeCreateTrade(boundInputs.get(firstHandoffId)!);
-    await activeBroadcast;
-    const second = service.executeCreateTrade(boundInputs.get(secondHandoffId)!);
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    const startedAt = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(startedAt);
+    let first: Promise<unknown> | undefined;
+    let second: Promise<unknown> | undefined;
+    try {
+      first = service.executeCreateTrade(boundInputs.get(firstHandoffId)!);
+      await activeBroadcast;
+      second = service.executeCreateTrade(boundInputs.get(secondHandoffId)!);
+      // Drain the in-memory workflow's promises before observing the queue.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const queued = service.getRelayerReadiness();
+      expect(queued.queue.active).toBe(1);
+      expect(queued.queue.pending).toBe(1);
+      expect(queued.alerts).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'gasless_queue_stuck' })]),
+      );
 
-    const readiness = service.getRelayerReadiness();
-    expect(readiness.queue.active).toBe(1);
-    expect(readiness.queue.pending).toBe(1);
-    expect(readiness.alerts).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'gasless_queue_stuck' })]),
-    );
-
-    heldSubmission.resolve(
-      buildConfirmedSubmission(
-        '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
-        '100',
-      ),
-    );
-    await first;
-    await second;
+      clock.mockReturnValue(startedAt + 2);
+      expect(service.getRelayerReadiness().alerts).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'gasless_queue_stuck' })]),
+      );
+    } finally {
+      heldSubmission.resolve(
+        buildConfirmedSubmission(
+          '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+          '100',
+        ),
+      );
+      await Promise.all([first, second]).finally(() => clock.mockRestore());
+    }
   });
 
   test('failed broadcasts do not poison nonce queue recovery for later submissions', async () => {
