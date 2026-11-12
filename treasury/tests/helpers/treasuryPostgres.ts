@@ -25,6 +25,23 @@ function adminPool(): Pool {
   });
 }
 
+/** Wait for caller-owned connections to close; never terminate a live fixture client. */
+export async function dropTreasuryTestDatabase(admin: Pool, dbName: string): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const active = await admin.query(
+      'SELECT 1 FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()',
+      [dbName],
+    );
+    if (active.rows.length === 0) {
+      await admin.query(`DROP DATABASE IF EXISTS "${dbName.replace(/"/g, '""')}"`);
+      return;
+    }
+    // Use PostgreSQL's clock so Jest fake timers cannot stall fixture teardown.
+    await admin.query('SELECT pg_sleep(0.025)');
+  }
+  throw new Error(`Treasury fixture connections remain open for ${dbName}`);
+}
+
 /**
  * Applies the full manifest chain rather than the baseline alone: the
  * maker-checker guarantees these suites exercise live in migration 003, so a
@@ -61,14 +78,11 @@ export async function provisionTreasuryDatabase(prefix: string): Promise<{
   return {
     dbName,
     async cleanup() {
-      await admin.query(
-        `SELECT pg_terminate_backend(pid)
-         FROM pg_stat_activity
-         WHERE datname = $1 AND pid <> pg_backend_pid()`,
-        [dbName],
-      );
-      await admin.query(`DROP DATABASE IF EXISTS "${dbName}"`);
-      await admin.end();
+      try {
+        await dropTreasuryTestDatabase(admin, dbName);
+      } finally {
+        await admin.end();
+      }
     },
   };
 }

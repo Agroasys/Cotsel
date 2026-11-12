@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Pool } from 'pg';
+import { dropTreasuryTestDatabase } from './helpers/treasuryPostgres';
 
 /**
  * The domains and the allocation trigger are database-level guarantees. A mock
@@ -35,14 +36,13 @@ describePostgres('treasury canonical monetary amount constraints', () => {
 
   afterAll(async () => {
     await pool?.end();
-    await admin?.query(
-      `SELECT pg_terminate_backend(pid)
-       FROM pg_stat_activity
-       WHERE datname = $1 AND pid <> pg_backend_pid()`,
-      [dbName],
-    );
-    await admin?.query(`DROP DATABASE IF EXISTS "${dbName}"`);
-    await admin?.end();
+    if (admin) {
+      try {
+        await dropTreasuryTestDatabase(admin, dbName);
+      } finally {
+        await admin.end();
+      }
+    }
   }, 60000);
 
   async function insertLedgerEntry(amountRaw: string, suffix: string): Promise<number> {

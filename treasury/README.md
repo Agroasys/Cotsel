@@ -189,6 +189,18 @@ does not become `EXECUTED` from operator-supplied amount or destination fields a
 
 See `docs/cotsel-cli.md` and `docs/runbooks/runtime-stack.md` for runtime operations.
 
+## PostgreSQL tests
+
+Use a disposable PostgreSQL instance with permission to create databases and fixture roles.
+Use the pinned repository toolchain. Set `DB_HOST`, `DB_PORT`, `DB_USER`, and `DB_PASSWORD` for that instance.
+
+```sh
+TZ=UTC TREASURY_POSTGRES_TESTS=true pnpm --filter treasury test
+```
+
+Close service and sidecar connections before fixture cleanup. Cleanup waits briefly for disconnected backends to disappear.
+An open connection fails cleanup; cleanup does not terminate it. Inspect and close leaked connections before removing a retained fixture database.
+
 ## License
 
 Licensed under Apache-2.0.

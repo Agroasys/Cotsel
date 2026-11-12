@@ -9,7 +9,12 @@ describePostgres('snapshot evidence publication across databases', () => {
   const treasuryName = `publication_t_${suffix}`;
   const reconciliationName = `publication_r_${suffix}`;
   const readerRole = `publication_reader_${suffix}`;
-  const connection = { host: '127.0.0.1', port: 5432, user: 'postgres', password: 'postgres' };
+  const connection = {
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: Number(process.env.DB_PORT || 5432),
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || 'postgres',
+  };
   const admin = new Pool({ ...connection, database: 'postgres' });
   let treasury: Pool;
   let reconciliation: Pool;
@@ -88,7 +93,7 @@ describePostgres('snapshot evidence publication across databases', () => {
     Object.assign(process.env, {
       PORT: '3200',
       DB_HOST: connection.host,
-      DB_PORT: '5432',
+      DB_PORT: String(connection.port),
       DB_NAME: treasuryName,
       DB_USER: connection.user,
       DB_PASSWORD: connection.password,

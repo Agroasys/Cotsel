@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Pool } from 'pg';
+import { dropTreasuryTestDatabase } from './helpers/treasuryPostgres';
 
 type TreasuryQueries = typeof import('../src/database/queries');
 type TreasuryConnection = typeof import('../src/database/connection');
@@ -59,14 +60,11 @@ async function createFreshTreasuryDatabase() {
   return {
     dbName,
     async cleanup() {
-      await admin.query(
-        `SELECT pg_terminate_backend(pid)
-         FROM pg_stat_activity
-         WHERE datname = $1 AND pid <> pg_backend_pid()`,
-        [dbName],
-      );
-      await admin.query(`DROP DATABASE IF EXISTS "${dbName}"`);
-      await admin.end();
+      try {
+        await dropTreasuryTestDatabase(admin, dbName);
+      } finally {
+        await admin.end();
+      }
     },
   };
 }
