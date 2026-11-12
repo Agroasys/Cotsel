@@ -55,9 +55,10 @@ function forbidden(res, message, onAuthFailure) {
 }
 
 function unavailable(req, res, error, options, onAuthFailure) {
-  const incoming = firstHeader(req, ['x-correlation-id', 'x-request-id']);
-  const correlationId =
-    incoming && /^[A-Za-z0-9._:-]{8,128}$/.test(incoming) ? incoming : crypto.randomUUID();
+  const incoming = ['x-correlation-id', 'x-request-id']
+    .map((header) => req.header(header))
+    .find((value) => typeof value === 'string' && /^[A-Za-z0-9._:-]{8,128}$/.test(value));
+  const correlationId = incoming || crypto.randomUUID();
   if (typeof options.onNonceStoreError === 'function') {
     options.onNonceStoreError(correlationId, error);
   }

@@ -56,4 +56,17 @@ describe('final HTTP failure boundary', () => {
       expect(errorLog.mock.calls.flat().join(' ')).not.toContain('fixture-secret');
     },
   );
+
+  test('an unsupported JSON charset retains its safe 415 response', async () => {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=iso-8859-1' },
+      body: '{}',
+    });
+    expect(response.status).toBe(415);
+    expect(await response.json()).toMatchObject({
+      error: 'UnsupportedMediaType',
+      correlationId: expect.any(String),
+    });
+  });
 });

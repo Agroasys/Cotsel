@@ -45,6 +45,32 @@ test('the final error boundary delegates an already-started response without wri
   assert.deepEqual(res.recorded, { headers: {} });
 });
 
+test('body-parser refusals preserve client status without logging submitted body text', () => {
+  for (const [type, status] of [
+    ['entity.parse.failed', 400],
+    ['entity.too.large', 413],
+    ['encoding.unsupported', 415],
+    ['charset.unsupported', 415],
+    ['entity.verify.failed', 403],
+    ['request.aborted', 400],
+    ['request.size.invalid', 400],
+  ]) {
+    const res = recordingResponse();
+    const logged = [];
+    const error = Object.assign(new Error('submitted-body-fixture-secret'), { type });
+    createInternalErrorHandler({ log: (_id, cause) => logged.push(cause) })(
+      error,
+      { headers: {} },
+      res,
+      () => assert.fail('must handle the client failure'),
+    );
+    assert.equal(res.recorded.status, status, type);
+    assert.equal(JSON.stringify(res.recorded.body).includes('fixture-secret'), false);
+    assert.equal(logged[0].message.includes('fixture-secret'), false);
+    assert.equal(logged[0].stack.includes('fixture-secret'), false);
+  }
+});
+
 test('correlationIdFor reuses a well-formed inbound header', () => {
   assert.equal(
     correlationIdFor({ headers: { 'x-request-id': 'req-0123456789' } }),

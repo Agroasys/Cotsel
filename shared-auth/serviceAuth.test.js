@@ -78,6 +78,20 @@ test('nonce storage failures keep the auth envelope and carry a logged correlati
   assert.equal(res.headers['x-correlation-id'], 'nonce-error-fixture');
   assert.deepEqual(logged, [{ correlationId: 'nonce-error-fixture', cause: error }]);
   assert.equal(JSON.stringify(res.body).includes('fixture-secret'), false);
+
+  const fallback = createRequest({
+    headers: {
+      'x-api-key': 'gateway',
+      'x-agroasys-timestamp': timestamp,
+      'x-agroasys-nonce': nonce,
+      'x-agroasys-signature': signature,
+      'x-correlation-id': 'bad',
+      'x-request-id': 'request-valid-fixture',
+    },
+  });
+  const fallbackResponse = createResponseRecorder();
+  await middleware(fallback, fallbackResponse, () => assert.fail('must not authenticate'));
+  assert.equal(fallbackResponse.body.correlationId, 'request-valid-fixture');
 });
 
 function createRequest(overrides = {}) {

@@ -101,6 +101,10 @@ function createInternalErrorHandler(options) {
       'entity.parse.failed': [400, 'BadRequest', 'Malformed JSON request body'],
       'entity.too.large': [413, 'PayloadTooLarge', 'Request body is too large'],
       'encoding.unsupported': [415, 'UnsupportedMediaType', 'Unsupported request encoding'],
+      'charset.unsupported': [415, 'UnsupportedMediaType', 'Unsupported request charset'],
+      'entity.verify.failed': [403, 'Forbidden', 'Request body verification failed'],
+      'request.aborted': [400, 'BadRequest', 'Request body was interrupted'],
+      'request.size.invalid': [400, 'BadRequest', 'Request body length is invalid'],
     };
     const bodyFailure =
       error && Object.hasOwn(bodyFailures, error.type) && bodyFailures[error.type];
