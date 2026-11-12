@@ -97,6 +97,14 @@ function createInternalErrorHandler(options) {
       next(error);
       return;
     }
+    if (error instanceof HttpError) {
+      res.status(error.statusCode).json(failure(error.code, error.message, error.details));
+      return;
+    }
+    if (isCallerSafeError(error)) {
+      res.status(400).json(failure('ValidationError', error.message));
+      return;
+    }
     const bodyFailures = {
       'entity.parse.failed': [400, 'BadRequest', 'Malformed JSON request body'],
       'entity.too.large': [413, 'PayloadTooLarge', 'Request body is too large'],

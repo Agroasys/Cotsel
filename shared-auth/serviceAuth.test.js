@@ -92,6 +92,28 @@ test('nonce storage failures keep the auth envelope and carry a logged correlati
   const fallbackResponse = createResponseRecorder();
   await middleware(fallback, fallbackResponse, () => assert.fail('must not authenticate'));
   assert.equal(fallbackResponse.body.correlationId, 'request-valid-fixture');
+
+  for (const callback of ['onNonceStoreError', 'onAuthFailure']) {
+    const failingLogger = createServiceAuthMiddleware({
+      enabled: true,
+      maxSkewSeconds: 30,
+      nonceTtlSeconds: 60,
+      nowSeconds: () => Number(timestamp),
+      lookupApiKey: () => ({ id: 'gateway', secret, active: true }),
+      consumeNonce: async () => {
+        throw error;
+      },
+      [callback]: () => {
+        throw new Error('logger failed with fixture-secret');
+      },
+    });
+    const response = createResponseRecorder();
+    await failingLogger(req, response, () => assert.fail('must not authenticate'));
+    assert.equal(response.statusCode, 503);
+    assert.equal(response.body.code, 'AUTH_UNAVAILABLE');
+    assert.equal(response.body.correlationId, 'nonce-error-fixture');
+    assert.equal(JSON.stringify(response.body).includes('fixture-secret'), false);
+  }
 });
 
 function createRequest(overrides = {}) {

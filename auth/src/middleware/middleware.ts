@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Request, Response, NextFunction } from 'express';
-import { failure, sendInternalFailure } from '@agroasys/shared-http';
+import { createInternalErrorHandler, failure, sendInternalFailure } from '@agroasys/shared-http';
 import { ApiErrorResponse, UserSession } from '../types';
 import { Logger } from '../utils/logger';
 
@@ -68,14 +68,7 @@ export function requireRole(...roles: string[]) {
   };
 }
 
-export function errorHandler(
-  err: Error,
-  req: Request,
-  res: Response<ApiErrorResponse>,
-  _next: NextFunction,
-): void {
-  sendInternalFailure(req, res, err, {
-    code: 'InternalServerError',
-    log: (correlationId, cause) => Logger.error('Unhandled error', { correlationId, error: cause }),
-  });
-}
+export const errorHandler = createInternalErrorHandler({
+  code: 'InternalServerError',
+  log: (correlationId, cause) => Logger.error('Unhandled error', { correlationId, error: cause }),
+});

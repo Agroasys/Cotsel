@@ -13,6 +13,11 @@ describe('Auth HTTP internal failures', () => {
     const app = express();
     resolveSession = jest.fn();
     reached = jest.fn();
+    app.use(express.json({ limit: '1kb' }));
+    app.post('/body', (_req, res) => {
+      reached();
+      res.json({ success: true });
+    });
     app.get('/session', createSessionMiddleware(resolveSession), (_req, res) => {
       reached();
       res.json({ success: true });
@@ -66,6 +71,26 @@ describe('Auth HTTP internal failures', () => {
       headers: { authorization: 'Bearer fixture-token' },
     });
     expect(response.status).toBe(401);
+    expect(reached).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['{"refreshToken": fixture-secret-123}', 'application/json', 400],
+    [JSON.stringify({ refreshToken: 'fixture-secret-123'.repeat(100) }), 'application/json', 413],
+    ['{}', 'application/json; charset=iso-8859-1', 415],
+  ])('parser refusal %# preserves privacy and status', async (payload, contentType, status) => {
+    const response = await fetch(`${url}/body`, {
+      method: 'POST',
+      headers: { 'content-type': contentType, 'x-correlation-id': 'parser-error-fixture' },
+      body: payload,
+    });
+    const body = await response.json();
+    expect(response.status).toBe(status);
+    expect(body.correlationId).toBe('parser-error-fixture');
+    expect(response.headers.get('x-correlation-id')).toBe('parser-error-fixture');
+    expect(JSON.stringify(body)).not.toMatch(/fixture-sec|refreshToken|stack/);
+    expect(errorLog).toHaveBeenCalled();
+    expect(errorLog.mock.calls.flat().join(' ')).not.toMatch(/fixture-sec|refreshToken/);
     expect(reached).not.toHaveBeenCalled();
   });
 });

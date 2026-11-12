@@ -30,6 +30,34 @@ function recordingResponse() {
   };
 }
 
+test('the final boundary preserves explicitly caller-safe refusals without internal-error logging', () => {
+  for (const [error, status, code, message, details] of [
+    [
+      new HttpError(409, 'Conflict', 'Already submitted', { state: 'pending' }),
+      409,
+      'Conflict',
+      'Already submitted',
+      { state: 'pending' },
+    ],
+    [
+      new CallerSafeError('limit is invalid'),
+      400,
+      'ValidationError',
+      'limit is invalid',
+      undefined,
+    ],
+  ]) {
+    const res = recordingResponse();
+    createInternalErrorHandler({
+      log: () => assert.fail('caller refusal is not an internal fault'),
+    })(error, { headers: {} }, res, () => assert.fail('must handle caller refusal'));
+    assert.equal(res.recorded.status, status);
+    assert.equal(res.recorded.body.error, code);
+    assert.equal(res.recorded.body.message, message);
+    assert.deepEqual(res.recorded.body.details, details);
+  }
+});
+
 test('the final error boundary delegates an already-started response without writing', () => {
   const res = recordingResponse();
   res.headersSent = true;

@@ -55,14 +55,25 @@ function forbidden(res, message, onAuthFailure) {
 }
 
 function unavailable(req, res, error, options, onAuthFailure) {
+  // Keep authentication independent of the HTTP response package. Match shared-http/response.js
+  // correlationIdFor: header order, validation and invalid-header fallback.
+  // serviceAuth.test.js exercises the same contract, including request-id fallback.
   const incoming = ['x-correlation-id', 'x-request-id']
     .map((header) => req.header(header))
     .find((value) => typeof value === 'string' && /^[A-Za-z0-9._:-]{8,128}$/.test(value));
   const correlationId = incoming || crypto.randomUUID();
-  if (typeof options.onNonceStoreError === 'function') {
-    options.onNonceStoreError(correlationId, error);
+  try {
+    if (typeof options.onNonceStoreError === 'function') {
+      options.onNonceStoreError(correlationId, error);
+    }
+  } catch {
+    // A diagnostic callback must not prevent the authentication refusal.
   }
-  onAuthFailure('AUTH_UNAVAILABLE');
+  try {
+    onAuthFailure('AUTH_UNAVAILABLE');
+  } catch {
+    // Metrics callbacks cannot prevent the stable unavailable response either.
+  }
   if (typeof res.setHeader === 'function') res.setHeader('x-correlation-id', correlationId);
   res.status(503).json({
     success: false,

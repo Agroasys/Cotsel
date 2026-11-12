@@ -1,5 +1,5 @@
 import express, { Request, RequestHandler, Response, NextFunction } from 'express';
-import { failure, sendInternalFailure } from '@agroasys/shared-http';
+import { createInternalErrorHandler, failure, sendInternalFailure } from '@agroasys/shared-http';
 import { config } from '../config';
 import { consumeHmacNonce } from '../database/queries';
 import { Logger } from '../utils/logger';
@@ -186,14 +186,19 @@ function isUnsupportedEncodingError(err: unknown): boolean {
   );
 }
 
+const internalErrorHandler = createInternalErrorHandler({
+  code: 'InternalServerError',
+  log: (correlationId, cause) => Logger.error('Unhandled error', { correlationId, error: cause }),
+});
+
 export function errorHandler(
   err: unknown,
   req: Request,
   res: Response<ErrorResponse>,
-  _next: NextFunction,
+  next: NextFunction,
 ): void {
   // Raised by createRawBodyJsonParser for a compressed body (WP-2 H-22).
-  if (isUnsupportedEncodingError(err)) {
+  if (!res.headersSent && isUnsupportedEncodingError(err)) {
     Logger.warn('Rejected compressed request body', { route: req.path, ip: req.ip });
     res
       .status(415)
@@ -201,15 +206,5 @@ export function errorHandler(
     return;
   }
 
-  // WP-10 I-06: the raw error is logged under the correlation ID, never returned.
-  sendInternalFailure(req, res, err, {
-    code: 'InternalServerError',
-    log: (correlationId, cause) =>
-      Logger.error('Unhandled error', {
-        correlationId,
-        route: req.path,
-        error: cause instanceof Error ? cause.message : String(cause),
-        stack: cause instanceof Error ? cause.stack : undefined,
-      }),
-  });
+  internalErrorHandler(err, req, res, next);
 }
