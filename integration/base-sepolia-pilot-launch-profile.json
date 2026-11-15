@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "cotsel.pilot-launch-profile.v1",
+  "profileId": "cotsel-base-sepolia-controlled-pilot-v1",
+  "environment": "aws-staging",
+  "status": "pending-acceptance",
+  "traceability": {
+    "issue": "https://github.com/Agroasys/Cotsel/issues/613",
+    "programme": "https://github.com/Agroasys/agroasys-backend/issues/482",
+    "sow": ["3.3", "3.4", "3.5", "3.6", "3.7"]
+  },
+  "release": {
+    "cotselCommitSource": "workflow_sha",
+    "commitEnv": "GATEWAY_COMMIT_SHA",
+    "candidateManifestSchema": "integration/candidate-manifest.v2.schema.json",
+    "authorityProfileId": "agroasys-internal-base-sepolia-v1",
+    "rollbackTarget": "previous-accepted-candidate"
+  },
+  "network": {
+    "settlementRuntime": "base-sepolia",
+    "chainId": 84532,
+    "contractIdentity": "integration/base-sepolia-staging-contract.json",
+    "escrowAddress": "0x95021c0fD0C69BB5Cb991832476B646857632e5d",
+    "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    "deploymentBlock": 45914609,
+    "normalizedRuntimeBytecodeSha256": "9554685d6655a4cf70417ce40c754e039948b15720a9294f1e3ad435accd049f"
+  },
+  "rpc": {
+    "mode": "managed-primary-with-fallback",
+    "primarySecretRef": "rpc-base-sepolia-primary",
+    "fallbackSecretRef": "rpc-base-sepolia-fallback",
+    "fallbackRequired": true
+  },
+  "serviceAuth": {
+    "insecureDownstreamAuthAllowed": false,
+    "settlementIngress": {
+      "enabled": true,
+      "keysetSecretRef": "gateway-settlement-ingress",
+      "maxSkewSeconds": 300,
+      "nonceTtlSeconds": 600
+    },
+    "downstream": [
+      { "service": "oracle", "secretRef": "gateway-to-oracle-auth" },
+      { "service": "treasury", "secretRef": "gateway-to-treasury-auth" },
+      { "service": "ricardian", "secretRef": "gateway-to-ricardian-auth" }
+    ]
+  },
+  "callback": {
+    "enabled": true,
+    "contract": "cotsel.settlement-callback.v1",
+    "observedAmountsContract": "cotsel.settlement-observed-amounts.v1",
+    "url": "https://api.staging.agroasys.com/api/v1/settlement-handoffs/cotsel/callbacks/execution-events",
+    "credentialSecretRef": "gateway-settlement-callback"
+  },
+  "sponsorship": {
+    "signerCustodyMode": "kms",
+    "managedSignerSecretRef": "gateway-managed-signer",
+    "capacityFailClosed": true,
+    "ceilings": {
+      "maxGasLimit": 1500000,
+      "maxFeePerGasWei": "50000000",
+      "maxNativeCostWei": "100000000000000"
+    },
+    "approval": {
+      "status": "pending",
+      "authority": "WP-0 approved sponsorship and settlement limits"
+    }
+  },
+  "featureFlags": {
+    "contractAddressRequired": true,
+    "immediateInspectionAcceptance": false,
+    "rateLimitEnabled": true,
+    "rateLimitFailOpen": false
+  },
+  "surfaces": [
+    {
+      "service": "gateway",
+      "exposure": "cloudfront-waf",
+      "pathPrefix": "/api/dashboard-gateway/v1/"
+    },
+    { "service": "auth", "exposure": "loopback" },
+    { "service": "oracle", "exposure": "private" },
+    { "service": "treasury", "exposure": "private" },
+    { "service": "reconciliation", "exposure": "private" },
+    { "service": "ricardian", "exposure": "private" },
+    { "service": "indexer-graphql", "exposure": "private" },
+    { "service": "relayer", "exposure": "private" }
+  ],
+  "readiness": {
+    "endpoint": { "method": "GET", "path": "/api/dashboard-gateway/v1/readyz" },
+    "livenessEndpoint": { "method": "GET", "path": "/api/dashboard-gateway/v1/healthz" },
+    "sideEffects": "none",
+    "requiredDependencies": ["postgres", "auth-service", "chain-rpc", "indexer-graphql"],
+    "gaslessDependencies": ["gasless-relayer", "gasless-relayer-policy"]
+  },
+  "unsupportedCapabilities": [
+    "base-mainnet",
+    "raw-private-key-signer-custody",
+    "oracle-only-inspection-acceptance",
+    "fiat-offramp"
+  ],
+  "invalidationTriggers": [
+    "integration/base-sepolia-staging-contract.json changes or its acceptance is withdrawn",
+    "the release manifest callback or observed-amount contract version changes",
+    "a staging gateway environment value pinned here changes in Terraform",
+    "the WP-0 sponsorship limits are approved, revised, or withdrawn"
+  ]
+}
