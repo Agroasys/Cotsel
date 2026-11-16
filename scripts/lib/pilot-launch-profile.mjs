@@ -14,6 +14,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { DECISION_EVIDENCE_PATTERN, validateAcceptance } from './pilot-launch-acceptance.mjs';
+
 const LIB_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(LIB_DIR, '../..');
 export const DEFAULT_PROFILE_PATH = 'integration/base-sepolia-pilot-launch-profile.json';
@@ -119,7 +121,12 @@ function validateTraceability(c, profile) {
 
 function validateRelease(c, profile, authorityRegistry, rootDir) {
   const release = c.object(profile.release, 'release');
-  c.equal(release.cotselCommitSource, 'workflow_sha', 'release.cotselCommitSource', 'the CI run');
+  c.equal(
+    release.commitSource,
+    'gateway_image_tag',
+    'release.commitSource',
+    'the staging Terraform (GATEWAY_COMMIT_SHA = var.gateway_image_tag)',
+  );
   c.equal(release.commitEnv, 'GATEWAY_COMMIT_SHA', 'release.commitEnv', 'the gateway image');
   c.enumValue(release.rollbackTarget, ROLLBACK_TARGETS, 'release.rollbackTarget');
   if (
@@ -300,9 +307,9 @@ function validateSponsorship(c, profile) {
   if (approval.status === 'approved') {
     c.pattern(
       approval.evidence,
-      /^https:\/\/github\.com\/Agroasys\/.+/,
+      DECISION_EVIDENCE_PATTERN,
       'sponsorship.approval.evidence',
-      'a link to the recorded approval',
+      'a link to the recorded approval comment or review',
     );
   }
 }
@@ -415,6 +422,7 @@ export function validatePilotLaunchProfile(
   validateFlagsAndSurfaces(c, profile);
   validateReadiness(c, profile);
   validateBoundaryLists(c, profile);
+  validateAcceptance(c, profile, authorityRegistry);
 
   if (profile.status === 'withdrawn') {
     c.add('status', 'a withdrawn profile cannot gate a launch');

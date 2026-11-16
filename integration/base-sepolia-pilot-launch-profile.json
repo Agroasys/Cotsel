@@ -9,7 +9,7 @@
     "sow": ["3.3", "3.4", "3.5", "3.6", "3.7"]
   },
   "release": {
-    "cotselCommitSource": "workflow_sha",
+    "commitSource": "gateway_image_tag",
     "commitEnv": "GATEWAY_COMMIT_SHA",
     "candidateManifestSchema": "integration/candidate-manifest.v2.schema.json",
     "authorityProfileId": "agroasys-internal-base-sepolia-v1",

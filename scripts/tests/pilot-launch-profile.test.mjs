@@ -81,29 +81,92 @@ test('the schema rejects unknown fields and unsafe probe methods', () => {
   assert.ok(errors.includes('$.readiness.endpoint.method enum'));
 });
 
+const DECISION = 'https://github.com/Agroasys/Cotsel/issues/613#issuecomment-1';
+
+function acceptProfile(profile) {
+  profile.status = 'accepted';
+  profile.acceptance = {
+    decision: 'ACCEPTED',
+    acceptedBy: 'czpyioe',
+    acceptedAt: '2026-12-01T10:00:00Z',
+    candidateCommit: 'a'.repeat(40),
+    evidence: DECISION,
+  };
+  profile.sponsorship.approval = { status: 'approved', authority: 'WP-0', evidence: DECISION };
+}
+
 test('a pending profile cannot gate a promotion', () => {
   const result = validate(undefined, { requirePromotable: true });
   assert.deepEqual(fields(result), ['status', 'sponsorship.approval.status']);
 
-  const accepted = validate(
+  const accepted = validate(acceptProfile, { requirePromotable: true });
+  assert.deepEqual(accepted.errors, []);
+  assert.deepEqual(
+    schemaErrors(
+      schema,
+      (() => {
+        const profile = structuredClone(inputs.profile);
+        acceptProfile(profile);
+        return profile;
+      })(),
+    ),
+    [],
+  );
+});
+
+test('a bare accepted status without an acceptance record cannot promote', () => {
+  const result = validate(
     (profile) => {
-      profile.status = 'accepted';
-      profile.sponsorship.approval = {
-        status: 'approved',
-        authority: 'WP-0',
-        evidence: 'https://github.com/Agroasys/Cotsel/issues/613#issuecomment-1',
-      };
+      acceptProfile(profile);
+      delete profile.acceptance;
     },
     { requirePromotable: true },
   );
-  assert.deepEqual(accepted.errors, []);
+  assert.deepEqual(fields(result), ['acceptance']);
 });
 
-test('an approval without recorded evidence is rejected', () => {
-  const result = validate((profile) => {
-    profile.sponsorship.approval.status = 'approved';
+test('the acceptance record names a real decision by an approval-role holder', () => {
+  for (const [mutate, field] of [
+    [(p) => (p.acceptance.decision = 'PENDING'), 'acceptance.decision'],
+    [(p) => (p.acceptance.acceptedBy = 'someone-else'), 'acceptance.acceptedBy'],
+    [(p) => (p.acceptance.acceptedAt = 'yesterday'), 'acceptance.acceptedAt'],
+    [(p) => (p.acceptance.candidateCommit = 'abc123'), 'acceptance.candidateCommit'],
+    [
+      (p) => (p.acceptance.evidence = 'https://github.com/Agroasys/Cotsel/issues/613'),
+      'acceptance.evidence',
+    ],
+    [
+      (p) => (p.acceptance.evidence = 'https://github.com/Agroasys/anything'),
+      'acceptance.evidence',
+    ],
+  ]) {
+    const result = validate((profile) => {
+      acceptProfile(profile);
+      mutate(profile);
+    });
+    assert.deepEqual(fields(result), [field], field);
+  }
+  const stale = validate((profile) => {
+    acceptProfile(profile);
+    profile.status = 'pending-acceptance';
   });
-  assert.deepEqual(fields(result), ['sponsorship.approval.evidence']);
+  assert.deepEqual(fields(stale), ['acceptance']);
+});
+
+test('an approval without a recorded decision link is rejected', () => {
+  for (const evidence of [undefined, 'https://github.com/Agroasys/anything']) {
+    const result = validate((profile) => {
+      profile.sponsorship.approval.status = 'approved';
+      profile.sponsorship.approval.evidence = evidence;
+    });
+    assert.deepEqual(fields(result), ['sponsorship.approval.evidence']);
+  }
+});
+
+test('the commit source names the Terraform input that sets GATEWAY_COMMIT_SHA', () => {
+  assert.deepEqual(fields(validate((p) => (p.release.commitSource = 'workflow_sha'))), [
+    'release.commitSource',
+  ]);
 });
 
 test('chain, contract, bytecode and acceptance drift fail closed', () => {
@@ -252,7 +315,8 @@ test('the CLI produces a digest-bound report and rejects unknown arguments', () 
   assert.equal(promotion.ok, false);
   assert.equal(promotion.report.verdict, 'FAIL');
 
-  assert.throws(() => run(['--profile']), /requires a path/);
+  assert.throws(() => run(['--profile']), /requires a value/);
+  assert.throws(() => run(['--candidate-commit']), /requires a value/);
   assert.throws(() => run(['--surprise']), /unknown argument/);
   assert.throws(() => run(['--runtime-env', '--env-file', 'x.env']), /either/);
 });

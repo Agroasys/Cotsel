@@ -30,6 +30,10 @@
       "type": "string",
       "pattern": "^https://github\\.com/Agroasys/[A-Za-z0-9.-]+/issues/[0-9]+$"
     },
+    "decisionEvidence": {
+      "type": "string",
+      "pattern": "^https://github\\.com/Agroasys/[A-Za-z0-9.-]+/(?:issues|pull)/[0-9]+#(?:issuecomment|pullrequestreview)-[0-9]+$"
+    },
     "wei": { "type": "string", "pattern": "^[1-9][0-9]*$" },
     "probe": {
       "type": "object",
@@ -64,14 +68,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "cotselCommitSource",
+        "commitSource",
         "commitEnv",
         "candidateManifestSchema",
         "authorityProfileId",
         "rollbackTarget"
       ],
       "properties": {
-        "cotselCommitSource": { "const": "workflow_sha" },
+        "commitSource": { "const": "gateway_image_tag" },
         "commitEnv": { "const": "GATEWAY_COMMIT_SHA" },
         "candidateManifestSchema": { "type": "string" },
         "authorityProfileId": { "type": "string" },
@@ -186,7 +190,7 @@
           "properties": {
             "status": { "enum": ["pending", "approved"] },
             "authority": { "type": "string", "minLength": 1 },
-            "evidence": { "type": "string", "pattern": "^https://github\\.com/Agroasys/" }
+            "evidence": { "$ref": "#/$defs/decisionEvidence" }
           }
         }
       }
@@ -237,6 +241,22 @@
         "sideEffects": { "const": "none" },
         "requiredDependencies": { "type": "array", "items": { "type": "string" } },
         "gaslessDependencies": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "acceptance": {
+      "description": "Required when status is accepted and forbidden otherwise.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "acceptedBy", "acceptedAt", "candidateCommit", "evidence"],
+      "properties": {
+        "decision": { "const": "ACCEPTED" },
+        "acceptedBy": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}$" },
+        "acceptedAt": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "candidateCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "evidence": { "$ref": "#/$defs/decisionEvidence" }
       }
     },
     "unsupportedCapabilities": { "type": "array", "items": { "type": "string" } },

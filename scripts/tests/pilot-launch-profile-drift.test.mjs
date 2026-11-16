@@ -52,7 +52,19 @@ test('pinned gateway policy matches the staging Terraform task definition', () =
     gatewayRuntime,
     /GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED", value = "true"/,
   );
-  assert.doesNotMatch(gatewayRuntime, /GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY/);
+  for (const forbidden of [
+    'GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY',
+    'GATEWAY_EXECUTOR_PRIVATE_KEY',
+    'GATEWAY_SETTLEMENT_SERVICE_SHARED_SECRET',
+  ]) {
+    assert.ok(!gatewayRuntime.includes(forbidden), `${forbidden} must not be configured`);
+  }
+  assert.match(
+    gatewayRuntime,
+    /name = "GATEWAY_COMMIT_SHA", value = var\.gateway_image_tag \}/,
+    'release.commitSource is gateway_image_tag',
+  );
+  assert.equal(profile.release.commitSource, 'gateway_image_tag');
 });
 
 test('the callback URL is the canonical staging callback enforced by Terraform', () => {

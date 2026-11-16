@@ -10,9 +10,19 @@
  * missing, malformed, or present. Actual values are echoed only for the explicit allowlist of
  * non-secret identity and policy variables below.
  */
+import { createRequire } from 'node:module';
+import { isIP } from 'node:net';
+
+// The gateway parses its settlement keyset with this function; reusing it keeps the launch check
+// and the runtime from disagreeing about what counts as a usable key.
+const { parseServiceApiKeys } = createRequire(import.meta.url)(
+  '../../shared-auth/src/serviceAuth.js',
+);
+const RAW_SIGNER_KEY_VARIABLES = ['GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY', 'GATEWAY_EXECUTOR_PRIVATE_KEY'];
 
 const NON_SECRET_KEYS = new Set([
   'NODE_ENV',
+  'GATEWAY_COMMIT_SHA',
   'GATEWAY_SETTLEMENT_RUNTIME',
   'GATEWAY_CHAIN_ID',
   'GATEWAY_ESCROW_ADDRESS',
@@ -88,13 +98,22 @@ function createRuntimeCollector(env) {
   return { errors, read, add, present, expect, notTrue, httpsUrl };
 }
 
-function checkIdentity(r, profile) {
-  const commit = r.present(profile.release?.commitEnv ?? 'GATEWAY_COMMIT_SHA');
+function checkIdentity(r, profile, { candidateCommit, requirePromotable }) {
+  const commitEnv = profile.release?.commitEnv ?? 'GATEWAY_COMMIT_SHA';
+  const commit = r.present(commitEnv);
   if (commit !== undefined && !COMMIT_PATTERN.test(commit)) {
+    r.add(commitEnv, 'must pin the full 40-character Cotsel commit of the deployed candidate');
+  }
+  if (!candidateCommit || !COMMIT_PATTERN.test(candidateCommit)) {
     r.add(
-      profile.release?.commitEnv ?? 'GATEWAY_COMMIT_SHA',
-      'must pin the full 40-character Cotsel commit of the deployed candidate',
+      'candidateCommit',
+      'a full 40-character candidate commit is required (--candidate-commit or GITHUB_SHA)',
     );
+  } else if (commit !== undefined && COMMIT_PATTERN.test(commit) && commit !== candidateCommit) {
+    r.add(commitEnv, `must equal the candidate commit being promoted${describe(commitEnv, commit)}`);
+  }
+  if (requirePromotable && candidateCommit !== profile.acceptance?.candidateCommit) {
+    r.add('candidateCommit', 'must equal the candidate commit recorded in the profile acceptance');
   }
   r.expect('NODE_ENV', 'production');
   r.expect('GATEWAY_SETTLEMENT_RUNTIME', profile.network?.settlementRuntime);
@@ -116,6 +135,19 @@ function checkIdentity(r, profile) {
   }
 }
 
+/**
+ * Approximates the provider by the last two hostname labels, so two hostnames of one provider
+ * (e.g. regional or numbered endpoints) do not count as independent. IP literals compare whole.
+ * This can over-reject public-suffix hosts such as example.co.uk, which fails safe.
+ */
+function providerDomain(hostname) {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (isIP(host)) {
+    return host;
+  }
+  return host.split('.').filter(Boolean).slice(-2).join('.');
+}
+
 function checkRpc(r, profile) {
   const primary = r.present('GATEWAY_RPC_URL');
   const primaryUrl = primary ? r.httpsUrl('GATEWAY_RPC_URL', primary) : undefined;
@@ -129,8 +161,8 @@ function checkRpc(r, profile) {
   fallbacks.forEach((fallback, index) => {
     const label = `GATEWAY_RPC_FALLBACK_URLS[${index}]`;
     const url = r.httpsUrl(label, fallback, label);
-    if (url && primaryUrl && url.host === primaryUrl.host) {
-      r.add(label, 'must use a different provider host than GATEWAY_RPC_URL');
+    if (url && primaryUrl && providerDomain(url.hostname) === providerDomain(primaryUrl.hostname)) {
+      r.add(label, 'must use a different provider domain than GATEWAY_RPC_URL');
     }
   });
 }
@@ -140,14 +172,16 @@ function checkServiceKeyset(r) {
   if (raw === undefined) {
     return;
   }
-  let parsed;
+  let keys;
   try {
-    parsed = JSON.parse(raw);
-  } catch {
-    r.add('GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON', 'must be valid JSON');
+    keys = parseServiceApiKeys(raw);
+  } catch (error) {
+    // The parser's messages name fields only; anything else is replaced so no value can leak.
+    const reason = /^API_KEYS_JSON[\w[\].]* /.test(error.message) ? `: ${error.message}` : '';
+    r.add('GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON', `must be a valid service keyset${reason}`);
     return;
   }
-  if (!Array.isArray(parsed) || parsed.length === 0) {
+  if (!keys.some((key) => key.active && key.id && key.secret)) {
     r.add('GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON', 'must contain at least one active key');
   }
 }
@@ -165,6 +199,12 @@ function checkServiceAuth(r, profile) {
     auth.settlementIngress?.nonceTtlSeconds,
   );
   checkServiceKeyset(r);
+  if (r.read('GATEWAY_SETTLEMENT_SERVICE_SHARED_SECRET')) {
+    r.add(
+      'GATEWAY_SETTLEMENT_SERVICE_SHARED_SECRET',
+      'must be unset; the pilot accepts only the rotatable keyset form of settlement auth',
+    );
+  }
   for (const { service } of auth.downstream ?? []) {
     const prefix = `GATEWAY_${String(service).toUpperCase().replace(/-/g, '_')}`;
     r.present(`${prefix}_BASE_URL`);
@@ -196,6 +236,12 @@ function checkCeiling(r, key, ceiling) {
 }
 
 function checkSponsorship(r, profile) {
+  // Raw keys are refused whether or not sponsorship is enabled: the gateway reads either name.
+  for (const key of RAW_SIGNER_KEY_VARIABLES) {
+    if (r.read(key)) {
+      r.add(key, 'raw signer keys are not allowed in the pilot');
+    }
+  }
   const enabled = r.read('GATEWAY_GASLESS_EXECUTION_ENABLED');
   if (enabled !== undefined && enabled !== '' && !['true', 'false'].includes(enabled)) {
     r.add('GATEWAY_GASLESS_EXECUTION_ENABLED', 'must be "true" or "false"');
@@ -222,9 +268,6 @@ function checkSponsorship(r, profile) {
       r.add('GATEWAY_GASLESS_KMS_EXPECTED_ADDRESS', 'must be an EVM address');
     }
   }
-  if (r.read('GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY')) {
-    r.add('GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY', 'raw signer keys are not allowed in the pilot');
-  }
   const ceilings = sponsorship.ceilings ?? {};
   checkCeiling(r, 'GATEWAY_GASLESS_MAX_GAS_LIMIT', ceilings.maxGasLimit);
   checkCeiling(r, 'GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI', ceilings.maxFeePerGasWei);
@@ -232,12 +275,17 @@ function checkSponsorship(r, profile) {
 }
 
 /**
- * Checks a resolved gateway environment against a statically valid launch profile. Returns
- * every finding so a single run produces the complete, redacted evidence record.
+ * Checks a resolved gateway environment against a statically valid launch profile and the
+ * candidate commit being promoted. Under `requirePromotable` the candidate must also be the one
+ * the profile acceptance names. Returns every finding so one run is the complete, redacted record.
  */
-export function checkGatewayRuntimeAgainstProfile(profile, env) {
+export function checkGatewayRuntimeAgainstProfile(
+  profile,
+  env,
+  { candidateCommit, requirePromotable = false } = {},
+) {
   const r = createRuntimeCollector(env ?? {});
-  checkIdentity(r, profile);
+  checkIdentity(r, profile, { candidateCommit, requirePromotable });
   checkRpc(r, profile);
   checkServiceAuth(r, profile);
   checkCallback(r, profile);
