@@ -11,6 +11,7 @@ on:
       - 'scripts/*base-sepolia*.mjs'
       - 'scripts/validate-base-sepolia-selection.sh'
       - 'scripts/tests/base-sepolia-*.test.mjs'
+      - 'scripts/**/*pilot-launch*.mjs'
   workflow_dispatch:
     inputs:
       action:
@@ -142,7 +143,7 @@ jobs:
       - name: Test saved-plan metadata and demo alerts
         run: node infra/terraform/scripts/plan-metadata-selftest.mjs && node --test infra/terraform/scripts/gasless-execution-policy.test.mjs infra/terraform/scripts/demo-indexer-alerts.test.mjs infra/terraform/scripts/database-bootstrap-users.test.mjs infra/terraform/scripts/database-entitlement-scope.test.mjs infra/terraform/scripts/settlement-observability.test.mjs
       - name: Test accepted and demo Base Sepolia selection validation
-        run: node --test scripts/tests/base-sepolia-staging-contract.test.mjs scripts/tests/base-sepolia-demo-selection.test.mjs
+        run: node --test scripts/tests/base-sepolia-staging-contract.test.mjs scripts/tests/base-sepolia-demo-selection.test.mjs scripts/tests/pilot-launch-profile.test.mjs scripts/tests/pilot-launch-runtime.test.mjs scripts/tests/pilot-launch-profile-drift.test.mjs && node scripts/validate-pilot-launch-profile.mjs
 
       - name: Test origin-lockdown and egress controls
         run: node infra/terraform/scripts/origin-lockdown-selftest.mjs && node infra/terraform/scripts/evidence-archive-identity-selftest.mjs && node --test infra/terraform/scripts/staging-egress-gate.test.mjs

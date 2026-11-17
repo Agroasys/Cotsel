@@ -45,6 +45,7 @@
     "readiness:cotsel:validate": "node scripts/readiness/validate-cotsel-production-readiness.mjs",
     "readiness:cotsel:test": "node --test scripts/readiness/cotsel-production-readiness-contracts.test.mjs scripts/readiness/contract-cohort-rollback-record.test.mjs",
     "readiness:cotsel:audit-live": "node scripts/readiness/audit-cotsel-production-readiness-live.mjs",
+    "launch-profile:check": "node scripts/validate-pilot-launch-profile.mjs && node --test scripts/tests/pilot-launch-profile.test.mjs scripts/tests/pilot-launch-runtime.test.mjs scripts/tests/pilot-launch-profile-drift.test.mjs",
     "integration:manifest:check": "node scripts/check-cross-repo-release-manifest.mjs && node --test scripts/tests/cross-repo-release-manifest.test.mjs",
     "release:evidence:check": "node --test scripts/tests/release-candidate-inventory.test.mjs scripts/tests/release-evidence-binding.test.mjs scripts/tests/release-image-supply-chain.test.mjs",
     "release:supply-chain:check": "node scripts/check-supply-chain-policy.mjs && node --test scripts/tests/supply-chain-policy.test.mjs",

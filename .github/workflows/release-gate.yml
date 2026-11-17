@@ -82,6 +82,7 @@ jobs:
               - 'SECURITY.md'
               - 'THIRD_PARTY_NOTICES.md'
               - 'docs/**'
+              - 'integration/**'
               - 'scripts/**'
             contracts:
               - 'contracts/**'
@@ -231,6 +232,7 @@ jobs:
           run_check source-file-size pnpm run quality:file-size:check
           run_check ci-cost-controls node --test scripts/tests/ci-cost-controls.test.mjs
           run_check release-evidence-binding pnpm run release:evidence:check
+          run_check pilot-launch-profile pnpm run launch-profile:check
           run_check release-supply-chain pnpm run release:supply-chain:check
           run_check governance-policy node --test scripts/tests/wp6-governance-policy.test.mjs
           run_check security-scan-evidence node --test scripts/tests/security-scan-evidence.test.mjs scripts/tests/sdk-release-evidence.test.mjs scripts/tests/license-inventory.test.mjs
