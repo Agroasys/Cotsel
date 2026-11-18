@@ -1,7 +1,11 @@
 FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS builder
 WORKDIR /app
 
-RUN apk add --no-cache --virtual .build-deps python3 make g++
+RUN for attempt in 1 2 3; do \
+    apk add --no-cache --virtual .build-deps python3 make g++ && break; \
+    if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+    sleep $((attempt * 10)); \
+  done
 
 RUN corepack enable && corepack prepare pnpm@10.34.4 --activate
 
@@ -43,7 +47,11 @@ ADD --checksum=sha256:90a6f1a7978a1b1b096dca6c57511ca48d3b8cf052f8e704baf358f34e
   /app/aws-rds-global-bundle.pem
 ENV NODE_EXTRA_CA_CERTS=/app/aws-rds-global-bundle.pem
 
-RUN apk upgrade --no-cache \
+RUN for attempt in 1 2 3; do \
+    apk upgrade --no-cache && break; \
+    if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+    sleep $((attempt * 10)); \
+  done \
   && corepack enable \
   && corepack prepare pnpm@10.34.4 --activate
 
@@ -65,7 +73,11 @@ COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
 COPY shared-telemetry/package.json shared-telemetry/package.json
 COPY treasury/package.json treasury/package.json
-RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+RUN for attempt in 1 2 3; do \
+    apk add --no-cache --virtual .build-deps python3 make g++ && break; \
+    if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+    sleep $((attempt * 10)); \
+  done \
   && pnpm install --frozen-lockfile --prod --ignore-scripts \
   && pnpm store prune \
   && corepack disable \

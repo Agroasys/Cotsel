@@ -2,7 +2,11 @@ FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a55
 
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++
+RUN for attempt in 1 2 3; do \
+    apk add --no-cache python3 make g++ && break; \
+    if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+    sleep $((attempt * 10)); \
+  done
 
 COPY package*.json ./
 
