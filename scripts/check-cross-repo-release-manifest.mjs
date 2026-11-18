@@ -114,6 +114,54 @@ function readWorkingTreeStatus(directory) {
   }).trim();
 }
 
+function isAncestor(directory, commit, ref) {
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', commit, ref], {
+      cwd: directory,
+      stdio: 'ignore',
+    });
+    return true;
+  } catch (error) {
+    // Exit status 1 means "not an ancestor"; anything else is a real failure.
+    if (error?.status === 1) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Proves the pinned commit is contained in the branch the manifest names.
+ *
+ * A commit that exists but is not on its declared ref (an unmerged PR head, a
+ * deleted or squash-merged branch) would otherwise pass every other check. The
+ * branch is fetched from the checkout's own `origin` into a private namespace,
+ * so a shallow single-commit checkout is sufficient input.
+ */
+export function verifyCommitOnRef(directory, entry, { remote = 'origin' } = {}) {
+  const trackingRef = `refs/cotsel-manifest/${entry.name}`;
+  try {
+    execFileSync(
+      'git',
+      [
+        'fetch',
+        '--quiet',
+        '--no-tags',
+        '--filter=tree:0',
+        remote,
+        `+refs/heads/${entry.ref}:${trackingRef}`,
+      ],
+      { cwd: directory, stdio: ['ignore', 'ignore', 'pipe'] },
+    );
+  } catch (error) {
+    const detail = error?.stderr?.toString().trim();
+    fail(`${entry.name} ref ${entry.ref} could not be fetched${detail ? ` (${detail})` : ''}`);
+  }
+  if (!isAncestor(directory, entry.commit, trackingRef)) {
+    fail(`${entry.name} commit ${entry.commit} is not contained in ref ${entry.ref}`);
+  }
+}
+
 function canonicalJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
@@ -131,6 +179,7 @@ export function verifyPinnedCheckouts(manifest) {
     if (actual !== entry.commit) {
       fail(`${entry.name} checkout is ${actual}, expected ${entry.commit}`);
     }
+    verifyCommitOnRef(directory, entry);
   }
 
   const providerFixture = JSON.parse(
