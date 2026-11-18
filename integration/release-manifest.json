@@ -10,19 +10,19 @@
       "name": "agroasys-backend",
       "repository": "Agroasys/agroasys-backend",
       "ref": "develop",
-      "commit": "7f5ed9201d56f969c39747134d0a2af8961775fb"
+      "commit": "2ad5027487ea38019e916aa364b3a7bcab9f9a4d"
     },
     {
       "name": "platform.v1",
       "repository": "Agroasys/platform.v1",
       "ref": "main",
-      "commit": "173463c79b4cade4466489e74b8edca47aea8d26"
+      "commit": "dc760a8071c17e309d477dea8f2b917b60c9bf67"
     },
     {
       "name": "Cotsel-Dash",
       "repository": "Agroasys/Cotsel.dash",
-      "ref": "codex/wp1-scoped-unpause-sdk-v2",
-      "commit": "a03d03c8f2cc5804075137f6bfcaa6549812cd3b"
+      "ref": "main",
+      "commit": "36ef3e3ef7aad94c0f8153c98d27ffb0f4b87200"
     }
   ],
   "contracts": {
