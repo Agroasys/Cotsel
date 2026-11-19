@@ -36,7 +36,11 @@ FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a55
 ENV NODE_ENV=production
 WORKDIR /app
 
-RUN apk upgrade --no-cache \
+RUN for attempt in 1 2 3; do \
+    apk upgrade --no-cache && break; \
+    if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+    sleep $((attempt * 10)); \
+  done \
   && corepack enable \
   && corepack prepare pnpm@10.34.4 --activate
 
