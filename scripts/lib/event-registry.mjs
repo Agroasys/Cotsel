@@ -8,13 +8,32 @@ import path from 'node:path';
 import { canonicalDigest } from './release-evidence-validation.mjs';
 
 const VERSION_PATTERN = /^v([1-9][0-9]*)$/u;
+// Value constraints a new version may remove but not add or change, since a
+// changed bound can reject values the previous version accepted.
+const CONSTRAINT_KEYWORDS = [
+  'minLength',
+  'maxLength',
+  'pattern',
+  'format',
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+  'minItems',
+  'maxItems',
+  'minProperties',
+  'maxProperties',
+];
 
 const asArray = (value) => (value === undefined ? [] : Array.isArray(value) ? value : [value]);
 
 /**
  * Returns every way `next` would break a consumer written against `previous`.
  * Covers the JSON Schema subset the registry uses: type, enum, const,
- * properties, required, additionalProperties and items.
+ * properties, required, additionalProperties, items and value constraints
+ * (CONSTRAINT_KEYWORDS). It is deliberately conservative: a changed bound is
+ * reported even when it widens, so a person decides.
  */
 export function compatibilityProblems(previous, next, at = '$') {
   const problems = [];
@@ -23,9 +42,18 @@ export function compatibilityProblems(previous, next, at = '$') {
 
   const previousTypes = asArray(previous.type);
   const nextTypes = new Set(asArray(next.type));
+  if (!previousTypes.length && nextTypes.size) problems.push(`${at}: type constraint added`);
   if (previousTypes.length && nextTypes.size) {
     for (const type of previousTypes) {
       if (!nextTypes.has(type)) problems.push(`${at}: type ${type} is no longer accepted`);
+    }
+  }
+  if (!Array.isArray(previous.enum) && previous.const === undefined && Array.isArray(next.enum)) {
+    problems.push(`${at}: enum constraint added`);
+  }
+  for (const keyword of CONSTRAINT_KEYWORDS) {
+    if (next[keyword] !== undefined && JSON.stringify(next[keyword]) !== JSON.stringify(previous[keyword])) {
+      problems.push(`${at}: ${keyword} added or changed`);
     }
   }
   if (Array.isArray(previous.enum)) {

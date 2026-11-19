@@ -61,12 +61,24 @@ test('breaking changes are reported', () => {
     [(s) => (s.properties.status.enum = ['open']), /enum value "closed" removed/],
     [(s) => (s.properties.id.type = 'number'), /type string is no longer accepted/],
     [(s) => (s.properties.status.const = 'open'), /const added/],
+    [(s) => (s.properties.id.minLength = 3), /minLength added or changed/],
+    [(s) => (s.properties.id.pattern = '^[a-z]+$'), /pattern added or changed/],
+    [(s) => (s.properties.id.format = 'uuid'), /format added or changed/],
   ];
   for (const [mutate, problem] of cases) {
     const next = structuredClone(base);
     mutate(next);
     assert.match(compatibilityProblems(base, next).join('\n'), problem);
   }
+  const untyped = { properties: { value: {} } };
+  assert.match(
+    compatibilityProblems(untyped, { properties: { value: { type: 'string' } } }).join('\n'),
+    /type constraint added/,
+  );
+  assert.match(
+    compatibilityProblems(untyped, { properties: { value: { enum: ['a'] } } }).join('\n'),
+    /enum constraint added/,
+  );
   const open = { ...structuredClone(base), additionalProperties: true };
   assert.match(
     compatibilityProblems(open, base).join('\n'),
