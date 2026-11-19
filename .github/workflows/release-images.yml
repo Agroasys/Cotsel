@@ -348,6 +348,8 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: '1'
           hide-progress: true
+          # Expiring, package-scoped exceptions; each needs a tested disposition.
+          trivyignores: config/trivy/release-image-ignore.yaml
 
       - name: Attest image SBOM
         id: sbom_attestation

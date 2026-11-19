@@ -1,0 +1,14 @@
+# Release-image Trivy exceptions. Each entry must be scoped to exact package
+# URLs, expire, and mirror a production dependency disposition in
+# scripts/production-dependency-dispositions.mjs with the same expiry.
+# scripts/tests/release-image-trivy-exceptions.test.mjs enforces this.
+# See "Production exceptions" in docs/security/dependency-vuln-policy.md.
+#
+# Entry format:
+#   - id: CVE-YYYY-NNNNN
+#     purls:
+#       - pkg:npm/<package>@<version>
+#     expired_at: YYYY-MM-DD
+#     statement: >-
+#       <why, the local fix, and the disposition document path>
+vulnerabilities: []
