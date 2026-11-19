@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { matchesVerifiedDisposition } from './dependency-disposition.mjs';
+import {
+  matchesVerifiedDisposition,
+  productionDispositionFailure,
+} from './dependency-disposition.mjs';
+import { verifiedProductionDispositions } from './production-dependency-dispositions.mjs';
 
 const locallyPatchedAdvisories = new Map([
   [
@@ -212,16 +216,36 @@ for (const [label, result] of [
     failed = true;
   }
 }
-if (
-  prodSummary.critical > 0 ||
-  prodSummary.high > 0 ||
-  prodSummary.moderate > 0 ||
-  prodSummary.low > 0 ||
-  prodSummary.info > 0 ||
-  advisories(auditProdReport).length > 0
-) {
+const prodAdvisories = advisories(auditProdReport);
+const prodFailures = prodAdvisories
+  .map((advisory) => ({
+    advisory,
+    reason: productionDispositionFailure(
+      advisory,
+      verifiedProductionDispositions.get(advisoryId(advisory)),
+    ),
+  }))
+  .filter(({ reason }) => reason !== undefined);
+const prodFindingCount =
+  prodSummary.critical +
+  prodSummary.high +
+  prodSummary.moderate +
+  prodSummary.low +
+  prodSummary.info;
+if (prodFindingCount !== prodAdvisories.length || prodFailures.length > 0) {
   console.error('Release gate failed: production dependency audit has findings.');
+  for (const { advisory, reason } of prodFailures) {
+    console.error(`  ${auditDescription(advisory)}: ${reason}`);
+  }
   failed = true;
+}
+for (const advisory of prodAdvisories.filter(
+  (candidate) => !prodFailures.some(({ advisory: failure }) => failure === candidate),
+)) {
+  const disposition = verifiedProductionDispositions.get(advisoryId(advisory));
+  console.log(
+    `Verified production disposition: ${auditDescription(advisory)}; patch-source=${disposition.patchFile}; expires=${disposition.expiresOn}; compatibility-check=${dependencyCompatibility.exitCode === 0 ? 'passed' : 'FAILED'}`,
+  );
 }
 
 if (auditAllReport) {
