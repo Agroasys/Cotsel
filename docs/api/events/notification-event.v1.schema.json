@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cotsel.invalid/events/notification-event.v1.schema.json",
+  "title": "Cotsel operational notification v1",
+  "description": "The NotificationEvent raised by oracle, reconciliation and indexer and held in notification_outbox (notifications/src/index.ts).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "type", "severity", "dedupKey", "message", "correlation"],
+  "properties": {
+    "source": { "type": "string", "enum": ["oracle", "reconciliation", "indexer"] },
+    "type": {
+      "type": "string",
+      "enum": [
+        "INDEXER_POISON_LOG",
+        "ORACLE_CONFIRMATION_TIMEOUT",
+        "ORACLE_TRIGGER_EXHAUSTED_NEEDS_REDRIVE",
+        "ORACLE_TRIGGER_TERMINAL_FAILURE",
+        "RECONCILIATION_COVERAGE_BACKLOG",
+        "RECONCILIATION_COVERAGE_GAP",
+        "RECONCILIATION_CRITICAL_DRIFT",
+        "RECONCILIATION_RUN_ABANDONED",
+        "RECONCILIATION_TRADE_CONTAINED",
+        "RECONCILIATION_TRADE_PAUSE_UNCONFIRMED"
+      ]
+    },
+    "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+    "dedupKey": { "type": "string", "minLength": 1 },
+    "message": { "type": "string", "minLength": 1 },
+    "correlation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tradeId": { "type": "string" },
+        "actionKey": { "type": "string" },
+        "requestId": { "type": "string" },
+        "txHash": { "type": "string" },
+        "runKey": { "type": "string" },
+        "mismatchCode": { "type": "string" }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
+    }
+  }
+}

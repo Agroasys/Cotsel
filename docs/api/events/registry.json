@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "cotsel.event-registry.v1",
+  "description": "Published Cotsel event schemas. A published entry is frozen by sha256; change it by adding the next version. See README.md.",
+  "envelope": {
+    "version": "v1",
+    "schema": "envelope.v1.schema.json",
+    "sha256": "b8f6db04b5163a605b46f9d9be4f564a4b316e2c9edb8456fce77a959601f428"
+  },
+  "events": [
+    {
+      "type": "cotsel.notification",
+      "version": "v1",
+      "schema": "notification-event.v1.schema.json",
+      "producers": ["oracle", "reconciliation", "indexer"],
+      "outbox": "notification_outbox",
+      "sha256": "2013058347e59950e5e132a5d55559a954325b9487fe1769b1b4dbc7fe512c42"
+    }
+  ],
+  "contracts": [
+    {
+      "id": "cotsel.settlement-callback.v1",
+      "openapi": "docs/api/cotsel-settlement-provider.openapi.yml",
+      "schema": "CotselSettlementCallbackV1",
+      "fixture": "docs/api/fixtures/cotsel-settlement-callback.v1.json",
+      "consumer": "Agroasys/agroasys-backend",
+      "sha256": "9c83a419a840e33e748675e684468a71f80f09f447e250c42bc6cda324be45a3"
+    }
+  ]
+}

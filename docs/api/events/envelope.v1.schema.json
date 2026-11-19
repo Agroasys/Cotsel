@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cotsel.invalid/events/envelope.v1.schema.json",
+  "title": "Cotsel event envelope v1",
+  "description": "Wraps every event Cotsel publishes. The payload is validated against the schema registered for its type and schemaVersion.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "type",
+    "schemaVersion",
+    "producer",
+    "orderingKey",
+    "occurredAt",
+    "payload"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique, stable across retries; consumers deduplicate on it."
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+      "description": "Registered event type."
+    },
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^v[1-9][0-9]*$",
+      "description": "Registered payload schema version for this type."
+    },
+    "producer": {
+      "type": "string",
+      "enum": [
+        "gateway",
+        "oracle",
+        "indexer",
+        "reconciliation",
+        "treasury",
+        "relayer",
+        "ricardian",
+        "auth"
+      ]
+    },
+    "settlementId": {
+      "type": ["string", "null"],
+      "description": "Trade or settlement identifier when the event concerns one; null otherwise."
+    },
+    "orderingKey": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Events with the same key are applied in occurredAt order."
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}
