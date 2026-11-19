@@ -43,7 +43,8 @@ pnpm run security:deps:gate
 ```
 
 This command is enforcing. It fails when production dependency audit output
-contains any advisory, when an unapproved development advisory exists, or when
+contains any advisory without a valid production exception (see below), when an
+unapproved development advisory exists, or when
 `pnpm list --depth Infinity` reports an invalid dependency graph. The release gate runs this command in
 `.github/workflows/release-gate.yml` under `ci/dependency-security`.
 
@@ -52,6 +53,36 @@ or pinning around a vulnerable package without a documented compatibility and
 reachability assessment. If a production advisory cannot be fixed immediately,
 the exception must be time-bound, owned, linked to the affected package path,
 and approved as release risk.
+
+## Production exceptions
+
+A production exception is a last resort. Use it only when **no upstream
+release fixes the advisory** and the repository ships a tested local fix.
+Otherwise, upgrade. An advisory that is withdrawn or fixed upstream needs no
+exception, and an existing one must be removed.
+
+An exception has two parts, which must agree:
+
+1. An entry in `scripts/production-dependency-dispositions.mjs`. The dependency
+   gate accepts the advisory only when every check passes:
+   - exact advisory id, package, severity, vulnerable range and patched range;
+   - SHA-256 of the advisory overview text, so any change to the advisory
+     re-opens it;
+   - exact installed versions, and only the listed production dependency paths;
+   - a patch file, a disposition document and an accountable owner;
+   - an expiry date no more than 90 days ahead.
+2. If the advisory also fails the release-image scan, an entry in
+   `config/trivy/release-image-ignore.yaml` with the same identifier, exact
+   package URLs for the same versions, the same expiry, and a statement citing
+   the disposition document. `scripts/tests/release-image-trivy-exceptions.test.mjs`
+   rejects any mismatch, a root `.trivyignore`, `ignore-unfixed`, and skipped
+   paths or files.
+
+The disposition document records the advisory, exposure, the local fix and its
+tests, and the decision. Every exception needs code-owner review and an
+independent Security review, and is recorded as accepted release risk. When an
+exception expires, the gate fails again. Remove it after upgrading, or record a
+fresh review with a new expiry.
 
 ## Override Lifecycle
 
