@@ -21,7 +21,7 @@
   "crossRepositoryManifest": {
     "path": "integration/release-manifest.json",
     "schemaVersion": "cotsel.release-manifest.v1",
-    "sha256": "109fd744249f794dfa27017a507724562b878107d112d53abb658326ca4366eb"
+    "sha256": "ba55ef1c3d47fca264fb956f83245a903b21d7c47d0d25058d8bc37c00e74264"
   },
   "artifacts": [
     {
@@ -268,7 +268,7 @@
       "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "reference": "example.invalid/agroasys-backend@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "sourceRepository": "Agroasys/agroasys-backend",
-      "sourceCommit": "7f5ed9201d56f969c39747134d0a2af8961775fb",
+      "sourceCommit": "2ad5027487ea38019e916aa364b3a7bcab9f9a4d",
       "producingWorkflow": ".github/workflows/release-image.yml",
       "producingRunId": "fixture-backend",
       "provenance": {
@@ -289,7 +289,7 @@
       "kind": "web-bundle",
       "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       "sourceRepository": "Agroasys/platform.v1",
-      "sourceCommit": "173463c79b4cade4466489e74b8edca47aea8d26",
+      "sourceCommit": "e7898839e4ec4467e1ae30b398028dc1c49d89bb",
       "producingWorkflow": ".github/workflows/release-artifact.yml",
       "producingRunId": "fixture-platform",
       "provenance": {
@@ -310,7 +310,7 @@
       "kind": "web-bundle",
       "digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       "sourceRepository": "Agroasys/Cotsel.dash",
-      "sourceCommit": "a03d03c8f2cc5804075137f6bfcaa6549812cd3b",
+      "sourceCommit": "36ef3e3ef7aad94c0f8153c98d27ffb0f4b87200",
       "producingWorkflow": ".github/workflows/deploy-staging.yml",
       "producingRunId": "fixture-dashboard",
       "provenance": {
