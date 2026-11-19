@@ -87,3 +87,16 @@ export {
   FUNDED_SETTLEMENT_PHASES,
 } from './settlementFundedBinding';
 export type { SettlementFundedBinding } from './settlementFundedBinding';
+export {
+  AGROASYS_LAUNCH_TEMPLATE_V1,
+  SETTLEMENT_TEMPLATE_SCHEMA_VERSION,
+  computeSettlementSchedule,
+  isSettlementScheduleValid,
+  settlementTemplateHash,
+  settlementTemplateProblems,
+} from './settlement/settlementTemplate';
+export type {
+  SettlementSchedule,
+  SettlementTemplate,
+  SettlementTemplateMilestone,
+} from './settlement/settlementTemplate';
