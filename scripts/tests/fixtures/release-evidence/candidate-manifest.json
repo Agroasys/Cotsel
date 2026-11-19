@@ -21,7 +21,7 @@
   "crossRepositoryManifest": {
     "path": "integration/release-manifest.json",
     "schemaVersion": "cotsel.release-manifest.v1",
-    "sha256": "ac32f2c6a956b4813745859f0daa6b5ff39a3fdc258bc75855ed0a5568e0fb55"
+    "sha256": "ba55ef1c3d47fca264fb956f83245a903b21d7c47d0d25058d8bc37c00e74264"
   },
   "artifacts": [
     {
@@ -289,7 +289,7 @@
       "kind": "web-bundle",
       "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       "sourceRepository": "Agroasys/platform.v1",
-      "sourceCommit": "dc760a8071c17e309d477dea8f2b917b60c9bf67",
+      "sourceCommit": "e7898839e4ec4467e1ae30b398028dc1c49d89bb",
       "producingWorkflow": ".github/workflows/release-artifact.yml",
       "producingRunId": "fixture-platform",
       "provenance": {
