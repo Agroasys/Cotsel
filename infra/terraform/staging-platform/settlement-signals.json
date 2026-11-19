@@ -406,6 +406,105 @@
       "sourceDirs": ["ricardian/src"],
       "conditions": [{ "field": "level", "equals": ["error"] }],
       "description": "Ricardian error-level records. Dashboard trend only."
+    },
+    {
+      "id": "auth_durable_admin_provisioned",
+      "domain": "security",
+      "logGroup": "auth",
+      "sourceDirs": ["auth/src"],
+      "conditions": [{ "field": "eventType", "equals": ["auth.durable_admin_provisioned"] }],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "A durable administrator was provisioned; verify the ticket, approver and target account."
+    },
+    {
+      "id": "auth_durable_admin_revoked",
+      "domain": "security",
+      "logGroup": "auth",
+      "sourceDirs": ["auth/src"],
+      "conditions": [{ "field": "eventType", "equals": ["auth.durable_admin_revoked"] }],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "A durable administrator was revoked; verify session revocation and the access-review ticket."
+    },
+    {
+      "id": "auth_break_glass_granted",
+      "domain": "security",
+      "logGroup": "auth",
+      "sourceDirs": ["auth/src"],
+      "conditions": [{ "field": "eventType", "equals": ["auth.break_glass_granted"] }],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "Break-glass administrator access was granted; open an incident review and confirm the TTL."
+    },
+    {
+      "id": "auth_break_glass_revoked",
+      "domain": "security",
+      "logGroup": "auth",
+      "sourceDirs": ["auth/src"],
+      "conditions": [{ "field": "eventType", "equals": ["auth.break_glass_revoked"] }],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "Break-glass access was revoked; verify the temporary authority and its sessions are gone."
+    },
+    {
+      "id": "auth_break_glass_expired",
+      "domain": "security",
+      "logGroup": "auth",
+      "sourceDirs": ["auth/src"],
+      "conditions": [{ "field": "eventType", "equals": ["auth.break_glass_expired"] }],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "Break-glass access expired; verify the temporary authority and its sessions are gone."
+    },
+    {
+      "id": "auth_service_auth_denied",
+      "domain": "security",
+      "logGroup": "auth",
+      "sourceDirs": ["auth/src"],
+      "conditions": [{ "field": "eventType", "equals": ["auth.service_auth_denied"] }],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "A service-to-service request failed authentication."
+    },
+    {
+      "id": "auth_nonce_replay_attempted",
+      "domain": "security",
+      "logGroup": "auth",
+      "sourceDirs": ["auth/src"],
+      "conditions": [{ "field": "eventType", "equals": ["auth.nonce_replay_attempted"] }],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "A signed request reused a nonce; treat it as a suspected replay until explained."
+    },
+    {
+      "id": "auth_rate_limit_fail_closed",
+      "domain": "security",
+      "logGroup": "auth",
+      "sourceDirs": ["auth/src"],
+      "conditions": [{ "field": "eventType", "equals": ["auth.rate_limiter_fail_closed"] }],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "The auth rate-limit store failed and protected requests are being rejected."
+    },
+    {
+      "id": "auth_rate_limit_fail_open",
+      "domain": "security",
+      "logGroup": "auth",
+      "sourceDirs": ["auth/src"],
+      "conditions": [{ "field": "eventType", "equals": ["auth.rate_limiter_fail_open"] }],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "The auth rate-limit store failed and requests are passing without rate limiting."
+    },
+    {
+      "id": "gateway_rate_limit_fail_closed",
+      "domain": "security",
+      "logGroup": "gateway",
+      "sourceDirs": ["gateway/src"],
+      "conditions": [{ "field": "eventType", "equals": ["gateway.rate_limiter_fail_closed"] }],
+      "alarm": { "severity": "high", "kind": "event" },
+      "description": "The gateway rate-limit store failed and protected requests are being rejected."
+    },
+    {
+      "id": "gateway_rate_limit_fail_open",
+      "domain": "security",
+      "logGroup": "gateway",
+      "sourceDirs": ["gateway/src"],
+      "conditions": [{ "field": "eventType", "equals": ["gateway.rate_limiter_fail_open"] }],
+      "alarm": { "severity": "critical", "kind": "event" },
+      "description": "The gateway rate-limit store failed and requests are passing without rate limiting."
     }
   ]
 }
