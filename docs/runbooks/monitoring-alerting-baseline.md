@@ -84,6 +84,10 @@ Pilot defaults approved in decision issue `#199`.
 | `gateway_rate_limit_fail_open`    | gateway        | `gateway.rate_limiter_fail_open` security event emitted            | CRITICAL | gateway structured logs                                          | Confirm fail-open was explicitly configured and restore Redis | Incident Commander                    | `scripts/cotsel.sh logs gateway`                                                                                                                                                                                                                                                                                                                                             |
 | `gateway_rate_limit_fail_closed`  | gateway        | `gateway.rate_limiter_fail_closed` security event emitted          | HIGH     | gateway structured logs                                          | Verify Redis availability and blocked protected path          | Ops/Engineering On-Call               | `scripts/cotsel.sh logs gateway`                                                                                                                                                                                                                                                                                                                                             |
 
+The `auth_break_glass_expired` event is emitted when a session check detects an expired grant.
+No background process emits expiry events for unused grants.
+Use the grant's recorded expiry and access-review process to check those grants.
+
 ## Deployed Staging Alarms
 
 The AWS staging platform deploys these signals as CloudWatch alarms, a settlement dashboard, gateway SLO burn-rate alarms, and an external readiness probe. See `docs/runbooks/settlement-observability.md` for the alarm catalog, routing inputs, and responses.

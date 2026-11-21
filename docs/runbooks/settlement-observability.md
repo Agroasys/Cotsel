@@ -151,6 +151,12 @@ failing record. Capture the evidence listed in
 | `gateway_rate_limit_fail_closed`         | HIGH     | Restore Redis; protected gateway paths reject requests until it is reachable                                  | `monitoring-alerting-baseline.md`          |
 | `gateway_rate_limit_fail_open`           | CRITICAL | Confirm fail-open was explicitly configured, then restore Redis; the gateway is running without rate limits   | `monitoring-alerting-baseline.md`          |
 
+The `auth_break_glass_expired` alarm reports expiry detected during session use.
+The session check records the grant's expiry and rejects the session.
+No background process emits this event when a grant reaches its expiry time.
+If the holder does not reuse the session, expiry produces no alarm.
+Use the grant's recorded expiry and the access-review process to check unused grants.
+
 ## Evidence capture
 
 For a candidate-bound E-5 or P-4 packet, record:
