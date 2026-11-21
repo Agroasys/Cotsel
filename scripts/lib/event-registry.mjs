@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // Event schema registry checks (#949). Published schema versions are frozen by
-// digest; a change needs a new version, and each version must stay backward
-// compatible with the one before it, so existing consumers keep working.
+// digest; a new version must emit only values accepted by existing consumers.
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { canonicalDigest } from './release-evidence-validation.mjs';
 
 const VERSION_PATTERN = /^v([1-9][0-9]*)$/u;
-// Value constraints a new version may remove but not add or change, since a
-// changed bound can reject values the previous version accepted.
+// Existing value constraints cannot disappear. Changed bounds require review,
+// even if they might narrow the new producer's output.
 const CONSTRAINT_KEYWORDS = [
   'minLength',
   'maxLength',
@@ -29,7 +28,8 @@ const CONSTRAINT_KEYWORDS = [
 const asArray = (value) => (value === undefined ? [] : Array.isArray(value) ? value : [value]);
 
 /**
- * Returns every way `next` would break a consumer written against `previous`.
+ * Consumer compatibility: every value accepted by `next` must be accepted by
+ * `previous`. Producers may narrow their output, but must not widen it.
  * Covers the JSON Schema subset the registry uses: type, enum, const,
  * properties, required, additionalProperties, items and value constraints
  * (CONSTRAINT_KEYWORDS). It is deliberately conservative: a changed bound is
@@ -37,61 +37,78 @@ const asArray = (value) => (value === undefined ? [] : Array.isArray(value) ? va
  */
 export function compatibilityProblems(previous, next, at = '$') {
   const problems = [];
+  if (next === false || previous === true) return problems;
+  if (previous === false) return next === false ? [] : [`${at}: rejecting schema widened`];
+  if (next === true) next = {};
   if (!previous || typeof previous !== 'object') return problems;
   if (!next || typeof next !== 'object') return [`${at}: schema removed`];
 
-  const previousTypes = asArray(previous.type);
-  const nextTypes = new Set(asArray(next.type));
-  if (!previousTypes.length && nextTypes.size) problems.push(`${at}: type constraint added`);
-  if (previousTypes.length && nextTypes.size) {
-    for (const type of previousTypes) {
-      if (!nextTypes.has(type)) problems.push(`${at}: type ${type} is no longer accepted`);
-    }
-  }
-  if (!Array.isArray(previous.enum) && previous.const === undefined && Array.isArray(next.enum)) {
-    problems.push(`${at}: enum constraint added`);
-  }
-  for (const keyword of CONSTRAINT_KEYWORDS) {
-    if (next[keyword] !== undefined && JSON.stringify(next[keyword]) !== JSON.stringify(previous[keyword])) {
-      problems.push(`${at}: ${keyword} added or changed`);
-    }
-  }
-  if (Array.isArray(previous.enum)) {
-    if (!Array.isArray(next.enum)) {
-      if (next.const !== undefined) problems.push(`${at}: enum narrowed to a const`);
-    } else {
-      for (const value of previous.enum) {
-        if (!next.enum.includes(value)) problems.push(`${at}: enum value ${JSON.stringify(value)} removed`);
+  const previousTypes = new Set(asArray(previous.type));
+  const nextTypes = asArray(next.type);
+  if (previousTypes.size && !nextTypes.length) problems.push(`${at}: type constraint removed`);
+  if (previousTypes.size && nextTypes.length) {
+    for (const type of nextTypes) {
+      if (!previousTypes.has(type) && !(type === 'integer' && previousTypes.has('number'))) {
+        problems.push(`${at}: type ${type} is newly emitted`);
       }
     }
   }
-  if (previous.const !== undefined && next.const !== undefined && previous.const !== next.const) {
-    problems.push(`${at}: const changed`);
+  for (const keyword of CONSTRAINT_KEYWORDS) {
+    if (
+      previous[keyword] !== undefined &&
+      JSON.stringify(next[keyword]) !== JSON.stringify(previous[keyword])
+    ) {
+      problems.push(`${at}: ${keyword} removed or changed`);
+    }
   }
-  if (previous.const === undefined && next.const !== undefined) problems.push(`${at}: const added`);
-
-  const previousRequired = new Set(previous.required ?? []);
-  for (const name of next.required ?? []) {
-    if (!previousRequired.has(name)) problems.push(`${at}: ${name} became required`);
+  const previousValues = previous.const !== undefined ? [previous.const] : previous.enum;
+  const nextValues = next.const !== undefined ? [next.const] : next.enum;
+  if (Array.isArray(previousValues)) {
+    if (!Array.isArray(nextValues)) {
+      problems.push(`${at}: enum or const constraint removed`);
+    } else {
+      for (const value of nextValues) {
+        if (!previousValues.some((old) => JSON.stringify(old) === JSON.stringify(value))) {
+          problems.push(`${at}: enum value ${JSON.stringify(value)} is newly emitted`);
+        }
+      }
+    }
+  }
+  const nextRequired = new Set(next.required ?? []);
+  for (const name of previous.required ?? []) {
+    if (!nextRequired.has(name)) problems.push(`${at}: ${name} is no longer required`);
   }
   for (const [name, schema] of Object.entries(previous.properties ?? {})) {
-    if (!next.properties || !(name in next.properties)) {
-      problems.push(`${at}.${name}: property removed`);
-      continue;
+    const nextSchema = next.properties?.[name] ?? next.additionalProperties;
+    if (nextSchema === false) continue;
+    problems.push(...compatibilityProblems(schema, nextSchema ?? {}, `${at}.${name}`));
+  }
+  for (const [name, schema] of Object.entries(next.properties ?? {})) {
+    if (name in (previous.properties ?? {})) continue;
+    if (previous.additionalProperties === false) {
+      problems.push(`${at}.${name}: property added to a closed object`);
+    } else if (typeof previous.additionalProperties === 'object') {
+      problems.push(
+        ...compatibilityProblems(previous.additionalProperties, schema, `${at}.${name}`),
+      );
     }
-    problems.push(...compatibilityProblems(schema, next.properties[name], `${at}.${name}`));
   }
-  if (previous.additionalProperties !== false && next.additionalProperties === false) {
-    problems.push(`${at}: additional properties are no longer allowed`);
+  if (previous.additionalProperties === false && next.additionalProperties !== false) {
+    problems.push(`${at}: additional properties are newly allowed`);
   }
-  if (previous.items) problems.push(...compatibilityProblems(previous.items, next.items, `${at}[]`));
+  if (previous.items)
+    problems.push(...compatibilityProblems(previous.items, next.items ?? {}, `${at}[]`));
   if (
     previous.additionalProperties &&
     typeof previous.additionalProperties === 'object' &&
-    typeof next.additionalProperties === 'object'
+    next.additionalProperties !== false
   ) {
     problems.push(
-      ...compatibilityProblems(previous.additionalProperties, next.additionalProperties, `${at}{*}`),
+      ...compatibilityProblems(
+        previous.additionalProperties,
+        next.additionalProperties ?? {},
+        `${at}{*}`,
+      ),
     );
   }
   return problems;
@@ -155,9 +172,10 @@ export function emittedNotificationTypes(source) {
     if (expression.includes("'")) {
       literals(expression).forEach((value) => found.add(value));
     } else if (/^[A-Za-z_$][\w$]*$/u.test(expression)) {
-      const assignment = new RegExp(`(?:const|let)\\s+${expression}\\s*=\\s*([\\s\\S]*?);`, 'u').exec(
-        source,
-      );
+      const assignment = new RegExp(
+        `(?:const|let)\\s+${expression}\\s*=\\s*([\\s\\S]*?);`,
+        'u',
+      ).exec(source);
       if (assignment) literals(assignment[1]).forEach((value) => found.add(value));
     }
   }
@@ -181,7 +199,8 @@ export function registryProblems(root) {
   const registry = JSON.parse(fs.readFileSync(path.join(directory, 'registry.json'), 'utf8'));
   const loadSchema = (file) => JSON.parse(fs.readFileSync(path.join(directory, file), 'utf8'));
 
-  if (registry.schemaVersion !== 'cotsel.event-registry.v1') problems.push('registry schemaVersion');
+  if (registry.schemaVersion !== 'cotsel.event-registry.v1')
+    problems.push('registry schemaVersion');
 
   const frozen = (label, entry, digest) => {
     if (entry.status === 'draft') return;
@@ -196,21 +215,27 @@ export function registryProblems(root) {
 
   const byType = new Map();
   for (const event of registry.events) {
-    if (!VERSION_PATTERN.test(event.version)) problems.push(`${event.type}: bad version ${event.version}`);
+    if (!VERSION_PATTERN.test(event.version))
+      problems.push(`${event.type}: bad version ${event.version}`);
     const schema = loadSchema(event.schema);
     frozen(`${event.type} ${event.version}`, event, canonicalDigest(schema));
     if (!byType.has(event.type)) byType.set(event.type, []);
     byType.get(event.type).push({ ...event, document: schema });
   }
   for (const [type, versions] of byType) {
-    versions.sort((a, b) => Number(VERSION_PATTERN.exec(a.version)[1]) - Number(VERSION_PATTERN.exec(b.version)[1]));
+    versions.sort(
+      (a, b) =>
+        Number(VERSION_PATTERN.exec(a.version)[1]) - Number(VERSION_PATTERN.exec(b.version)[1]),
+    );
     versions.forEach((entry, index) => {
       if (Number(VERSION_PATTERN.exec(entry.version)[1]) !== index + 1) {
         problems.push(`${type}: versions must be consecutive from v1`);
       }
       if (index > 0) {
         for (const problem of compatibilityProblems(versions[index - 1].document, entry.document)) {
-          problems.push(`${type} ${entry.version} breaks ${versions[index - 1].version}: ${problem}`);
+          problems.push(
+            `${type} ${entry.version} breaks ${versions[index - 1].version}: ${problem}`,
+          );
         }
       }
     });
@@ -232,14 +257,14 @@ export function registryProblems(root) {
     const emitted = new Set();
     for (const producer of latest.producers) {
       for (const file of listSourceFiles(path.join(root, producer, 'src'))) {
-        emittedNotificationTypes(fs.readFileSync(file, 'utf8')).forEach((type) => emitted.add(type));
+        emittedNotificationTypes(fs.readFileSync(file, 'utf8')).forEach((type) =>
+          emitted.add(type),
+        );
       }
     }
     for (const type of emitted) {
-      if (!registered.has(type)) problems.push(`notification type ${type} is emitted but not registered`);
-    }
-    for (const type of registered) {
-      if (!emitted.has(type)) problems.push(`notification type ${type} is registered but no longer emitted`);
+      if (!registered.has(type))
+        problems.push(`notification type ${type} is emitted but not registered`);
     }
   }
   return problems;

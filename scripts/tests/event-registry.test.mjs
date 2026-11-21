@@ -46,44 +46,92 @@ test('the checked-in registry is valid and matches the emitted notification type
   assert.deepEqual(registryProblems(ROOT), []);
 });
 
-test('additive changes are compatible', () => {
+test('narrower producer output remains compatible with existing consumers', () => {
   const next = structuredClone(base);
-  next.properties.note = { type: 'string' };
-  next.properties.status.enum.push('archived');
-  next.properties.id.type = ['string', 'null'];
+  next.required.push('status');
+  next.properties.status.enum = ['open'];
+  next.properties.id.minLength = 1;
   assert.deepEqual(compatibilityProblems(base, next), []);
+  assert.deepEqual(compatibilityProblems({ type: 'object' }, base), []);
+  assert.deepEqual(compatibilityProblems({ type: ['string', 'null'] }, { type: 'string' }), []);
+  assert.deepEqual(compatibilityProblems({ type: 'number' }, { type: 'integer' }), []);
+  assert.deepEqual(
+    compatibilityProblems({ type: 'string', enum: ['a', 'b'] }, { type: 'string', const: 'a' }),
+    [],
+  );
 });
 
 test('breaking changes are reported', () => {
   const cases = [
-    [(s) => delete s.properties.status, /status: property removed/],
-    [(s) => s.required.push('status'), /status became required/],
-    [(s) => (s.properties.status.enum = ['open']), /enum value "closed" removed/],
-    [(s) => (s.properties.id.type = 'number'), /type string is no longer accepted/],
-    [(s) => (s.properties.status.const = 'open'), /const added/],
-    [(s) => (s.properties.id.minLength = 3), /minLength added or changed/],
-    [(s) => (s.properties.id.pattern = '^[a-z]+$'), /pattern added or changed/],
-    [(s) => (s.properties.id.format = 'uuid'), /format added or changed/],
+    [(s) => (s.required = []), /id is no longer required/],
+    [(s) => s.properties.status.enum.push('archived'), /enum value "archived" is newly emitted/],
+    [(s) => (s.properties.id.type = ['string', 'null']), /type null is newly emitted/],
+    [(s) => delete s.properties.id.type, /type constraint removed/],
+    [(s) => delete s.properties.status.enum, /enum or const constraint removed/],
+    [(s) => (s.properties.note = { type: 'string' }), /note: property added to a closed object/],
+    [(s) => (s.additionalProperties = true), /additional properties are newly allowed/],
   ];
   for (const [mutate, problem] of cases) {
     const next = structuredClone(base);
     mutate(next);
     assert.match(compatibilityProblems(base, next).join('\n'), problem);
   }
-  const untyped = { properties: { value: {} } };
+  for (const [keyword, value] of [
+    ['minLength', 3],
+    ['pattern', '^[a-z]+$'],
+    ['format', 'uuid'],
+  ]) {
+    const previous = { type: 'string', [keyword]: value };
+    assert.match(
+      compatibilityProblems(previous, { type: 'string' }).join('\n'),
+      new RegExp(`${keyword} removed or changed`),
+    );
+  }
+  assert.match(compatibilityProblems({ const: 'a' }, { const: 'b' }).join('\n'), /newly emitted/);
   assert.match(
-    compatibilityProblems(untyped, { properties: { value: { type: 'string' } } }).join('\n'),
-    /type constraint added/,
+    compatibilityProblems({ type: 'integer' }, { type: 'number' }).join('\n'),
+    /newly emitted/,
   );
   assert.match(
-    compatibilityProblems(untyped, { properties: { value: { enum: ['a'] } } }).join('\n'),
-    /enum constraint added/,
+    compatibilityProblems({ type: 'array', items: { type: 'string' } }, { type: 'array' }).join(
+      '\n',
+    ),
+    /type constraint removed/,
   );
-  const open = { ...structuredClone(base), additionalProperties: true };
+});
+
+test('nested closed objects and typed additional properties protect old consumers', () => {
+  const previous = {
+    type: 'object',
+    properties: { correlation: base },
+    additionalProperties: false,
+  };
+  const next = structuredClone(previous);
+  next.properties.correlation.properties.trace = { type: 'string' };
   assert.match(
-    compatibilityProblems(open, base).join('\n'),
-    /additional properties are no longer allowed/,
+    compatibilityProblems(previous, next).join('\n'),
+    /correlation.trace: property added/,
   );
+  const typed = { type: 'object', additionalProperties: { type: 'string' } };
+  assert.match(
+    compatibilityProblems(typed, { type: 'object' }).join('\n'),
+    /type constraint removed/,
+  );
+  assert.match(
+    compatibilityProblems(typed, {
+      type: 'object',
+      properties: { amount: { type: 'number' } },
+      additionalProperties: false,
+    }).join('\n'),
+    /type number is newly emitted/,
+  );
+  assert.deepEqual(
+    compatibilityProblems(typed, { type: 'object', additionalProperties: false }),
+    [],
+  );
+  assert.deepEqual(compatibilityProblems(base, false), []);
+  assert.match(compatibilityProblems(false, base).join('\n'), /rejecting schema widened/);
+  assert.match(compatibilityProblems(base, true).join('\n'), /type constraint removed/);
 });
 
 test('a published schema cannot change in place', () => {
@@ -112,7 +160,10 @@ test('a new version must be compatible with the previous one', () => {
     status: 'draft',
   });
   fs.writeFileSync(path.join(directory, 'registry.json'), JSON.stringify(registry));
-  assert.match(registryProblems(root).join('\n'), /v2 breaks v1: \$\.dedupKey: property removed/);
+  assert.match(
+    registryProblems(root).join('\n'),
+    /v2 breaks v1: \$: dedupKey is no longer required/,
+  );
 });
 
 test('the callback contract digest covers referenced schemas', () => {
@@ -165,4 +216,17 @@ test('an emitted but unregistered notification type fails the check', () => {
     registryProblems(root).join('\n'),
     /INDEXER_NEW_ALERT is emitted but not registered/,
   );
+});
+
+test('a notification type may stop being emitted while its published schema remains frozen', () => {
+  const root = copyRoot();
+  const file = path.join(root, 'indexer/src/alerts.ts');
+  const schema = JSON.parse(
+    fs.readFileSync(path.join(root, 'docs/api/events/notification-event.v1.schema.json'), 'utf8'),
+  );
+  const replacement = schema.properties.type.enum.find((value) => value.startsWith('ORACLE_'));
+  const source = fs.readFileSync(file, 'utf8');
+  assert.ok(source.includes('INDEXER_POISON_LOG'));
+  fs.writeFileSync(file, source.replaceAll('INDEXER_POISON_LOG', replacement));
+  assert.deepEqual(registryProblems(root), []);
 });
