@@ -101,6 +101,11 @@ applied.
 
 ## Router behaviour
 
+The router snapshots each submit before validation and fingerprinting. Later
+caller mutations cannot change the approved request. Signing observations are
+checked against a separate copy of the intent. Chain payloads must contain a
+signed transaction for the requested chain; otherwise no adapter is called.
+
 | Case                                                                          | Result                                                                                  |
 | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Duplicate submit, same key and request                                        | One provider operation; later calls return the stored result with `replayed: true`.     |
@@ -116,6 +121,13 @@ applied.
 The router stores claims through `ExecutionIdempotencyStore`. `claim` must be an
 atomic insert-if-absent shared by every process. The bundled in-memory store is for
 tests and single-process tools only; the durable store belongs with #644.
+
+Stored results retain the verified observation, including a wallet address or
+signed transaction, so a retry after a lost response returns the usable result.
+Returned observations are independent copies. Durable stores must preserve
+`bigint` amounts losslessly and protect signing output as sensitive data.
+Malformed observations return `unknown` and raise an alert. A malformed status
+response does not overwrite previously verified evidence.
 
 Alerts go to `onAlert` and carry reason codes only, never payloads, signatures or
 credentials. They are inputs to #953.

@@ -1,15 +1,16 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { ExecutionCapability } from './adapters';
+import type { ExecutionCapability, ExecutionObservation } from './adapters';
 import type { CustodyMode } from './custody';
 import type { ExpectedExecutionObservation } from './verification';
 
-/** Serializable form of a routed result, as stored with the claim. */
+/** Stored result. Durable stores must serialize bigint amounts losslessly. */
 export interface StoredExecutionResult {
   outcome: 'pending' | 'succeeded' | 'failed' | 'unknown';
   operationRef: string | null;
   reason?: string;
+  observation?: ExecutionObservation;
 }
 
 export interface ExecutionIdempotencyRecord {
@@ -67,7 +68,7 @@ export function createInMemoryExecutionIdempotencyStore(): ExecutionIdempotencyS
       if (!record) {
         throw new Error(`No idempotency claim for ${key}`);
       }
-      records.set(key, { ...record, state: 'recorded', result: { ...result } });
+      records.set(key, { ...record, state: 'recorded', result: structuredClone(result) });
     },
     async release(key) {
       records.delete(key);

@@ -173,13 +173,13 @@ export function createExecutionRouter(options: CreateExecutionRouterOptions): Ex
     idempotencyKey: string,
     result: StoredExecutionResult | { outcome: 'not_found'; operationRef: string | null },
     replayed: boolean,
-    observation?: ExecutionObservation,
   ): RoutedExecutionResult {
+    const observation = 'observation' in result ? result.observation : undefined;
     return {
       outcome: result.outcome,
       operationRef: result.operationRef,
       ...('reason' in result && result.reason ? { reason: result.reason } : {}),
-      ...(observation ? { observation } : {}),
+      ...(observation ? { observation: structuredClone(observation) } : {}),
       capability: record.capability,
       adapterId: record.adapterId,
       custodyMode: record.custodyMode,
@@ -201,10 +201,14 @@ export function createExecutionRouter(options: CreateExecutionRouterOptions): Ex
     allowNotFound: boolean,
   ): {
     result: StoredExecutionResult | { outcome: 'not_found'; operationRef: null };
-    observation?: ExecutionObservation;
   } {
     if (returned === TIMED_OUT) {
       return { result: { outcome: 'unknown', operationRef: null, reason: 'timeout' } };
+    }
+    try {
+      returned = structuredClone(returned);
+    } catch {
+      return { result: { outcome: 'unknown', operationRef: null, reason: 'result_invalid' } };
     }
     const value = returned as {
       outcome?: unknown;
@@ -243,8 +247,8 @@ export function createExecutionRouter(options: CreateExecutionRouterOptions): Ex
         outcome: outcome as StoredExecutionResult['outcome'],
         operationRef,
         ...(reason ? { reason } : {}),
+        ...(value?.observation ? { observation: value.observation } : {}),
       },
-      observation: value?.observation,
     };
   }
 
@@ -316,13 +320,13 @@ export function createExecutionRouter(options: CreateExecutionRouterOptions): Ex
       }
       returned = { outcome: 'unknown', operationRef: null, reason: 'adapter_error' };
     }
-    const { result, observation } = settle(record, request.idempotencyKey, returned, false);
+    const { result } = settle(record, request.idempotencyKey, returned, false);
     const stored = result as StoredExecutionResult;
     await store.record(record.key, stored);
     if (stored.outcome === 'unknown') {
       reportUnknown(record, request.idempotencyKey, stored.reason);
     }
-    return routed(record, request.idempotencyKey, stored, false, observation);
+    return routed(record, request.idempotencyKey, stored, false);
   }
 
   return {
@@ -374,6 +378,11 @@ export function createExecutionRouter(options: CreateExecutionRouterOptions): Ex
     },
 
     async submit(capability, request) {
+      try {
+        request = structuredClone(request);
+      } catch {
+        throw new ExecutionRoutingError('payload_invalid', { problems: ['request_not_cloneable'] });
+      }
       const { declaration: current, adapter } = resolve(capability, request);
       checkPayload(capability, request.payload);
       const settlementId = request.settlementId ?? null;
@@ -400,7 +409,7 @@ export function createExecutionRouter(options: CreateExecutionRouterOptions): Ex
         if (running.fingerprint !== record.fingerprint) {
           throw new ExecutionIdempotencyConflictError(record.key);
         }
-        return { ...(await running.result), replayed: true };
+        return { ...structuredClone(await running.result), replayed: true };
       }
       const result = submitOnce(capability, { ...request, settlementId }, adapter, record);
       inFlight.set(record.key, { fingerprint: record.fingerprint, result });
@@ -469,14 +478,14 @@ export function createExecutionRouter(options: CreateExecutionRouterOptions): Ex
           false,
         );
       }
-      const { result, observation } = settle(record, query.idempotencyKey, returned, true);
+      const { result } = settle(record, query.idempotencyKey, returned, true);
       if (result.outcome === 'unknown') {
         reportUnknown(record, query.idempotencyKey, result.reason);
       } else if (result.outcome !== 'not_found') {
         // Only a verified provider answer replaces what is stored.
         await store.record(key, result);
       }
-      return routed(record, query.idempotencyKey, result, false, observation);
+      return routed(record, query.idempotencyKey, result, false);
     },
   };
 }

@@ -26,6 +26,7 @@ export type ExpectedExecutionObservation =
   | { kind: 'transaction'; transactionHash: string };
 
 export type ExecutionObservationMismatch =
+  | 'observation_invalid'
   | 'observation_missing'
   | 'asset_mismatch'
   | 'amount_mismatch'
@@ -104,7 +105,11 @@ export function executionPayloadProblems<C extends ExecutionCapability>(
       const chain = payload as ExecutionPayloads['chain'];
       if (!positiveChainId(chain.chainId)) problems.push('chain_id_invalid');
       try {
-        Transaction.from(chain.signedTransaction);
+        const transaction = Transaction.from(chain.signedTransaction);
+        if (!transaction.isSigned()) problems.push('transaction_unsigned');
+        if (transaction.chainId !== BigInt(chain.chainId)) {
+          problems.push('transaction_chain_id_mismatch');
+        }
       } catch {
         problems.push('signed_transaction_invalid');
       }
@@ -125,7 +130,10 @@ export function expectedExecutionObservation<C extends ExecutionCapability>(
     case 'wallet':
       return { kind: 'wallet' };
     case 'signing':
-      return { kind: 'signature', intent: (payload as ExecutionPayloads['signing']).intent };
+      return {
+        kind: 'signature',
+        intent: structuredClone((payload as ExecutionPayloads['signing']).intent),
+      };
     case 'funding': {
       const funding = payload as ExecutionPayloads['funding'];
       return {
@@ -179,7 +187,18 @@ export function verifyExecutionObservation(
   observation: ExecutionObservation | undefined,
 ): ExecutionObservationMismatch | null {
   const mustReport = outcome === 'succeeded';
+  if (
+    observation !== undefined &&
+    (typeof observation !== 'object' || observation === null || Array.isArray(observation))
+  ) {
+    return 'observation_invalid';
+  }
   const observed = observation ?? {};
+  for (const field of ['recipient', 'address', 'signedTransaction', 'transactionHash'] as const) {
+    if (observed[field] !== undefined && typeof observed[field] !== 'string') {
+      return 'observation_invalid';
+    }
+  }
   switch (expected.kind) {
     case 'wallet':
       if (observed.address === undefined) {
