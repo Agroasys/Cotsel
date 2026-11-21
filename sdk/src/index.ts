@@ -61,6 +61,9 @@ export type { Eip1193ProviderLike, Eip1193RequestArguments } from './wallet/eip1
 export { web3Wallet } from './wallet/wallet-provider';
 export { AgroasysEscrow__factory } from './types/typechain-types/factories/src/AgroasysEscrow.sol/AgroasysEscrow__factory';
 
+// execution adapter interfaces, custody firewall and router (#942)
+export * from './execution';
+
 // types
 export * from './types/trade';
 export * from './types/dispute';
