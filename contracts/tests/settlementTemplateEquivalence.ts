@@ -49,6 +49,33 @@ describe('AGROASYS_LAUNCH_TEMPLATE_V1 matches what AgroasysEscrow admits', funct
     return contract as unknown as ScheduleHarness;
   }
 
+  it('every template timing window equals the deployed contract constant', async () => {
+    const factory = await ethers.getContractFactory('AgroasysEscrow');
+    const [token, oracle, treasury, relayer, admin1, admin2, admin3] = await ethers.getSigners();
+    const escrow = await factory.deploy(
+      token.address,
+      oracle.address,
+      treasury.address,
+      relayer.address,
+      [admin1.address, admin2.address, admin3.address],
+      2,
+    );
+    await escrow.waitForDeployment();
+    expect(BigInt(TEMPLATE.windows.standardInspectionSeconds)).to.equal(
+      await escrow.STANDARD_INSPECTION_WINDOW(),
+    );
+    expect(BigInt(TEMPLATE.windows.packagedLocalInspectionSeconds)).to.equal(
+      await escrow.PACKAGED_LOCAL_INSPECTION_WINDOW(),
+    );
+    expect(BigInt(TEMPLATE.windows.lockTimeoutSeconds)).to.equal(await escrow.LOCK_TIMEOUT());
+    expect(BigInt(TEMPLATE.windows.inTransitTimeoutSeconds)).to.equal(
+      await escrow.IN_TRANSIT_TIMEOUT(),
+    );
+    expect(BigInt(TEMPLATE.windows.disputeProposalTtlSeconds)).to.equal(
+      await escrow.DISPUTE_PROPOSAL_TTL(),
+    );
+  });
+
   // Goods of 1 cent cannot fund a positive second tranche; covered separately below.
   const goodsCents = (() => {
     const next = prng(0x9e3779b97f4a7c15n);

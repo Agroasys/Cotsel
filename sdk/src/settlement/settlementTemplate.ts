@@ -208,9 +208,10 @@ export function computeSettlementSchedule(
  * Whether the supplied amounts are exactly the template's schedule for some
  * goods amount, as AgroasysEscrow admits it: LaunchSettlementSchedule.isValid
  * plus every tranche being positive (EscrowTranchesMustBeGreaterThan0).
- * Amounts must be whole quanta, and the goods amount is recovered from the net
- * supplier total (it is one of two candidates because the supplier fee is
- * rounded half up).
+ * Supplier amounts must be whole quanta. Recover the goods amount from the
+ * buyer's total payment minus the fixed support fee. This equals goods plus
+ * the rounded buyer fee, so the goods amount is always one of two candidates,
+ * including templates with supplier fees close to 100%.
  */
 export function isSettlementScheduleValid(
   template: SettlementTemplate,
@@ -221,15 +222,20 @@ export function isSettlementScheduleValid(
   if (supplierTranches.length !== template.milestones.length) return false;
   if (supplierTranches.some((amount) => amount <= 0n)) return false;
   const quantum = BigInt(template.asset.quantumBaseUnits);
+  const supportFee = BigInt(template.fees.fixedSupportFeeBaseUnits);
   if (
-    [platformFeesAmount, ...supplierTranches].some(
-      (amount) => amount < 0n || amount % quantum !== 0n,
-    )
+    platformFeesAmount < supportFee ||
+    (platformFeesAmount - supportFee) % quantum !== 0n ||
+    supplierTranches.some((amount) => amount % quantum !== 0n)
   ) {
     return false;
   }
-  const netQuanta = supplierTranches.reduce((total, amount) => total + amount, 0n) / quantum;
-  const candidate = (netQuanta * BPS) / (BPS - BigInt(template.fees.supplierBps));
+  const paidQuanta =
+    (supplierTranches.reduce((total, amount) => total + amount, 0n) +
+      platformFeesAmount -
+      supportFee) /
+    quantum;
+  const candidate = (paidQuanta * BPS) / (BPS + BigInt(template.fees.buyerBps));
   return [candidate, candidate + 1n].some((goodsQuanta) => {
     if (goodsQuanta <= 0n) return false;
     let schedule: SettlementSchedule;

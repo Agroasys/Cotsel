@@ -87,4 +87,54 @@ describe('settlement templates', () => {
       isSettlementScheduleValid(TEMPLATE, 1_004n * USDC + 1n, [59_500n * USDC, 40_000n * USDC]),
     ).toBe(false);
   });
+
+  it.each([0, 4_999, 5_000, 5_001, 9_000, 9_999])(
+    'accepts computed schedules with supplier fee %i bps across rounding boundaries',
+    (supplierBps) => {
+      const template = clone();
+      template.milestones = [{ id: 'final', releaseBps: 10_000, deductsSupplierFee: true }];
+      template.fees.supplierBps = supplierBps;
+      for (const buyerBps of [0, 50, 5_000, 10_000]) {
+        template.fees.buyerBps = buyerBps;
+        for (const goodsQuanta of [14n, 101n, 9_999n, 10_000n, 10_001n, 100_001n]) {
+          let schedule;
+          try {
+            schedule = computeSettlementSchedule(template, goodsQuanta * 10_000n);
+          } catch {
+            continue; // Near-100% fees can consume the entire supplier tranche.
+          }
+          expect(
+            isSettlementScheduleValid(
+              template,
+              schedule.platformFeesAmount,
+              schedule.supplierTranches,
+            ),
+          ).toBe(true);
+          expect(
+            isSettlementScheduleValid(
+              template,
+              schedule.platformFeesAmount + 1n,
+              schedule.supplierTranches,
+            ),
+          ).toBe(false);
+        }
+      }
+    },
+  );
+
+  it('validates schedules with a support fee smaller than one quantum', () => {
+    const template = clone();
+    template.fees.fixedSupportFeeBaseUnits = '1';
+    const schedule = computeSettlementSchedule(template, 100n * USDC);
+    expect(
+      isSettlementScheduleValid(template, schedule.platformFeesAmount, schedule.supplierTranches),
+    ).toBe(true);
+    expect(
+      isSettlementScheduleValid(
+        template,
+        schedule.platformFeesAmount - 1n,
+        schedule.supplierTranches,
+      ),
+    ).toBe(false);
+  });
 });
