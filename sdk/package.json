@@ -62,10 +62,10 @@
   },
   "dependencies": {
     "ethers": "^6.17.0",
-    "ox": "^1.8.13"
+    "ox": "^1.8.16"
   },
   "devDependencies": {
-    "dotenv": "^18.0.9",
+    "dotenv": "^18.0.10",
     "@web3auth/modal": "^10.16.0",
     "@types/jest": "^30.0.0",
     "@types/node": "26.6.6",
