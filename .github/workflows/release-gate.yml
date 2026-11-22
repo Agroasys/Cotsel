@@ -232,6 +232,7 @@ jobs:
           run_check source-file-size pnpm run quality:file-size:check
           run_check ci-cost-controls node --test scripts/tests/ci-cost-controls.test.mjs
           run_check release-evidence-binding pnpm run release:evidence:check
+          run_check event-schema-registry pnpm run events:registry:check
           run_check pilot-launch-profile pnpm run launch-profile:check
           run_check release-supply-chain pnpm run release:supply-chain:check
           run_check governance-policy node --test scripts/tests/wp6-governance-policy.test.mjs
