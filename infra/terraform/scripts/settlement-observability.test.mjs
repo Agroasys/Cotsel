@@ -24,6 +24,7 @@ const DOMAINS = new Set([
   'reconciliation',
   'treasury',
   'services',
+  'security',
 ]);
 const SEVERITIES = new Set(['critical', 'high']);
 const OBSERVED_SERVICES = new Set([
