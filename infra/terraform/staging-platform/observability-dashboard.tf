@@ -9,6 +9,7 @@ locals {
     { key = "reconciliation", title = "Reconciliation: drift, coverage, leases, containment" },
     { key = "treasury", title = "Treasury ingestion runs and integrity" },
     { key = "services", title = "Service error records" },
+    { key = "security", title = "Security controls: admin, break-glass, service auth, rate limits" },
   ]
 
   dashboard_domain_signals = {

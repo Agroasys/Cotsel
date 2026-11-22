@@ -46,6 +46,7 @@
     "readiness:cotsel:test": "node --test scripts/readiness/cotsel-production-readiness-contracts.test.mjs scripts/readiness/contract-cohort-rollback-record.test.mjs",
     "readiness:cotsel:audit-live": "node scripts/readiness/audit-cotsel-production-readiness-live.mjs",
     "launch-profile:check": "node scripts/validate-pilot-launch-profile.mjs && node --test scripts/tests/pilot-launch-profile.test.mjs scripts/tests/pilot-launch-runtime.test.mjs scripts/tests/pilot-launch-profile-drift.test.mjs",
+    "events:registry:check": "node scripts/check-event-registry.mjs && node --test scripts/tests/event-registry.test.mjs",
     "integration:manifest:check": "node scripts/check-cross-repo-release-manifest.mjs && node --test scripts/tests/cross-repo-release-manifest.test.mjs",
     "release:evidence:check": "node --test scripts/tests/release-candidate-inventory.test.mjs scripts/tests/release-evidence-binding.test.mjs scripts/tests/release-image-supply-chain.test.mjs scripts/tests/release-image-trivy-exceptions.test.mjs",
     "release:supply-chain:check": "node scripts/check-supply-chain-policy.mjs && node --test scripts/tests/supply-chain-policy.test.mjs",
@@ -89,11 +90,11 @@
     "lint-staged": "^17.6.0",
     "lodash": "4.18.1",
     "pg": "8.23.1",
-    "prettier": "3.9.10",
+    "prettier": "3.10.1",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.72.1",
-    "undici": "8.12.3",
-    "viem": "2.57.14"
+    "typescript-eslint": "^8.72.2",
+    "undici": "8.12.4",
+    "viem": "2.57.19"
   },
   "lint-staged": {
     "*.{js,cjs,mjs,ts}": [
@@ -120,7 +121,7 @@
     "serialize-javascript": "7.1.3",
     "socket.io-parser": "4.2.7",
     "tmp": "0.2.7",
-    "undici": "8.12.3",
+    "undici": "8.12.4",
     "adm-zip": "0.6.1",
     "form-data@>=4.0.0 <4.0.6": "4.0.6",
     "@babel/core@<=7.29.0": "7.29.6",
