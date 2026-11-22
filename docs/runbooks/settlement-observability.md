@@ -139,6 +139,23 @@ failing record. Capture the evidence listed in
 | `oracle_exhausted_retries`               | HIGH     | Review the trigger and re-drive through the approved maker-checker path                                       | `oracle-redrive.md`                        |
 | `relayer_replay_rejected`                | HIGH     | Treat as a suspected replay until explained; review the caller credential                                     | `secrets-and-token-rotation.md`            |
 | `relayer_request_failed`                 | HIGH     | Check relayer KMS, RPC, and sponsor-policy health                                                             | `base-sepolia-gasless-settlement-proof.md` |
+| `auth_durable_admin_provisioned`         | HIGH     | Verify the ticket, approver, executor key ID and target account against `auth_admin_audit_events`             | `auth-admin-provisioning.md`               |
+| `auth_durable_admin_revoked`             | HIGH     | Verify the target's sessions were revoked and the access-review ticket exists                                 | `auth-admin-provisioning.md`               |
+| `auth_break_glass_granted`               | CRITICAL | Open an incident review; confirm the grant's TTL, reason and planned revocation                               | `auth-admin-provisioning.md`               |
+| `auth_break_glass_revoked`               | HIGH     | Verify the temporary authority is gone and its old sessions now fail                                          | `auth-admin-provisioning.md`               |
+| `auth_break_glass_expired`               | HIGH     | Verify the temporary authority is gone and its old sessions now fail                                          | `auth-admin-provisioning.md`               |
+| `auth_service_auth_denied`               | HIGH     | Check the key allowlist, caller, path and attempted endpoint; rotate the credential if misuse is suspected    | `service-auth-matrix.md`                   |
+| `auth_nonce_replay_attempted`            | HIGH     | Treat as a suspected replay until explained; identify the caller credential                                   | `service-auth-matrix.md`                   |
+| `auth_rate_limit_fail_closed`            | HIGH     | Restore Redis; protected auth paths reject requests until it is reachable                                     | `monitoring-alerting-baseline.md`          |
+| `auth_rate_limit_fail_open`              | CRITICAL | Confirm fail-open was explicitly configured, then restore Redis; auth is running without rate limits          | `monitoring-alerting-baseline.md`          |
+| `gateway_rate_limit_fail_closed`         | HIGH     | Restore Redis; protected gateway paths reject requests until it is reachable                                  | `monitoring-alerting-baseline.md`          |
+| `gateway_rate_limit_fail_open`           | CRITICAL | Confirm fail-open was explicitly configured, then restore Redis; the gateway is running without rate limits   | `monitoring-alerting-baseline.md`          |
+
+The `auth_break_glass_expired` alarm reports expiry detected during session use.
+The session check records the grant's expiry and rejects the session.
+No background process emits this event when a grant reaches its expiry time.
+If the holder does not reuse the session, expiry produces no alarm.
+Use the grant's recorded expiry and the access-review process to check unused grants.
 
 ## Evidence capture
 
