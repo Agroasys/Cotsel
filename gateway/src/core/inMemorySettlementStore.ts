@@ -477,6 +477,7 @@ export function createInMemorySettlementStore(
           latestEventDetail: record.latestEventDetail,
           latestEventAt: record.latestEventAt,
           callbackDeliveredAt: record.callbackDeliveredAt,
+          settlementTemplate: record.settlementTemplate ?? null,
           createdAt: record.createdAt,
           updatedAt: record.updatedAt,
         });

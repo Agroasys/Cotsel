@@ -41,7 +41,7 @@ describe('dashboard gateway OpenAPI bundle', () => {
 
     const spec = loadOpenApiSpec();
     expect(Object.keys(spec.paths)).toHaveLength(86);
-    expect(Object.keys(spec.components?.schemas ?? {})).toHaveLength(227);
+    expect(Object.keys(spec.components?.schemas ?? {})).toHaveLength(228);
     expect(spec.components?.schemas?.SettlementUserActionInventory).toEqual(
       expect.objectContaining({ additionalProperties: false }),
     );

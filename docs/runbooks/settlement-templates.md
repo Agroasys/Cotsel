@@ -52,8 +52,8 @@ If no version is active, the gateway refuses to create settlements. It returns 5
 To recover:
 
 1. Find out who changed `settlement_templates` and why. The row's `retired_by`, `retired_at` and `request_id` show this.
-2. A retired version cannot be reactivated: the trigger refuses `retired → active` for every role. To restore the terms:
-   1. Create the next version with the same terms.
-   2. Have it reviewed and activated by two other people.
-   3. Add `agroasys.launch:<version>` to `GATEWAY_TEMPLATE_ACTIVATION_ALLOWLIST`. This is safe only because the terms are unchanged, so the contract enforces them.
+2. A retired version cannot be reactivated: the trigger refuses `retired → active` for every role. Restore the terms as a new version, in this order, because activation refuses any version not yet allowlisted:
+   1. Deploy the next version, `agroasys.launch:<version>`, in `GATEWAY_TEMPLATE_ACTIVATION_ALLOWLIST`. This is safe only because its terms are unchanged, so the contract enforces them.
+   2. Create that version with the same terms.
+   3. Have it reviewed, then activated, by someone other than its author. The rule is two people: the author, plus one other who may both review and activate.
 3. Confirm that a new handoff records the expected `settlementTemplate`.

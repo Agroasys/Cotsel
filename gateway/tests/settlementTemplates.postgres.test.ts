@@ -96,9 +96,20 @@ describePostgres('settlement templates through PostgreSQL (Cotsel#940)', () => {
   });
 
   it('records the active template on every new settlement', async () => {
-    const handoff = await createPostgresSettlementStore(db.runtime).createHandoff(
-      handoffInput('after-templates'),
-    );
+    const store = createPostgresSettlementStore(db.runtime);
+    const handoff = await store.createHandoff({
+      ...handoffInput('after-templates'),
+      tradeId: '2',
+    });
+    // The dashboard projection carries it too, for backfilled and new settlements.
+    const projection = await store.getTradeSettlementProjectionMap(['1', '2']);
+    for (const tradeId of ['1', '2']) {
+      expect(projection.get(tradeId)?.settlementTemplate).toEqual({
+        templateId: 'agroasys.launch',
+        version: 1,
+        templateHash: V1_HASH,
+      });
+    }
     expect(handoff.settlementTemplate).toEqual({
       templateId: 'agroasys.launch',
       version: 1,

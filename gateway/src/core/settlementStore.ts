@@ -771,6 +771,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
           latestEventDetail: handoff.latestEventDetail,
           latestEventAt: handoff.latestEventAt,
           callbackDeliveredAt: handoff.callbackDeliveredAt,
+          settlementTemplate: handoff.settlementTemplate ?? null,
           createdAt: handoff.createdAt,
           updatedAt: handoff.updatedAt,
         });

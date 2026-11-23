@@ -200,6 +200,8 @@ export interface TradeSettlementProjection {
   latestEventDetail: string | null;
   latestEventAt: string | null;
   callbackDeliveredAt: string | null;
+  /** The template the settlement was created against (Cotsel#940); null for a pre-017 row. */
+  settlementTemplate: SettlementTemplateReference | null;
   createdAt: string;
   updatedAt: string;
 }
