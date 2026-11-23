@@ -14,6 +14,15 @@ declare global {
       gatewayPrincipal?: GatewayPrincipal;
       idempotencyState?: IdempotencyRequestState;
       serviceAuth?: ServiceAuthContext;
+      /** Set by requireRecentStepUp for a privileged mutation (Cotsel#946). */
+      stepUpEvidence?: {
+        authTime: number | null;
+        method: string | null;
+        strength: string | null;
+        ageSeconds: number | null;
+        maxAgeSeconds: number;
+        enforcement: 'enforce' | 'record';
+      };
     }
   }
 }

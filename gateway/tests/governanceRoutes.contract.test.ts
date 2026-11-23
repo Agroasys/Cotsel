@@ -17,6 +17,8 @@ import { GovernanceMutationService } from '../src/core/governanceMutationService
 import type { GovernanceTransactionVerifier } from '../src/core/governanceMutationTypes';
 import { createInMemoryIdempotencyStore } from '../src/core/idempotencyStore';
 import { createInMemoryGovernanceTransitionStore } from '../src/core/governanceTransitionStore';
+import { freshStepUp } from './support/stepUp';
+import type { SessionAuthentication } from '../src/core/authSessionClient';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -63,6 +65,7 @@ async function startServer(
   sessionRole: 'admin' | 'buyer' | null,
   signerAuthorizations: SignerAuthorization[] = [],
   refreshedSignerAuthorizations?: SignerAuthorization[],
+  authentication: SessionAuthentication = freshStepUp(),
 ) {
   let resolutionCount = 0;
   const authSessionClient: AuthSessionClient = {
@@ -95,6 +98,7 @@ async function startServer(
           reviewedBy: null,
           reviewStatus: 'none',
         },
+        authentication,
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60000,
       };
@@ -288,6 +292,44 @@ describe('gateway governance read routes contract', () => {
       server.close();
     }
   });
+
+  test.each([
+    ['a stale step-up', freshStepUp(301), 'stale'],
+    [
+      'a session without authentication assurance',
+      { authTime: null, method: null, strength: null },
+      'no_assurance',
+    ],
+  ])(
+    'governance mutations refuse %s with step_up_required',
+    async (_label, authentication, refusal) => {
+      const { server, baseUrl } = await startServer('admin', [], undefined, authentication);
+      try {
+        const response = await fetch(`${baseUrl}/governance/pause/prepare`, {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer sess-admin',
+            'Content-Type': 'application/json',
+            'Idempotency-Key': `governance-step-up-${refusal}`,
+          },
+          body: JSON.stringify({
+            signerWallet: '0x00000000000000000000000000000000000000aa',
+            audit: {
+              reason: 'Attempt without a fresh step-up.',
+              ticketRef: 'COTSEL-946',
+              evidenceLinks: [{ kind: 'ticket', uri: 'https://example.test/COTSEL-946' }],
+            },
+          }),
+        });
+        const payload = await response.json();
+        expect(response.status).toBe(403);
+        expect(payload.error.code).toBe('FORBIDDEN');
+        expect(payload.error.details).toMatchObject({ reason: 'step_up_required', refusal });
+      } finally {
+        server.close();
+      }
+    },
+  );
 
   test('a wildcard signer environment is rejected instead of authorizing every deployment', async () => {
     const { server, baseUrl } = await startServer('admin', [

@@ -14,17 +14,20 @@ import {
   createAuthenticationMiddleware,
   requireAuthorizedSignerBinding,
   requireGatewayRole,
-  requireMutationWriteAccess,
   requireSignerWalletAddress,
   requireTreasuryCapability,
 } from '../middleware/auth';
 import { successResponse } from '../responses';
+import { createTreasuryWriteGuards } from './treasuryGuards';
+import type { AuditLogStore } from '../core/auditLogStore';
 
 export interface TreasuryRouterOptions {
   authSessionClient: AuthSessionClient;
   config: GatewayConfig;
   treasuryReadService: TreasuryReadReader;
   treasuryWorkflowService: TreasuryWorkflowClient;
+  /** Records the step-up evidence of each privileged mutation (Cotsel#946). */
+  auditLogStore?: AuditLogStore;
 }
 
 interface TreasuryAuditPayload {
@@ -360,20 +363,12 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
     }
   });
 
-  const requireTreasuryWrite = requireMutationWriteAccess();
-  const requireTreasuryPrepare = [
-    requireTreasuryWrite,
-    requireTreasuryCapability('treasury:prepare'),
-  ];
-  const requireTreasuryApprove = [
-    requireTreasuryWrite,
-    requireTreasuryCapability('treasury:approve'),
-  ];
-  const requireTreasuryExecuteMatch = [
-    requireTreasuryWrite,
-    requireTreasuryCapability('treasury:execute_match'),
-  ];
-  const requireTreasuryClose = [requireTreasuryWrite, requireTreasuryCapability('treasury:close')];
+  const {
+    requireTreasuryPrepare,
+    requireTreasuryApprove,
+    requireTreasuryExecuteMatch,
+    requireTreasuryClose,
+  } = createTreasuryWriteGuards(options.config, options.auditLogStore);
   const assertAuthorizedTreasurySigner = (
     req: Request,
     actionClass: 'treasury_approve' | 'treasury_execute' | 'treasury_close',
