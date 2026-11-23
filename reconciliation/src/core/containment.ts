@@ -1,37 +1,19 @@
 import { randomBytes } from 'node:crypto';
 import type { DriftCode, DriftFinding } from '../types';
+import { DRIFT_CODES, riskOutcome } from './riskRules';
 
 /**
- * The discrepancy codes that qualify a trade for scoped containment.
- *
- * Qualification is about the *kind* of divergence, not the alert severity: a
- * qualifying code means the chain and the projection disagree about who was
- * paid, how much, or which agreement a trade settles — a difference that cannot
- * be resolved by waiting, and that must not progress to payout while it stands.
- *
- * Deliberately excluded, and why:
- * - `ONCHAIN_READ_ERROR` is inconclusive. A transient RPC failure proves
- *   nothing about the trade, and the coverage control already holds the cursor
- *   on it. Pausing a trade on a read blip would contain healthy settlement.
- * - `INDEXER_SURPLUS_RECORDS` is a whole-projection count, not attributable to
- *   one trade, so it cannot scope a pause to the affected trade.
- * - `STATUS_MISMATCH` and `ARRIVAL_TIMESTAMP_MISMATCH` are lifecycle-lag
- *   shapes that resolve as the projection catches up.
- * - `INDEXED_INVALID_ADDRESS` and `ONCHAIN_INVALID_ADDRESS` report an
- *   unusable value rather than a proven disagreement; a real divergence in the
- *   parties surfaces as `PARTICIPANT_MISMATCH`.
+ * The discrepancy codes that qualify a trade for scoped containment: the codes
+ * whose versioned risk rule is `contain`. Qualification is about the *kind* of
+ * divergence, not the alert severity. Each code's outcome and the reason for it
+ * live in `riskRules.ts` (Cotsel#951).
  */
-export const QUALIFYING_DISCREPANCY_CODES: ReadonlySet<DriftCode> = new Set<DriftCode>([
-  'AMOUNT_MISMATCH',
-  'FEE_COMPONENT_MISMATCH',
-  'PARTICIPANT_MISMATCH',
-  'HASH_MISMATCH',
-  'ONCHAIN_TRADE_MISSING',
-  'INDEXER_TRADE_MISSING',
-]);
+export const QUALIFYING_DISCREPANCY_CODES: ReadonlySet<DriftCode> = new Set<DriftCode>(
+  DRIFT_CODES.filter((code) => riskOutcome(code) === 'contain'),
+);
 
 export function isQualifyingDiscrepancy(finding: DriftFinding): boolean {
-  return QUALIFYING_DISCREPANCY_CODES.has(finding.mismatchCode);
+  return riskOutcome(finding.mismatchCode) === 'contain';
 }
 
 export interface QualifiedDiscrepancy {
