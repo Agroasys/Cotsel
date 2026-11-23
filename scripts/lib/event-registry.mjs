@@ -158,12 +158,12 @@ export function openApiSchemaText(yaml, name) {
 export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
 /**
- * Notification types raised at notify(...) / raise(...) call sites. Resolves a
+ * Notification types raised at notify(...), raise(...) or enqueue(...) call sites. Resolves a
  * `type: identifier` to the literals assigned to that identifier in the same
  * file, which covers the ternaries the producers use.
  */
 export function emittedNotificationTypes(source) {
-  if (!/\.notify\(|\.raise\(/u.test(source)) return new Set();
+  if (!/\.notify\(|\.raise\(|\.enqueue\(/u.test(source)) return new Set();
   const found = new Set();
   const literals = (expression) =>
     [...expression.matchAll(/'([A-Z][A-Z0-9_]+)'/gu)].map((match) => match[1]);
