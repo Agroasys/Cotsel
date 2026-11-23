@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Pool, PoolClient } from 'pg';
-import { UserProfile, UserSession } from '../../types';
+import { AuthenticationAssurance, UserProfile, UserSession } from '../../types';
 import { activeAdminGrantSql } from './profileRows';
 import { normalizeSessionRow, SessionRow } from './sessionNormalization';
 
@@ -12,6 +12,7 @@ export interface SessionInsert {
   issuedAt: number;
   expiresAt: number;
   lineageStartedAt: number;
+  authentication: AuthenticationAssurance;
 }
 
 export async function insertSession(
@@ -22,9 +23,9 @@ export async function insertSession(
   await client.query(
     `INSERT INTO user_sessions (
        session_token_hash, parent_session_token_hash, user_id, wallet_address, role,
-       issued_at, expires_at, lineage_started_at
+       issued_at, expires_at, lineage_started_at, auth_time, auth_method, auth_strength
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       session.tokenHash,
       session.parentTokenHash,
@@ -34,6 +35,9 @@ export async function insertSession(
       session.issuedAt,
       session.expiresAt,
       session.lineageStartedAt,
+      session.authentication.authTime,
+      session.authentication.method,
+      session.authentication.strength,
     ],
   );
 }
@@ -100,7 +104,10 @@ export async function findSessionByTokenHash(
               '[]'::json
             ) AS "signerAuthorizations",
             issued_at AS "issuedAt", expires_at AS "expiresAt",
-            revoked_at AS "revokedAt"
+            revoked_at AS "revokedAt",
+            user_sessions.auth_time AS "authTime",
+            user_sessions.auth_method AS "authMethod",
+            user_sessions.auth_strength AS "authStrength"
      FROM user_sessions
      JOIN user_profiles ON user_profiles.id = user_sessions.user_id
      WHERE user_sessions.session_token_hash = $1`,
@@ -153,8 +160,13 @@ export async function rotateSession(
     const parent = await client.query<{
       lineageStartedAt: number | string;
       expiresAt: number | string;
+      authTime: number | string | null;
+      authMethod: AuthenticationAssurance['method'];
+      authStrength: AuthenticationAssurance['strength'];
     }>(
-      `SELECT lineage_started_at AS "lineageStartedAt", expires_at AS "expiresAt"
+      `SELECT lineage_started_at AS "lineageStartedAt", expires_at AS "expiresAt",
+              auth_time AS "authTime", auth_method AS "authMethod",
+              auth_strength AS "authStrength"
        FROM user_sessions
        WHERE session_token_hash = $1
          AND user_id = $2
@@ -190,6 +202,12 @@ export async function rotateSession(
       issuedAt: now,
       expiresAt,
       lineageStartedAt,
+      // A refresh is not a re-authentication: the successor keeps the parent's assurance.
+      authentication: {
+        authTime: row.authTime === null ? null : Number(row.authTime),
+        method: row.authMethod,
+        strength: row.authStrength,
+      },
     });
     await client.query('COMMIT');
     return { status: 'rotated', expiresAt };

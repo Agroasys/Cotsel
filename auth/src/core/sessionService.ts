@@ -3,6 +3,7 @@
  */
 import { CallerSafeError } from '@agroasys/shared-http';
 import {
+  AuthenticationAssurance,
   TrustedSessionIdentity,
   UserRole,
   UserSession,
@@ -41,6 +42,7 @@ export interface SessionService {
     identity: TrustedSessionIdentity,
     authority: ExchangeAuthority,
     ttlSeconds?: number,
+    authentication?: AuthenticationAssurance,
   ): Promise<SessionIssueResult>;
 
   /**
@@ -161,14 +163,14 @@ export function createSessionService(
       return result;
     },
 
-    async issueTrustedSession(identity, authority, ttlSeconds) {
+    async issueTrustedSession(identity, authority, ttlSeconds, authentication) {
       const ttl = resolveTtl(ttlSeconds);
       const profile = await profiles.upsertTrustedIdentity(identity, authority);
       if (!profile.active) {
         throw new CallerSafeError('User profile is deactivated');
       }
 
-      const result = await sessions.issue(profile, ttl);
+      const result = await sessions.issue(profile, ttl, authentication);
       incrementSessionIssued();
       Logger.info('Trusted session issued', {
         userId: profile.id,
