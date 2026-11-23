@@ -46,7 +46,9 @@ test('long-running Cotsel services cannot receive migration credentials', async 
 
   const gatewayIam = await readFile('infra/terraform/staging-platform/iam.tf', 'utf8');
 
-  const compose = await readFile('docker-compose.services.yml', 'utf8');
+  const compose =
+    (await readFile('docker-compose.services.yml', 'utf8')) +
+    (await readFile('docker-compose.gateway.yml', 'utf8'));
   for (const service of ['ricardian', 'auth', 'gateway', 'treasury', 'oracle', 'reconciliation']) {
     const [, remainder] = compose.split(`\n  ${service}:\n`);
     assert.ok(remainder, `missing compose service ${service}`);
@@ -142,7 +144,9 @@ test('every non-indexer schema has a dedicated one-off migration task', async ()
 });
 
 test('local runtimes wait for their dedicated migration jobs', async () => {
-  const compose = await readFile('docker-compose.services.yml', 'utf8');
+  const compose =
+    (await readFile('docker-compose.services.yml', 'utf8')) +
+    (await readFile('docker-compose.gateway.yml', 'utf8'));
   const migrations = await readFile('docker-compose.migrations.yml', 'utf8');
 
   assert.match(compose, /include:\n {2}- docker-compose\.migrations\.yml/);

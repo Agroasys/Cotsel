@@ -10,6 +10,7 @@
  * A refused caller re-runs the trusted exchange after a new step-up upstream.
  */
 import type { NextFunction, Request, Response } from 'express';
+import { runWithStepUpEvidence } from '../core/stepUpAudit';
 import { GatewayConfig, resolveStepUpPolicy, StepUpPolicy } from '../config/gatewayConfig';
 import type { AuditLogStore } from '../core/auditLogStore';
 import type { SessionAuthentication } from '../core/authSessionClient';
@@ -136,6 +137,7 @@ export function requireRecentStepUp(
     }
 
     req.stepUpEvidence = evidence;
-    next();
+    // The action's own audit rows record this evidence (stepUpAudit.ts).
+    runWithStepUpEvidence(evidence, () => next());
   };
 }

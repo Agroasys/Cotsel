@@ -262,6 +262,14 @@ describe('gateway compliance routes contract', () => {
         actionId: payload.data.decisionId,
         idempotencyKey: 'idem-create-1',
         actorId: 'account:acct-admin',
+        // Cotsel#946: the action's own audit entry names its step-up.
+        metadata: expect.objectContaining({
+          stepUp: expect.objectContaining({
+            method: 'webauthn',
+            strength: 'hardware_webauthn',
+            enforcement: 'enforce',
+          }),
+        }),
       });
     } finally {
       server.close();
