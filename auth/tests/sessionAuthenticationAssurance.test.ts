@@ -8,9 +8,7 @@
  */
 import crypto from 'crypto';
 import fs from 'fs';
-import http from 'http';
 import path from 'path';
-import express from 'express';
 import { HttpError } from '@agroasys/shared-http';
 import {
   buildServiceAuthCanonicalString,
@@ -124,51 +122,63 @@ describe('authentication assurance in a trusted session exchange', () => {
         () => ANY_ROLE_AUTHORITY,
         () => FIXTURE_NOW,
       );
+      const verify = createServiceAuthMiddleware({
+        enabled: true,
+        maxSkewSeconds: 300,
+        nonceTtlSeconds: 600,
+        nowSeconds: () => FIXTURE_NOW,
+        lookupApiKey: (apiKey) =>
+          apiKey === fixture.request.headers['X-Api-Key']
+            ? { id: apiKey, secret: fixture.verification.secret, active: true }
+            : undefined,
+        consumeNonce: async () => true,
+      });
 
-      const app = express();
-      app.use(
-        express.json({
-          verify: (req, _res, buffer) => {
-            (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+      // The request exactly as express hands it to the middleware: the raw bytes
+      // the signature covers, and the parsed body the controller reads.
+      async function exchange(rawBody: string) {
+        const headers = new Map(
+          Object.entries(fixture.request.headers).map(([name, value]) => [
+            name.toLowerCase(),
+            value,
+          ]),
+        );
+        const req = {
+          method: fixture.request.method,
+          originalUrl: fixture.request.path,
+          header: (name: string) => headers.get(name.toLowerCase()),
+          rawBody: Buffer.from(rawBody, 'utf8'),
+          body: JSON.parse(rawBody),
+        } as unknown as Parameters<SessionController['exchangeTrustedSession']>[0];
+        const res = {
+          statusCode: 200,
+          status(code: number) {
+            this.statusCode = code;
+            return this;
           },
-        }),
-      );
-      app.post(
-        '/api/auth/v1/session/exchange/agroasys',
-        createServiceAuthMiddleware({
-          enabled: true,
-          maxSkewSeconds: 300,
-          nonceTtlSeconds: 600,
-          nowSeconds: () => FIXTURE_NOW,
-          lookupApiKey: (apiKey) =>
-            apiKey === fixture.request.headers['X-Api-Key']
-              ? { id: apiKey, secret: fixture.verification.secret, active: true }
-              : undefined,
-          consumeNonce: async () => true,
-        }),
-        (req, res) => controller.exchangeTrustedSession(req, res),
-      );
-
-      const server = http.createServer(app);
-      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-      try {
-        const { port } = server.address() as { port: number };
-        const response = await fetch(`http://127.0.0.1:${port}${fixture.request.path}`, {
-          method: fixture.request.method,
-          headers: fixture.request.headers,
-          body: fixture.request.rawBody,
+          json() {
+            return this;
+          },
+        };
+        const response = res as unknown as Parameters<
+          SessionController['exchangeTrustedSession']
+        >[1];
+        let passed = false;
+        await verify(req, response, () => {
+          passed = true;
         });
-        expect(response.status).toBe(201);
-
-        const tampered = await fetch(`http://127.0.0.1:${port}${fixture.request.path}`, {
-          method: fixture.request.method,
-          headers: fixture.request.headers,
-          body: fixture.request.rawBody.replace('"authTime":1769996400', '"authTime":1769996409'),
-        });
-        expect(tampered.status).toBe(401);
-      } finally {
-        await new Promise<void>((resolve) => server.close(() => resolve()));
+        if (passed) {
+          await controller.exchangeTrustedSession(req, response);
+        }
+        return { passed, status: res.statusCode };
       }
+
+      expect(await exchange(fixture.request.rawBody)).toEqual({ passed: true, status: 201 });
+      expect(
+        await exchange(
+          fixture.request.rawBody.replace('"authTime":1769996400', '"authTime":1769996409'),
+        ),
+      ).toEqual({ passed: false, status: 401 });
 
       expect(issued).toHaveLength(1);
       expect(issued[0].authentication).toEqual({
