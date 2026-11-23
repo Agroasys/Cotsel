@@ -17,6 +17,11 @@ import {
 import { readPendingRunAlerts } from '../database/alertOutbox';
 import { applyContainment, publishFinding } from '../core/runControls';
 import { qualifyDiscrepancies } from '../core/containment';
+import { parsePublicKeys, verifyRunEvidence } from '@agroasys/shared-db/reconciliationEvidence';
+import { localPublicKeyDerBase64 } from '../core/findingSigner';
+import { RISK_RULES_VERSION } from '../core/riskRules';
+import type { TradeContainedAlertPayload } from '../types';
+import { BASE_TEST_ENV } from './helpers/reconciliationEnv';
 import {
   type AdminPool,
   BOUNDARY,
@@ -369,6 +374,32 @@ test(
               'TRADE_CONTAINED',
             ]);
             assert.ok((await getContainment('7', pool))?.pause_observed_at instanceof Date);
+
+            // Cotsel#951: the freeze request cites the signed findings. Every
+            // digest it carries is listed in the run's sealed manifest.
+            const contained = (await readPendingRunAlerts(50, pool)).find(
+              (row) => row.kind === 'TRADE_CONTAINED',
+            );
+            const payload = contained?.payload as unknown as TradeContainedAlertPayload;
+            assert.equal(payload.rulesVersion, RISK_RULES_VERSION);
+            assert.equal(payload.findingDigests?.length, 1);
+            const sealed = await verifyRunEvidence(
+              pool,
+              'daemon-1',
+              parsePublicKeys(
+                JSON.stringify({
+                  'reconciliation-test-key': localPublicKeyDerBase64(
+                    BASE_TEST_ENV.RECONCILIATION_FINDING_SIGNING_KEY,
+                  ),
+                }),
+              ),
+            );
+            assert.equal(sealed.ok, true);
+            if (sealed.ok) {
+              for (const digest of payload.findingDigests ?? []) {
+                assert.ok(sealed.manifest.findings.digests.includes(digest), digest);
+              }
+            }
           },
         );
 

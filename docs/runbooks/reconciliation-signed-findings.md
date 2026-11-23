@@ -60,6 +60,16 @@ The gateway does not read findings today. Cotsel.dash#228 shows verification sta
 2. Deploy reconciliation. Every run completed from then on is sealed.
 3. Deploy treasury with `RECONCILIATION_FINDING_PUBLIC_KEYS`. Until a signed run completes, the latest run is unsigned and exports are blocked with `reconciliation_evidence_unsigned`. That lasts one daemon interval.
 
+**During the cutover:**
+
+- An export whose build started against an unsigned run fails its publication re-check, and is retried against the next run, which is signed.
+- Completed exports are served from their stored context and are never re-assessed, so runs that predate signing do not affect them.
+- `RECONCILIATION_EVIDENCE_UNSIGNED` is logged once per gate read until that signed run completes.
+
+**Cost:** at 100,000 scope rows and 100 findings, sealing took about 32 ms and verification about 25 ms per read (PostgreSQL 16, local).
+
+**Order of applies:** the platform stack reads the foundation outputs `reconciliation_finding_key_arn`, so the foundation must be applied first.
+
 **Rollback:** reverting reconciliation stops sealing, and a treasury still verifying then blocks exports. Revert treasury first, then reconciliation. Manifests already written stay valid, and migration 009 is additive.
 
 ## Response
