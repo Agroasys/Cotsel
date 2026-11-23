@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Pool } from 'pg';
+import { withStepUpEvidence } from './stepUpAudit';
 
 export interface AuditLogEntry {
   eventType: string;
@@ -55,7 +56,7 @@ export function createPostgresAuditLogStore(pool: Pool): AuditLogStore {
           entry.actorWalletAddress || null,
           entry.actorRole || null,
           entry.status,
-          JSON.stringify(entry.metadata || {}),
+          JSON.stringify(withStepUpEvidence(entry.metadata) || {}),
         ],
       );
     },
@@ -70,7 +71,7 @@ export function createInMemoryAuditLogStore(entries: AuditLogEntry[] = []): Audi
     async append(entry) {
       entries.push({
         ...entry,
-        metadata: entry.metadata ? { ...entry.metadata } : undefined,
+        metadata: withStepUpEvidence(entry.metadata ? { ...entry.metadata } : undefined),
       });
     },
   };
