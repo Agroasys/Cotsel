@@ -51,6 +51,17 @@ export interface BreakGlassSessionContext {
   reviewStatus: BreakGlassReviewStatus;
 }
 
+/**
+ * When and how the operator last authenticated upstream, as asserted by the
+ * trusted session exchange (Cotsel#946). Absent from sessions issued by an auth
+ * image that predates it; nulls mean the session carries no assurance.
+ */
+export interface SessionAuthentication {
+  authTime: number | null;
+  method: string | null;
+  strength: string | null;
+}
+
 export interface AuthSession {
   userId: string;
   accountId?: string;
@@ -59,6 +70,7 @@ export interface AuthSession {
   capabilities: OperatorCapability[];
   signerAuthorizations: SignerAuthorization[];
   breakGlass?: BreakGlassSessionContext;
+  authentication?: SessionAuthentication;
   issuedAt: number;
   expiresAt: number;
   email?: string | null;
@@ -164,6 +176,24 @@ function isBreakGlassSessionContext(value: unknown): value is BreakGlassSessionC
   );
 }
 
+function isOptionalSessionAuthentication(
+  value: unknown,
+): value is SessionAuthentication | undefined {
+  if (value === undefined) {
+    return true;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    (candidate.authTime === null ||
+      (typeof candidate.authTime === 'number' && Number.isSafeInteger(candidate.authTime))) &&
+    isStringOrNull(candidate.method) &&
+    isStringOrNull(candidate.strength)
+  );
+}
+
 function isAuthSession(value: unknown): value is AuthSession {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
@@ -180,6 +210,7 @@ function isAuthSession(value: unknown): value is AuthSession {
     Array.isArray(candidate.signerAuthorizations) &&
     candidate.signerAuthorizations.every(isSignerAuthorization) &&
     isBreakGlassSessionContext(candidate.breakGlass) &&
+    isOptionalSessionAuthentication(candidate.authentication) &&
     typeof candidate.issuedAt === 'number' &&
     Number.isFinite(candidate.issuedAt) &&
     typeof candidate.expiresAt === 'number' &&

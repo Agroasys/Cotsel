@@ -505,6 +505,15 @@
       "conditions": [{ "field": "eventType", "equals": ["gateway.rate_limiter_fail_open"] }],
       "alarm": { "severity": "critical", "kind": "event" },
       "description": "The gateway rate-limit store failed and requests are passing without rate limiting."
+    },
+    {
+      "id": "gateway_step_up_refusals",
+      "domain": "security",
+      "logGroup": "gateway",
+      "sourceDirs": ["gateway/src"],
+      "conditions": [{ "field": "eventType", "equals": ["gateway.step_up_required"] }],
+      "alarm": { "severity": "high", "kind": "event", "threshold": 10, "periodSeconds": 300 },
+      "description": "Privileged mutations refused for a stale or missing step-up; repeated refusals can mean a broken exchange or misuse."
     }
   ]
 }
