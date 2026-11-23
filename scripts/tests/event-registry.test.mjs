@@ -291,3 +291,12 @@ test('every registered notification type produces a schema-valid envelope', () =
   assert.equal(unlinked.settlementId, null);
   assert.ok(validateEnvelope(unlinked), ajv.errorsText(validateEnvelope.errors));
 });
+
+test('a file that only enqueues an unregistered type fails the check', () => {
+  const root = copyRoot();
+  fs.writeFileSync(
+    path.join(root, 'oracle/src/rogue-enqueue.ts'),
+    "export const raise = (o: { enqueue(e: unknown): void }) => o.enqueue({ type: 'ROGUE_UNREGISTERED' });\n",
+  );
+  assert.match(registryProblems(root).join('\n'), /ROGUE_UNREGISTERED/);
+});

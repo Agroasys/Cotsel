@@ -53,3 +53,23 @@ test('enqueue writes the envelope with the row and never rewrites it on a merge'
   const mergeClause = text.slice(text.indexOf('DO UPDATE SET'));
   assert.doesNotMatch(mergeClause, /envelope/u, 'a merged repeat must keep the first envelope');
 });
+
+test('an unregistered notification type is rejected, not enqueued', async () => {
+  const { UnregisteredNotificationTypeError } = require('../dist/index.js');
+  assert.throws(
+    () => buildNotificationEnvelope(createEvent({ type: 'NOT_A_REGISTERED_TYPE' })),
+    UnregisteredNotificationTypeError,
+  );
+  const calls = [];
+  const outbox = new NotificationOutbox({
+    async query(text, values) {
+      calls.push({ text, values });
+      return { rows: [{ inserted: true }] };
+    },
+  });
+  await assert.rejects(
+    outbox.enqueue(createEvent({ type: 'NOT_A_REGISTERED_TYPE' }), 0),
+    UnregisteredNotificationTypeError,
+  );
+  assert.equal(calls.length, 0);
+});

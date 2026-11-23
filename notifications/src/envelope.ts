@@ -45,10 +45,25 @@ export interface EnvelopeOptions {
   occurredAt?: Date;
 }
 
+/** A notification type that is not in docs/api/events/registry.json. */
+export class UnregisteredNotificationTypeError extends Error {
+  constructor(readonly notificationType: string) {
+    super(
+      `Notification type ${notificationType} is not registered in docs/api/events/registry.json`,
+    );
+    this.name = 'UnregisteredNotificationTypeError';
+  }
+}
+
 export function buildNotificationEnvelope(
   event: NotificationEvent,
   options: EnvelopeOptions = {},
 ): EventEnvelope<NotificationEvent> {
+  // CI keeps every emitted type registered; reaching this throw is a code
+  // defect, and it fails at enqueue rather than producing an unregistered event.
+  if (!(REGISTERED_NOTIFICATION_TYPES as readonly string[]).includes(event.type)) {
+    throw new UnregisteredNotificationTypeError(event.type);
+  }
   return {
     eventId: options.eventId ?? randomUUID(),
     type: NOTIFICATION_ENVELOPE_TYPE,

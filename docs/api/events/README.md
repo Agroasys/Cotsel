@@ -33,6 +33,6 @@ The release gate runs the same command.
 - **Repeats:** a merged repeat of the same incident keeps the first envelope, so `eventId` is stable while `occurrences` counts the repeats. The `event` column holds the latest occurrence.
 - **Integrity:** the column is constrained to the envelope shape, and a trigger makes a written envelope immutable. Rows written before the migration have a `NULL` envelope.
 - **Migrations:** oracle `202611230001`, reconciliation `202611230001`, indexer `1785800000000`.
-- **Type list:** `notifications/src/envelope.ts` keeps its own `REGISTERED_NOTIFICATION_TYPES`, and the check fails if it differs from the registry. The list is not a runtime gate, so an alert is never dropped because of its schema.
+- **Type list:** `notifications/src/envelope.ts` keeps its own `REGISTERED_NOTIFICATION_TYPES`, and the check fails if it differs from the registry. `buildNotificationEnvelope` throws `UnregisteredNotificationTypeError` for any other type, and the registry check scans every `notify`, `raise` and `enqueue` call site, so an unregistered type fails in CI before it can reach a producer.
 
 Relays and consumers (#957, #958) read `envelope`, deduplicate on `eventId`, and order by `orderingKey`.
