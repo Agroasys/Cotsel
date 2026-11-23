@@ -56,9 +56,32 @@ Body:
   "walletAddress": "0x0000000000000000000000000000000000000000",
   "orgId": "agroasys-ops",
   "ttlSeconds": 1800,
-  "reason": "INC-3333 temporary admin needed to freeze affected governance workflow"
+  "reason": "INC-3333 temporary admin needed to freeze affected governance workflow",
+  "operatorAuthentication": {
+    "authTime": 1795000000,
+    "authMethod": "webauthn",
+    "authStrength": "hardware_webauthn"
+  }
 }
 ```
+
+**Break-glass always requires a fresh step-up (Cotsel#946).** `operatorAuthentication`
+is the granting operator's upstream step-up, inside the HMAC-signed body, so the
+admin-control caller attests it as it attests a session exchange. Cotsel checks it
+itself:
+
+- it is required;
+- `authStrength` must be in `AUTH_BREAK_GLASS_STEP_UP_ACCEPTED_STRENGTHS` (default
+  `hardware_webauthn`);
+- `authTime` must be at most `AUTH_BREAK_GLASS_STEP_UP_MAX_AGE_SECONDS` old (default
+  `300`, range 60–3600).
+
+Otherwise the grant is refused with 403 `StepUpRequired`, logged as
+`auth.break_glass_step_up_required`, and nothing is granted. A malformed claim is a 400. Revocation and review do not require a step-up.
+
+**Rollout:** the grant ignores unknown body fields, so the Agroasys admin-control
+client can start sending `operatorAuthentication` before this Cotsel release. Deploy
+it in that order, or emergency grants are refused until Agroasys sends the claims.
 
 The auth service stores durable `role` separately from temporary
 `break_glass_role`. During the TTL, the effective role is `admin`. After expiry
@@ -165,6 +188,7 @@ The reviewer must confirm:
 Operators should alert on:
 
 - `auth.break_glass_granted`
+- `auth.break_glass_step_up_required` (a grant refused for a stale or missing step-up)
 - `auth.break_glass_revoked`
 - `auth.break_glass_expired`
 - `auth.nonce_replay_attempted`

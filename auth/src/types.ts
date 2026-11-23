@@ -248,6 +248,9 @@ export interface AuthConfig {
   adminControlMaxSkewSeconds: number;
   adminControlNonceTtlSeconds: number;
   adminBreakGlassMaxTtlSeconds: number;
+  /** A break-glass grant needs an operator step-up at most this old, of these strengths (Cotsel#946). */
+  breakGlassStepUpMaxAgeSeconds: number;
+  breakGlassStepUpAcceptedStrengths: AuthenticationStrength[];
   adminGrantMaxTtlSeconds: number;
 }
 

@@ -10,6 +10,11 @@ import {
   success,
 } from '@agroasys/shared-http';
 import { AdminService } from '../core/adminService';
+import {
+  DEFAULT_BREAK_GLASS_STEP_UP_POLICY,
+  requireFreshBreakGlassStepUp,
+  type BreakGlassStepUpPolicy,
+} from '../core/breakGlassStepUp';
 import { ApiErrorResponse, ApiSuccessResponse, UserProfile, UserRole } from '../types';
 import { resolveBreakGlassReviewStatus } from '../core/breakGlassReviewStatus';
 import { assertWalletAddress, handleControllerError, requireAuthRole } from './controllerSupport';
@@ -36,6 +41,8 @@ interface BreakGlassBody {
   reason?: string;
   ttlSeconds?: number;
   baseRole?: Exclude<UserRole, 'admin'>;
+  /** The granting operator's upstream step-up: authTime, authMethod, authStrength. */
+  operatorAuthentication?: unknown;
 }
 
 interface AccountActionBody {
@@ -156,7 +163,13 @@ export class AdminController {
   readonly signers: AdminSignerController;
   readonly authority: AdminAuthorityController;
 
-  constructor(private readonly adminService: AdminService) {
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly breakGlassStepUp: {
+      policy: BreakGlassStepUpPolicy;
+      nowSeconds?: () => number;
+    } = { policy: DEFAULT_BREAK_GLASS_STEP_UP_POLICY },
+  ) {
     this.signers = new AdminSignerController(adminService);
     this.authority = new AdminAuthorityController(adminService);
   }
@@ -255,6 +268,11 @@ export class AdminController {
     try {
       const body = requireObject(req.body, 'body') as BreakGlassBody;
       const accountId = requireString(body.accountId, 'accountId');
+      requireFreshBreakGlassStepUp(
+        body.operatorAuthentication,
+        this.breakGlassStepUp.policy,
+        (this.breakGlassStepUp.nowSeconds ?? (() => Math.floor(Date.now() / 1000)))(),
+      );
       if (!Number.isInteger(body.ttlSeconds)) {
         throw new HttpError(400, 'BadRequest', 'ttlSeconds must be an integer');
       }
