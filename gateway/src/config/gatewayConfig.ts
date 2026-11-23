@@ -44,6 +44,12 @@ export interface GatewayConfig {
   stepUpAcceptedStrengths?: string[];
   /** `record` logs and audits a stale step-up but lets the request through (rollback only). */
   stepUpEnforcement?: 'enforce' | 'record';
+  /**
+   * Settlement template versions that may become active, as `templateId:version`
+   * (Cotsel#940). Default `agroasys.launch:1`: the escrow enforces only those
+   * terms until #955. Remove an entry only through review.
+   */
+  settlementTemplateActivationAllowlist?: string[];
   /** @deprecated Compatibility alias for legacy in-process test fixtures only. */
   governanceQueueTtlSeconds?: number;
   settlementIngressEnabled: boolean;

@@ -45,10 +45,27 @@ export interface SettlementTemplateRecord extends SettlementTemplateReference {
   requestId: string;
 }
 
+export type SettlementTemplateAction = 'created' | 'reviewed' | 'activated' | 'retired';
+
+/**
+ * Writes the audit record of a template change inside the transaction that
+ * makes the change, so a change is never committed without it.
+ */
+export type SettlementTemplateAudit = (
+  db: Pick<PoolClient, 'query'>,
+  event: {
+    action: SettlementTemplateAction;
+    record: SettlementTemplateRecord;
+    /** On activation: the previously active version this one replaced. */
+    replaced?: SettlementTemplateRecord | null;
+  },
+) => Promise<void>;
+
 export interface SettlementTemplateTransitionInput {
   templateId: string;
   version: number;
   actor: string;
+  audit?: SettlementTemplateAudit;
 }
 
 export interface SettlementTemplateStore {
@@ -59,6 +76,7 @@ export interface SettlementTemplateStore {
     template: SettlementTemplate;
     actor: string;
     requestId: string;
+    audit?: SettlementTemplateAudit;
   }): Promise<SettlementTemplateRecord>;
   review(input: SettlementTemplateTransitionInput): Promise<SettlementTemplateRecord>;
   /** Activates a reviewed version and retires the previously active one atomically. */
@@ -219,7 +237,7 @@ export function createPostgresSettlementTemplateStore(
       return result.rows[0] ? mapRow(result.rows[0]) : null;
     },
 
-    async createDraft({ template, actor, requestId }) {
+    async createDraft({ template, actor, requestId, audit }) {
       const problems = settlementTemplateProblems(template);
       if (problems.length > 0) {
         throw new GatewayError(400, 'VALIDATION_ERROR', 'Settlement template is invalid', {
@@ -227,33 +245,37 @@ export function createPostgresSettlementTemplateStore(
         });
       }
       const templateHash = settlementTemplateHash(template);
-      const result = await pool.query<SettlementTemplateRow>(
-        `INSERT INTO settlement_templates (
+      return inTransaction(async (client) => {
+        const result = await client.query<SettlementTemplateRow>(
+          `INSERT INTO settlement_templates (
            template_id, version, schema_version, template, template_hash, created_by, request_id
          ) VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
          ON CONFLICT DO NOTHING
          RETURNING ${COLUMNS}`,
-        [
-          template.templateId,
-          template.version,
-          template.schemaVersion,
-          JSON.stringify(template),
-          templateHash,
-          actor,
-          requestId,
-        ],
-      );
-      if (!result.rows[0]) {
-        throw conflict('Settlement template version or terms already exist', {
-          templateId: template.templateId,
-          version: template.version,
-          templateHash,
-        });
-      }
-      return mapRow(result.rows[0]);
+          [
+            template.templateId,
+            template.version,
+            template.schemaVersion,
+            JSON.stringify(template),
+            templateHash,
+            actor,
+            requestId,
+          ],
+        );
+        if (!result.rows[0]) {
+          throw conflict('Settlement template version or terms already exist', {
+            templateId: template.templateId,
+            version: template.version,
+            templateHash,
+          });
+        }
+        const record = mapRow(result.rows[0]);
+        await audit?.(client, { action: 'created', record });
+        return record;
+      });
     },
 
-    review({ templateId, version, actor }) {
+    review({ templateId, version, actor, audit }) {
       return inTransaction(async (client) => {
         const row = await lockVersion(client, templateId, version);
         if (row.status !== 'draft') {
@@ -269,11 +291,13 @@ export function createPostgresSettlementTemplateStore(
             version,
           });
         }
-        return transition(client, row, 'reviewed', 'reviewed', actor);
+        const record = await transition(client, row, 'reviewed', 'reviewed', actor);
+        await audit?.(client, { action: 'reviewed', record });
+        return record;
       });
     },
 
-    activate({ templateId, version, actor }) {
+    activate({ templateId, version, actor, audit }) {
       return inTransaction(async (client) => {
         const row = await lockVersion(client, templateId, version);
         if (row.status !== 'reviewed') {
@@ -305,11 +329,12 @@ export function createPostgresSettlementTemplateStore(
           ? await transition(client, previous.rows[0], 'retired', 'retired', actor)
           : null;
         const activated = await transition(client, row, 'active', 'activated', actor);
+        await audit?.(client, { action: 'activated', record: activated, replaced: retired });
         return { activated, retired };
       });
     },
 
-    retire({ templateId, version, actor }) {
+    retire({ templateId, version, actor, audit }) {
       return inTransaction(async (client) => {
         const row = await lockVersion(client, templateId, version);
         if (row.status === 'retired') {
@@ -324,7 +349,9 @@ export function createPostgresSettlementTemplateStore(
             reason: 'active_template_requires_replacement',
           });
         }
-        return transition(client, row, 'retired', 'retired', actor);
+        const record = await transition(client, row, 'retired', 'retired', actor);
+        await audit?.(client, { action: 'retired', record });
+        return record;
       });
     },
   };

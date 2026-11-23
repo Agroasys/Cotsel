@@ -1,0 +1,190 @@
+paths:
+  /settlement-templates:
+    get:
+      tags:
+        - Settlement Templates
+      summary: List settlement template versions
+      description: |
+        Every version of every settlement template (Cotsel#940), ordered by template and version.
+        See `docs/runbooks/settlement-templates.md` for the lifecycle and what enforces each rule.
+      operationId: listSettlementTemplates
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: templateId
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/SettlementTemplateId'
+      responses:
+        '200':
+          description: Template versions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      tags:
+        - Settlement Templates
+      summary: Create a settlement template draft
+      description: |
+        Records a new template version as a draft. Its terms and SHA-256 hash never change
+        afterwards. Requires `governance:write`, a recent upstream step-up (403 with
+        `details.reason = step_up_required` otherwise) and an `Idempotency-Key`. The audit row
+        commits in the same transaction as the draft.
+      operationId: createSettlementTemplateDraft
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementTemplateCreateRequest'
+      responses:
+        '201':
+          description: Draft recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateVersionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement-templates/{templateId}/versions/{version}:
+    get:
+      tags:
+        - Settlement Templates
+      summary: Get one settlement template version
+      operationId: getSettlementTemplateVersion
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/SettlementTemplateIdPath'
+        - $ref: '#/components/parameters/SettlementTemplateVersionPath'
+      responses:
+        '200':
+          description: Template version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateVersionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /settlement-templates/{templateId}/versions/{version}/review:
+    post:
+      tags:
+        - Settlement Templates
+      summary: Review a settlement template draft
+      description: Moves a draft to reviewed. The reviewer must not be the author.
+      operationId: reviewSettlementTemplate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/SettlementTemplateIdPath'
+        - $ref: '#/components/parameters/SettlementTemplateVersionPath'
+      responses:
+        '200':
+          description: Version reviewed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateVersionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement-templates/{templateId}/versions/{version}/activate:
+    post:
+      tags:
+        - Settlement Templates
+      summary: Activate a reviewed settlement template version
+      description: |
+        Makes a reviewed version active and retires the previously active one in the same
+        transaction. The activator must not be the author, and the version must be listed in
+        `GATEWAY_TEMPLATE_ACTIVATION_ALLOWLIST` (409 with
+        `details.reason = template_not_enforced_by_contract` otherwise), because the escrow
+        enforces only those terms until #955.
+      operationId: activateSettlementTemplate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/SettlementTemplateIdPath'
+        - $ref: '#/components/parameters/SettlementTemplateVersionPath'
+      responses:
+        '200':
+          description: Version active. `retired` is the version it replaced, if any.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateActivationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement-templates/{templateId}/versions/{version}/retire:
+    post:
+      tags:
+        - Settlement Templates
+      summary: Retire a draft or reviewed settlement template version
+      description: |
+        The active version cannot be retired on its own (409 with
+        `details.reason = active_template_requires_replacement`), because settlements would then
+        have no terms. It is replaced by activating another version.
+      operationId: retireSettlementTemplate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/SettlementTemplateIdPath'
+        - $ref: '#/components/parameters/SettlementTemplateVersionPath'
+      responses:
+        '200':
+          description: Version retired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateVersionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'

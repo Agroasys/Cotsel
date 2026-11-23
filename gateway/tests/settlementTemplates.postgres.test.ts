@@ -140,6 +140,33 @@ describePostgres('settlement templates through PostgreSQL (Cotsel#940)', () => {
     expect((await store.getActive('agroasys.launch'))?.version).toBe(1);
   });
 
+  it('commits a change only together with its audit record', async () => {
+    const store = createPostgresSettlementTemplateStore(db.runtime);
+    const failingAudit = async () => {
+      throw new Error('audit unavailable');
+    };
+    await expect(
+      store.createDraft({
+        template: { ...V2, version: 5 },
+        actor: 'alice',
+        requestId: 'req-v5',
+        audit: failingAudit,
+      }),
+    ).rejects.toThrow('audit unavailable');
+    expect(await store.get('agroasys.launch', 5)).toBeNull();
+
+    await store.createDraft({ template: { ...V2, version: 6 }, actor: 'alice', requestId: 'r6' });
+    await expect(
+      store.review({
+        templateId: 'agroasys.launch',
+        version: 6,
+        actor: 'zoe',
+        audit: failingAudit,
+      }),
+    ).rejects.toThrow('audit unavailable');
+    expect((await store.get('agroasys.launch', 6))?.status).toBe('draft');
+  });
+
   it('activates a new version and retires the previous one in one transaction', async () => {
     const store = createPostgresSettlementTemplateStore(db.runtime, {
       activationAllowlist: [...DEFAULT_TEMPLATE_ACTIVATION_ALLOWLIST, 'agroasys.launch:2'],

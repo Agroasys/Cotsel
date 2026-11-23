@@ -46,6 +46,19 @@ components:
       required: true
       schema:
         type: string
+    SettlementTemplateIdPath:
+      name: templateId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/SettlementTemplateId'
+    SettlementTemplateVersionPath:
+      name: version
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
     SettlementHandoffId:
       name: handoffId
       in: path
