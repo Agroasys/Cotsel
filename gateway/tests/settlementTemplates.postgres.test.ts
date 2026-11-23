@@ -183,16 +183,42 @@ describePostgres('settlement templates through PostgreSQL (Cotsel#940)', () => {
     await expect(
       db.owner.query(`DELETE FROM settlement_templates WHERE template_id = 'agroasys.launch'`),
     ).rejects.toMatchObject({ code: '23514' });
+    // The two-person rule holds even for a direct UPDATE that skips the store.
+    const draft = await createPostgresSettlementTemplateStore(db.runtime).createDraft({
+      template: { ...V2, version: 9 },
+      actor: 'dave',
+      requestId: 'req-v9',
+    });
     await expect(
       db.runtime.query(
-        `INSERT INTO settlement_templates (template_id, version, schema_version, template,
-           template_hash, status, created_by, reviewed_by, reviewed_at, request_id)
-         VALUES ('agroasys.launch', 9, 'cotsel.settlement-template.v1',
-           jsonb_build_object('templateId', 'agroasys.launch', 'version', 9,
-             'schemaVersion', 'cotsel.settlement-template.v1'),
-           '0x${'a'.repeat(64)}', 'reviewed', 'dave', 'dave', NOW(), 'req-self')`,
+        `UPDATE settlement_templates SET status = 'reviewed', reviewed_by = 'dave', reviewed_at = NOW()
+         WHERE template_id = 'agroasys.launch' AND version = $1`,
+        [draft.version],
       ),
     ).rejects.toMatchObject({ code: '23514' });
+    await expect(
+      db.runtime.query(
+        `UPDATE settlement_templates SET status = 'reviewed', reviewed_by = 'migration:017', reviewed_at = NOW()
+         WHERE template_id = 'agroasys.launch' AND version = $1`,
+        [draft.version],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+    const insertVersion = (version: number, status: string, createdBy: string, extra = '') =>
+      db.runtime.query(
+        `INSERT INTO settlement_templates (template_id, version, schema_version, template,
+           template_hash, status, created_by, request_id${extra ? ', reviewed_by, reviewed_at, activated_by, activated_at' : ''})
+         VALUES ('agroasys.launch', ${version}, 'cotsel.settlement-template.v1',
+           jsonb_build_object('templateId', 'agroasys.launch', 'version', ${version},
+             'schemaVersion', 'cotsel.settlement-template.v1'),
+           '0x${String(version).repeat(64).slice(0, 64)}', '${status}', '${createdBy}', 'req'${extra})`,
+      );
+    // A version cannot be inserted already approved, nor claim the bootstrap actor.
+    await expect(
+      insertVersion(10, 'active', 'mallory', ", 'trent', NOW(), 'trent', NOW()"),
+    ).rejects.toMatchObject({ code: '23514' });
+    await expect(insertVersion(11, 'draft', 'migration:017')).rejects.toMatchObject({
+      code: '23514',
+    });
   });
 
   it('never leaves the gateway without terms, and refuses settlements if it is', async () => {

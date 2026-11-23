@@ -17,17 +17,32 @@ export function testPostgresPort(): number {
 const SOURCE_DIRECTORY = path.resolve(__dirname, '../../src/database');
 
 /**
- * Writes the gateway manifest truncated at `throughVersion` (with its files) to a
- * temporary directory and returns the manifest path. The caller removes the directory.
+ * Writes the gateway manifest truncated at `throughVersion`, without the
+ * `withoutVersions` migrations, to a temporary directory with its files and
+ * returns the manifest path. The caller removes the directory.
  */
-export function writeManifestThrough(throughVersion: string): string {
+export function writeManifestThrough(
+  throughVersion?: string,
+  withoutVersions: readonly string[] = [],
+): string {
   const directory = mkdtempSync(path.join(tmpdir(), 'gateway-history-'));
   const manifest = JSON.parse(
     readFileSync(path.join(SOURCE_DIRECTORY, 'migrations.json'), 'utf8'),
   ) as {
-    migrations: Array<{ version: string; file: string }>;
+    migrations: Array<{ version: string; file: string; schema_sha256?: string }>;
   };
-  manifest.migrations = manifest.migrations.filter((row) => row.version <= throughVersion);
+  manifest.migrations = manifest.migrations.filter(
+    (row) =>
+      (!throughVersion || row.version <= throughVersion) && !withoutVersions.includes(row.version),
+  );
+  // A schema fingerprint is cumulative: after an omitted migration, each pin
+  // describes a schema this history never builds. File checksums still apply.
+  const firstOmitted = [...withoutVersions].sort()[0];
+  if (firstOmitted) {
+    for (const row of manifest.migrations) {
+      if (row.version > firstOmitted) delete row.schema_sha256;
+    }
+  }
   for (const row of manifest.migrations) {
     const target = path.join(directory, row.file);
     mkdirSync(path.dirname(target), { recursive: true });
@@ -40,6 +55,7 @@ export function writeManifestThrough(throughVersion: string): string {
 
 export async function createUserActionEnginePostgres(
   throughVersion?: '202610170015' | '202610180016',
+  options: { withoutVersions?: readonly string[] } = {},
 ) {
   const name = `ua_${randomUUID().replace(/-/g, '')}`;
   const connection = {
@@ -78,8 +94,8 @@ export async function createUserActionEnginePostgres(
     });
     await owner.query(`SET app.runtime_db_user='${name}'`);
     let manifestPath = path.join(SOURCE_DIRECTORY, 'migrations.json');
-    if (throughVersion) {
-      manifestPath = writeManifestThrough(throughVersion);
+    if (throughVersion || options.withoutVersions?.length) {
+      manifestPath = writeManifestThrough(throughVersion, options.withoutVersions);
       manifestDirectory = path.dirname(manifestPath);
     }
     const args = {

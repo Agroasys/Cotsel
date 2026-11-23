@@ -6,6 +6,7 @@ import { tmpdir } from 'os';
 import path from 'path';
 import https from 'https';
 import { Pool } from 'pg';
+import { testPostgresPort } from './userActionEnginePostgres';
 import { createServiceAuthHeaders } from '../../src/core/serviceAuth';
 import {
   PAIRED_PROTOCOL,
@@ -176,7 +177,7 @@ export function createPairedLifecycleTestClient() {
         // Parent owns cleanup after a killed child; never select a deployed database.
         const admin = new Pool({
           host: '127.0.0.1',
-          port: 5432,
+          port: testPostgresPort(),
           user: 'postgres',
           password: 'postgres',
           database: 'postgres',

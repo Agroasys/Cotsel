@@ -73,6 +73,8 @@ BEGIN
         OR (OLD.reviewed_by IS NOT NULL AND NEW.reviewed_by IS DISTINCT FROM OLD.reviewed_by)
         OR (OLD.activated_by IS NOT NULL AND NEW.activated_by IS DISTINCT FROM OLD.activated_by)
         OR (OLD.retired_by IS NOT NULL AND NEW.retired_by IS DISTINCT FROM OLD.retired_by)
+        OR (OLD.reviewed_by IS NULL AND NEW.reviewed_by = 'migration:017')
+        OR (OLD.activated_by IS NULL AND NEW.activated_by = 'migration:017')
     THEN
         RAISE EXCEPTION 'settlement template % v% terms and evidence are immutable', OLD.template_id, OLD.version
             USING ERRCODE = 'check_violation';
@@ -115,6 +117,31 @@ INSERT INTO settlement_templates (
     NOW(),
     'migration:017'
 );
+
+-- Created after the seed, so the bootstrap row above is the only one that can
+-- ever carry the migration:017 exemption. Every later version starts as a
+-- plain draft and reaches active only through the guarded UPDATE path.
+CREATE FUNCTION guard_new_settlement_template() RETURNS trigger AS $$
+BEGIN
+    IF NEW.status <> 'draft'
+        OR NEW.reviewed_by IS NOT NULL OR NEW.reviewed_at IS NOT NULL
+        OR NEW.activated_by IS NOT NULL OR NEW.activated_at IS NOT NULL
+        OR NEW.retired_by IS NOT NULL OR NEW.retired_at IS NOT NULL
+    THEN
+        RAISE EXCEPTION 'a new settlement template version must start as a draft'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.created_by = 'migration:017' THEN
+        RAISE EXCEPTION 'migration:017 is reserved for the bootstrap template'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER settlement_templates_start_as_draft
+    BEFORE INSERT ON settlement_templates
+    FOR EACH ROW EXECUTE FUNCTION guard_new_settlement_template();
 
 -- Every settlement records the terms it was created against. Existing handoffs
 -- were created under v1, the only terms the contract has enforced. The columns
