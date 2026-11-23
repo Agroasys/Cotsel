@@ -1,4 +1,6 @@
 import dotenv from 'dotenv';
+import type { KeyObject } from 'node:crypto';
+import { parsePublicKeys } from '@agroasys/shared-db/reconciliationEvidence';
 import { strict as assert } from 'assert';
 import { deploymentProfile, parseAllowedOrigins } from '@agroasys/shared-edge';
 import { parsePostgresSslMode, type PostgresSslMode } from '@agroasys/shared-db';
@@ -65,6 +67,12 @@ export interface TreasuryConfig {
     password: string;
     sslMode: PostgresSslMode;
   } | null;
+  /**
+   * Keys that verify reconciliation run manifests (Cotsel#951), by key id. Retired
+   * keys stay listed so the runs they signed remain verifiable. Required whenever
+   * the reconciliation database is configured.
+   */
+  reconciliationFindingPublicKeys: ReadonlyMap<string, KeyObject>;
   reconciliationMaxAgeSeconds: number;
   reconciliationMaxRunningRunAgeSeconds: number;
 }
@@ -373,6 +381,9 @@ export function loadConfig(): TreasuryConfig {
           ),
         }
       : null,
+    reconciliationFindingPublicKeys: reconciliationDbName
+      ? parsePublicKeys(env('RECONCILIATION_FINDING_PUBLIC_KEYS'))
+      : new Map(),
     reconciliationMaxAgeSeconds: envNumber('RECONCILIATION_MAX_AGE_SECONDS', 900),
     reconciliationMaxRunningRunAgeSeconds: envNumber(
       'RECONCILIATION_MAX_RUNNING_RUN_AGE_SECONDS',

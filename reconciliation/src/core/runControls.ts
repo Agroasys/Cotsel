@@ -16,6 +16,8 @@ import {
   generateIncidentReference,
   qualifyDiscrepancies,
 } from './containment';
+import { findingDigest } from '@agroasys/shared-db/reconciliationEvidence';
+import { RISK_RULES_V1_DIGEST, RISK_RULES_VERSION } from './riskRules';
 import type { QualifiedDiscrepancy } from './containment';
 import { getErrorMessage } from './runHelpers';
 import type { EscrowGovernanceReader } from '../blockchain/escrowGovernance';
@@ -266,6 +268,11 @@ export async function applyContainment(
             openedRunKey: row.opened_run_key,
             openedAt: row.opened_at.toISOString(),
             observationCount: row.observation_count,
+            findingDigests: discrepancy.findings.map((finding) =>
+              findingDigest({ runKey: input.runKey, ...finding }),
+            ),
+            rulesVersion: RISK_RULES_VERSION,
+            rulesDigest: RISK_RULES_V1_DIGEST,
           },
         },
       },

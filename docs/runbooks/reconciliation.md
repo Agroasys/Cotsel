@@ -43,7 +43,8 @@ pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out 
 
 Notes:
 
-- Report command reads reconciliation DB (`DB_NAME`), treasury DB (`TREASURY_DB_NAME`), and indexer DB (`INDEXER_DB_NAME`) using the same Postgres host/user/password env set.
+- Report command reads the reconciliation DB (`DB_NAME`) and, when `TREASURY_DB_NAME` is set, the treasury DB, using the same Postgres host/user/password env set.
+- The report's `evidence.status` says whether the run's signed manifest verifies (`verified`, `failed`, `unsigned`, or `unverifiable` without `RECONCILIATION_FINDING_PUBLIC_KEYS`); see `reconciliation-signed-findings.md`.
 - Output schema is stable and ordered by `tradeId`, then `txHash`; missing fields are emitted as explicit `null`.
 - Treasury-linked rows now also surface `rampReference`, `fiatDepositState`, `fiatDepositFailureReason`, and `fiatDepositObservedAt` when deposit evidence exists.
 - Treasury-linked rows also surface `bankReference`, `bankPayoutState`, `bankFailureCode`, `bankConfirmedAt`, and `bankPayoutDivergenceReason` when bank-finality evidence exists.

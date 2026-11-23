@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { findingDigest } from '@agroasys/shared-db/reconciliationEvidence';
+import { RISK_RULES_V1_DIGEST, RISK_RULES_VERSION } from '../core/riskRules';
 import {
   QUALIFYING_DISCREPANCY_CODES,
   buildContainmentEvidence,
@@ -123,12 +125,18 @@ test('incident evidence preserves the findings and the block they were read at',
     discrepancy,
   });
 
+  // Each finding carries the digest its run's signed manifest lists, and the
+  // snapshot names the risk rules that qualified it (Cotsel#951).
+  const digest = findingDigest({ runKey: 'daemon-1', ...discrepancy.findings[0] });
+  assert.match(digest, /^[0-9a-f]{64}$/u);
   assert.deepEqual(evidence, {
     runKey: 'daemon-1',
     boundaryBlock: 4242,
     boundaryBlockHash: '0xabc',
+    rules: { version: RISK_RULES_VERSION, digest: RISK_RULES_V1_DIGEST },
     findings: [
       {
+        digest,
         mismatchCode: 'AMOUNT_MISMATCH',
         comparedField: 'totalAmountLocked',
         severity: 'CRITICAL',

@@ -94,6 +94,7 @@ describe('Ledger Abstraction Proof', () => {
 
   test('clean path keeps payout and export eligibility clear only after fresh reconciliation', async () => {
     const gate = new ReconciliationGateService({
+      verifyRun: async () => ({ ok: true, manifest: {} as never }),
       pool: createPoolMock({
         "WHERE status = 'COMPLETED'": () => ({
           rows: [
@@ -224,6 +225,7 @@ describe('Ledger Abstraction Proof', () => {
 
   test('unknown-scope reconciliation remains fail-closed and visible as an upstream control gap', async () => {
     const gate = new ReconciliationGateService({
+      verifyRun: async () => ({ ok: true, manifest: {} as never }),
       pool: createPoolMock({
         "WHERE status = 'COMPLETED'": () => ({
           rows: [

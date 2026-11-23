@@ -515,6 +515,9 @@ importers:
       '@agroasys/shared-telemetry':
         specifier: workspace:*
         version: link:../shared-telemetry
+      '@aws-sdk/client-kms':
+        specifier: 3.1167.0
+        version: 3.1167.0
       dotenv:
         specifier: ^18.0.10
         version: 18.0.10

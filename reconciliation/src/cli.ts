@@ -5,6 +5,7 @@ import { ReconciliationService } from './core/reconciler';
 import { serviceNotifications } from './core/notifications';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from './blockchain/rpc-preflight';
 import { startHealthServer } from './health-server';
+import { configuredFindingSigner } from './database/runManifest';
 
 type Mode = 'once' | 'daemon';
 
@@ -36,6 +37,8 @@ async function bootstrap(): Promise<void> {
   });
 
   await testConnection();
+  // Fails before any run: findings are never published unsigned (Cotsel#951).
+  configuredFindingSigner();
 
   Logger.info('Validating RPC endpoint for reconciliation startup', {
     rpcUrl: redactRpcUrlForLogs(config.rpcUrl),

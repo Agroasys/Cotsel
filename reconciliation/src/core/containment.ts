@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { DriftCode, DriftFinding } from '../types';
-import { DRIFT_CODES, riskOutcome } from './riskRules';
+import { findingDigest } from '@agroasys/shared-db/reconciliationEvidence';
+import { DRIFT_CODES, RISK_RULES_V1_DIGEST, RISK_RULES_VERSION, riskOutcome } from './riskRules';
 
 /**
  * The discrepancy codes that qualify a trade for scoped containment: the codes
@@ -116,7 +117,10 @@ export function buildContainmentEvidence(input: {
     runKey: input.runKey,
     boundaryBlock: input.boundaryBlock,
     boundaryBlockHash: input.boundaryBlockHash,
+    rules: { version: RISK_RULES_VERSION, digest: RISK_RULES_V1_DIGEST },
     findings: input.discrepancy.findings.map((finding) => ({
+      // Listed in the run's signed manifest (Cotsel#951).
+      digest: findingDigest({ runKey: input.runKey, ...finding }),
       mismatchCode: finding.mismatchCode,
       comparedField: finding.comparedField,
       severity: finding.severity,

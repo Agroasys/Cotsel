@@ -17,7 +17,10 @@
           ]
         }
       ],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "An escrow log could not be projected; the checkpoint is held until an explicit replay."
     },
     {
@@ -31,7 +34,10 @@
           "equals": ["quarantine.startup_blocked", "indexer.bootstrap_failed"]
         }
       ],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "The indexer refused to start because of unresolved quarantine or a failed chain/ABI gate."
     },
     {
@@ -40,10 +46,19 @@
       "logGroup": "reconciliation",
       "sourceDirs": ["reconciliation/src"],
       "conditions": [
-        { "field": "message", "equals": ["Reconciliation drift detected"] },
-        { "field": "severity", "equals": ["CRITICAL"] }
+        {
+          "field": "message",
+          "equals": ["Reconciliation drift detected"]
+        },
+        {
+          "field": "severity",
+          "equals": ["CRITICAL"]
+        }
       ],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "A reconciliation run classified chain-versus-indexer drift as CRITICAL."
     },
     {
@@ -51,7 +66,12 @@
       "domain": "reconciliation",
       "logGroup": "reconciliation",
       "sourceDirs": ["reconciliation/src"],
-      "conditions": [{ "field": "message", "equals": ["Reconciliation drift detected"] }],
+      "conditions": [
+        {
+          "field": "message",
+          "equals": ["Reconciliation drift detected"]
+        }
+      ],
       "description": "Every drift finding of any severity. Dashboard trend only; CRITICAL findings page separately."
     },
     {
@@ -69,7 +89,10 @@
           ]
         }
       ],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "Reconciliation could not prove complete chain coverage and is holding its cursor."
     },
     {
@@ -87,7 +110,10 @@
           ]
         }
       ],
-      "alarm": { "severity": "high", "kind": "event" },
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "A reconciliation run lost or abandoned its lease; a successor must claim it."
     },
     {
@@ -95,8 +121,16 @@
       "domain": "reconciliation",
       "logGroup": "reconciliation",
       "sourceDirs": ["reconciliation/src"],
-      "conditions": [{ "field": "message", "equals": ["Contained trade is not paused on chain"] }],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "conditions": [
+        {
+          "field": "message",
+          "equals": ["Contained trade is not paused on chain"]
+        }
+      ],
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "A trade under reconciliation containment is not paused on chain."
     },
     {
@@ -105,17 +139,45 @@
       "logGroup": "reconciliation",
       "sourceDirs": ["reconciliation/src"],
       "conditions": [
-        { "field": "message", "equals": ["Reconciliation run failed", "Daemon run failed"] }
+        {
+          "field": "message",
+          "equals": ["Reconciliation run failed", "Daemon run failed"]
+        }
       ],
-      "alarm": { "severity": "high", "kind": "event" },
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "A reconciliation run or daemon cycle failed."
+    },
+    {
+      "id": "reconciliation_findings_signing_failed",
+      "domain": "reconciliation",
+      "logGroup": "reconciliation",
+      "sourceDirs": ["reconciliation/src"],
+      "conditions": [
+        {
+          "field": "errorCode",
+          "equals": ["RECONCILIATION_FINDINGS_SIGNING_FAILED"]
+        }
+      ],
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
+      "description": "A completed run could not be signed (Cotsel#951); its findings are held unpublished and the cursor is held until the signer recovers."
     },
     {
       "id": "treasury_ingestion_runs",
       "domain": "treasury",
       "logGroup": "treasury",
       "sourceDirs": ["treasury/src"],
-      "conditions": [{ "field": "metric", "equals": ["treasury_ingestion_runs_total"] }],
+      "conditions": [
+        {
+          "field": "metric",
+          "equals": ["treasury_ingestion_runs_total"]
+        }
+      ],
       "alarm": {
         "severity": "critical",
         "kind": "heartbeat",
@@ -131,10 +193,21 @@
       "logGroup": "treasury",
       "sourceDirs": ["treasury/src"],
       "conditions": [
-        { "field": "metric", "equals": ["treasury_ingestion_runs_total"] },
-        { "field": "outcome", "equals": ["FAILED", "BLOCKED"] }
+        {
+          "field": "metric",
+          "equals": ["treasury_ingestion_runs_total"]
+        },
+        {
+          "field": "outcome",
+          "equals": ["FAILED", "BLOCKED"]
+        }
       ],
-      "alarm": { "severity": "high", "kind": "event", "threshold": 3, "periodSeconds": 900 },
+      "alarm": {
+        "severity": "high",
+        "kind": "event",
+        "threshold": 3,
+        "periodSeconds": 900
+      },
       "description": "Treasury ingestion ticks are failing or blocked."
     },
     {
@@ -143,10 +216,19 @@
       "logGroup": "treasury",
       "sourceDirs": ["treasury/src"],
       "conditions": [
-        { "field": "metric", "equals": ["treasury_ingestion_freshness"] },
-        { "field": "level", "equals": ["error"] }
+        {
+          "field": "metric",
+          "equals": ["treasury_ingestion_freshness"]
+        },
+        {
+          "field": "level",
+          "equals": ["error"]
+        }
       ],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "Treasury chain evidence is stale or lagging past its threshold, sampled on every ingestion worker tick and on each export; export and close are blocked."
     },
     {
@@ -154,7 +236,12 @@
       "domain": "treasury",
       "logGroup": "treasury",
       "sourceDirs": ["treasury/src"],
-      "conditions": [{ "field": "metric", "equals": ["treasury_ingestion_freshness"] }],
+      "conditions": [
+        {
+          "field": "metric",
+          "equals": ["treasury_ingestion_freshness"]
+        }
+      ],
       "valueField": "ageSeconds",
       "unit": "Seconds",
       "description": "Age of the newest ingested treasury chain evidence, against TREASURY_INGEST_MAX_AGE_SECONDS."
@@ -164,7 +251,12 @@
       "domain": "treasury",
       "logGroup": "treasury",
       "sourceDirs": ["treasury/src"],
-      "conditions": [{ "field": "metric", "equals": ["treasury_ingestion_freshness"] }],
+      "conditions": [
+        {
+          "field": "metric",
+          "equals": ["treasury_ingestion_freshness"]
+        }
+      ],
       "valueField": "lagBlocks",
       "unit": "None",
       "description": "Blocks between the finalized head and treasury ingestion, against TREASURY_INGEST_MAX_LAG_BLOCKS."
@@ -183,8 +275,45 @@
           ]
         }
       ],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "A treasury ledger entry lost its canonical block, or canonical identity is unavailable."
+    },
+    {
+      "id": "treasury_reconciliation_evidence_invalid",
+      "domain": "treasury",
+      "logGroup": "treasury",
+      "sourceDirs": ["treasury/src"],
+      "conditions": [
+        {
+          "field": "errorCode",
+          "equals": ["RECONCILIATION_EVIDENCE_INVALID"]
+        }
+      ],
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
+      "description": "A reconciliation run's signed manifest does not match its evidence (Cotsel#951); treasury exports are blocked."
+    },
+    {
+      "id": "treasury_reconciliation_evidence_unsigned",
+      "domain": "treasury",
+      "logGroup": "treasury",
+      "sourceDirs": ["treasury/src"],
+      "conditions": [
+        {
+          "field": "errorCode",
+          "equals": ["RECONCILIATION_EVIDENCE_UNSIGNED"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
+      "description": "The latest completed reconciliation run has no signed manifest (Cotsel#951); treasury exports are blocked until a signed run completes."
     },
     {
       "id": "gateway_transaction_outcome_unknown",
@@ -201,7 +330,10 @@
           ]
         }
       ],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "A gasless financial transaction has an unknown or disputed outcome and must not be rebroadcast."
     },
     {
@@ -221,7 +353,10 @@
           ]
         }
       ],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "The gateway could not durably record a gasless transaction state transition."
     },
     {
@@ -230,9 +365,15 @@
       "logGroup": "gateway",
       "sourceDirs": ["gateway/src"],
       "conditions": [
-        { "field": "message", "equals": ["Managed signer transaction rejected before broadcast"] }
+        {
+          "field": "message",
+          "equals": ["Managed signer transaction rejected before broadcast"]
+        }
       ],
-      "alarm": { "severity": "high", "kind": "event" },
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "The gateway managed signer response did not match canonical intent and was refused."
     },
     {
@@ -241,9 +382,15 @@
       "logGroup": "oracle",
       "sourceDirs": ["oracle/src"],
       "conditions": [
-        { "field": "message", "equals": ["Managed signer transaction rejected before broadcast"] }
+        {
+          "field": "message",
+          "equals": ["Managed signer transaction rejected before broadcast"]
+        }
       ],
-      "alarm": { "severity": "high", "kind": "event" },
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "The Oracle managed signer response did not match canonical intent and was refused."
     },
     {
@@ -257,7 +404,10 @@
           "equals": ["Settlement callback polling stalled", "Settlement callback polling failed"]
         }
       ],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "Durable settlement callback dispatch to Agroasys has stalled."
     },
     {
@@ -265,8 +415,18 @@
       "domain": "transactions",
       "logGroup": "gateway",
       "sourceDirs": ["gateway/src"],
-      "conditions": [{ "field": "message", "equals": ["Settlement callback delivery failed"] }],
-      "alarm": { "severity": "high", "kind": "event", "threshold": 3, "periodSeconds": 900 },
+      "conditions": [
+        {
+          "field": "message",
+          "equals": ["Settlement callback delivery failed"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event",
+        "threshold": 3,
+        "periodSeconds": 900
+      },
       "description": "Settlement callback deliveries to Agroasys are failing and retrying."
     },
     {
@@ -283,7 +443,10 @@
           ]
         }
       ],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "An Oracle milestone execution has an unresolved or unattributable on-chain outcome."
     },
     {
@@ -297,7 +460,10 @@
           "equals": ["Containment guard could not be read; refusing to progress the trade"]
         }
       ],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "The Oracle could not read the containment guard and failed closed."
     },
     {
@@ -305,7 +471,12 @@
       "domain": "oracle",
       "logGroup": "oracle",
       "sourceDirs": ["oracle/src"],
-      "conditions": [{ "field": "message", "equals": ["Refusing to progress a contained trade"] }],
+      "conditions": [
+        {
+          "field": "message",
+          "equals": ["Refusing to progress a contained trade"]
+        }
+      ],
       "description": "The Oracle correctly refused a contained trade. Dashboard trend only."
     },
     {
@@ -313,8 +484,16 @@
       "domain": "oracle",
       "logGroup": "oracle",
       "sourceDirs": ["oracle/src"],
-      "conditions": [{ "field": "metric", "equals": ["oracle_exhausted_retries_total"] }],
-      "alarm": { "severity": "high", "kind": "event" },
+      "conditions": [
+        {
+          "field": "metric",
+          "equals": ["oracle_exhausted_retries_total"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "An Oracle trigger exhausted retries and needs an operator re-drive."
     },
     {
@@ -322,7 +501,12 @@
       "domain": "oracle",
       "logGroup": "oracle",
       "sourceDirs": ["oracle/src"],
-      "conditions": [{ "field": "metric", "equals": ["oracle_pending_approval_total"] }],
+      "conditions": [
+        {
+          "field": "metric",
+          "equals": ["oracle_pending_approval_total"]
+        }
+      ],
       "description": "Oracle triggers entering maker-checker approval. Dashboard trend only."
     },
     {
@@ -330,7 +514,12 @@
       "domain": "oracle",
       "logGroup": "oracle",
       "sourceDirs": ["oracle/src"],
-      "conditions": [{ "field": "metric", "equals": ["oracle_approved_total"] }],
+      "conditions": [
+        {
+          "field": "metric",
+          "equals": ["oracle_approved_total"]
+        }
+      ],
       "description": "Oracle triggers approved. Dashboard trend only."
     },
     {
@@ -338,7 +527,12 @@
       "domain": "oracle",
       "logGroup": "oracle",
       "sourceDirs": ["oracle/src"],
-      "conditions": [{ "field": "metric", "equals": ["oracle_rejected_total"] }],
+      "conditions": [
+        {
+          "field": "metric",
+          "equals": ["oracle_rejected_total"]
+        }
+      ],
       "description": "Oracle triggers rejected. Dashboard trend only."
     },
     {
@@ -346,8 +540,16 @@
       "domain": "transactions",
       "logGroup": "relayer",
       "sourceDirs": ["relayer/src"],
-      "conditions": [{ "field": "message", "equals": ["Relayer authentication replay rejected"] }],
-      "alarm": { "severity": "high", "kind": "event" },
+      "conditions": [
+        {
+          "field": "message",
+          "equals": ["Relayer authentication replay rejected"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "The gasless relayer rejected a replayed authenticated request."
     },
     {
@@ -355,8 +557,18 @@
       "domain": "transactions",
       "logGroup": "relayer",
       "sourceDirs": ["relayer/src"],
-      "conditions": [{ "field": "message", "equals": ["Relayer request failed"] }],
-      "alarm": { "severity": "high", "kind": "event", "threshold": 3, "periodSeconds": 900 },
+      "conditions": [
+        {
+          "field": "message",
+          "equals": ["Relayer request failed"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event",
+        "threshold": 3,
+        "periodSeconds": 900
+      },
       "description": "Relayer requests are failing."
     },
     {
@@ -364,7 +576,12 @@
       "domain": "services",
       "logGroup": "gateway",
       "sourceDirs": ["gateway/src"],
-      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "conditions": [
+        {
+          "field": "level",
+          "equals": ["error"]
+        }
+      ],
       "description": "Gateway error-level records. Dashboard trend only."
     },
     {
@@ -372,7 +589,12 @@
       "domain": "services",
       "logGroup": "oracle",
       "sourceDirs": ["oracle/src"],
-      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "conditions": [
+        {
+          "field": "level",
+          "equals": ["error"]
+        }
+      ],
       "description": "Oracle error-level records. Dashboard trend only."
     },
     {
@@ -380,7 +602,12 @@
       "domain": "services",
       "logGroup": "reconciliation",
       "sourceDirs": ["reconciliation/src"],
-      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "conditions": [
+        {
+          "field": "level",
+          "equals": ["error"]
+        }
+      ],
       "description": "Reconciliation error-level records. Dashboard trend only."
     },
     {
@@ -388,7 +615,12 @@
       "domain": "services",
       "logGroup": "treasury",
       "sourceDirs": ["treasury/src"],
-      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "conditions": [
+        {
+          "field": "level",
+          "equals": ["error"]
+        }
+      ],
       "description": "Treasury error-level records. Dashboard trend only."
     },
     {
@@ -396,7 +628,12 @@
       "domain": "services",
       "logGroup": "auth",
       "sourceDirs": ["auth/src"],
-      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "conditions": [
+        {
+          "field": "level",
+          "equals": ["error"]
+        }
+      ],
       "description": "Auth error-level records. Dashboard trend only."
     },
     {
@@ -404,7 +641,12 @@
       "domain": "services",
       "logGroup": "ricardian",
       "sourceDirs": ["ricardian/src"],
-      "conditions": [{ "field": "level", "equals": ["error"] }],
+      "conditions": [
+        {
+          "field": "level",
+          "equals": ["error"]
+        }
+      ],
       "description": "Ricardian error-level records. Dashboard trend only."
     },
     {
@@ -412,8 +654,16 @@
       "domain": "security",
       "logGroup": "auth",
       "sourceDirs": ["auth/src"],
-      "conditions": [{ "field": "eventType", "equals": ["auth.durable_admin_provisioned"] }],
-      "alarm": { "severity": "high", "kind": "event" },
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["auth.durable_admin_provisioned"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "A durable administrator was provisioned; verify the ticket, approver and target account."
     },
     {
@@ -421,8 +671,16 @@
       "domain": "security",
       "logGroup": "auth",
       "sourceDirs": ["auth/src"],
-      "conditions": [{ "field": "eventType", "equals": ["auth.durable_admin_revoked"] }],
-      "alarm": { "severity": "high", "kind": "event" },
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["auth.durable_admin_revoked"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "A durable administrator was revoked; verify session revocation and the access-review ticket."
     },
     {
@@ -430,8 +688,16 @@
       "domain": "security",
       "logGroup": "auth",
       "sourceDirs": ["auth/src"],
-      "conditions": [{ "field": "eventType", "equals": ["auth.break_glass_granted"] }],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["auth.break_glass_granted"]
+        }
+      ],
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "Break-glass administrator access was granted; open an incident review and confirm the TTL."
     },
     {
@@ -439,8 +705,16 @@
       "domain": "security",
       "logGroup": "auth",
       "sourceDirs": ["auth/src"],
-      "conditions": [{ "field": "eventType", "equals": ["auth.break_glass_revoked"] }],
-      "alarm": { "severity": "high", "kind": "event" },
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["auth.break_glass_revoked"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "Break-glass access was revoked; verify the temporary authority and its sessions are gone."
     },
     {
@@ -448,8 +722,16 @@
       "domain": "security",
       "logGroup": "auth",
       "sourceDirs": ["auth/src"],
-      "conditions": [{ "field": "eventType", "equals": ["auth.break_glass_expired"] }],
-      "alarm": { "severity": "high", "kind": "event" },
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["auth.break_glass_expired"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "Session use detected expired break-glass access; verify the temporary authority and its sessions are gone."
     },
     {
@@ -457,8 +739,16 @@
       "domain": "security",
       "logGroup": "auth",
       "sourceDirs": ["auth/src"],
-      "conditions": [{ "field": "eventType", "equals": ["auth.service_auth_denied"] }],
-      "alarm": { "severity": "high", "kind": "event" },
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["auth.service_auth_denied"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "A service-to-service request failed authentication."
     },
     {
@@ -466,8 +756,16 @@
       "domain": "security",
       "logGroup": "auth",
       "sourceDirs": ["auth/src"],
-      "conditions": [{ "field": "eventType", "equals": ["auth.nonce_replay_attempted"] }],
-      "alarm": { "severity": "high", "kind": "event" },
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["auth.nonce_replay_attempted"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "A signed request reused a nonce; treat it as a suspected replay until explained."
     },
     {
@@ -475,8 +773,16 @@
       "domain": "security",
       "logGroup": "auth",
       "sourceDirs": ["auth/src"],
-      "conditions": [{ "field": "eventType", "equals": ["auth.rate_limiter_fail_closed"] }],
-      "alarm": { "severity": "high", "kind": "event" },
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["auth.rate_limiter_fail_closed"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "The auth rate-limit store failed and protected requests are being rejected."
     },
     {
@@ -484,8 +790,16 @@
       "domain": "security",
       "logGroup": "auth",
       "sourceDirs": ["auth/src"],
-      "conditions": [{ "field": "eventType", "equals": ["auth.rate_limiter_fail_open"] }],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["auth.rate_limiter_fail_open"]
+        }
+      ],
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "The auth rate-limit store failed and requests are passing without rate limiting."
     },
     {
@@ -493,8 +807,16 @@
       "domain": "security",
       "logGroup": "gateway",
       "sourceDirs": ["gateway/src"],
-      "conditions": [{ "field": "eventType", "equals": ["gateway.rate_limiter_fail_closed"] }],
-      "alarm": { "severity": "high", "kind": "event" },
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["gateway.rate_limiter_fail_closed"]
+        }
+      ],
+      "alarm": {
+        "severity": "high",
+        "kind": "event"
+      },
       "description": "The gateway rate-limit store failed and protected requests are being rejected."
     },
     {
@@ -502,8 +824,16 @@
       "domain": "security",
       "logGroup": "gateway",
       "sourceDirs": ["gateway/src"],
-      "conditions": [{ "field": "eventType", "equals": ["gateway.rate_limiter_fail_open"] }],
-      "alarm": { "severity": "critical", "kind": "event" },
+      "conditions": [
+        {
+          "field": "eventType",
+          "equals": ["gateway.rate_limiter_fail_open"]
+        }
+      ],
+      "alarm": {
+        "severity": "critical",
+        "kind": "event"
+      },
       "description": "The gateway rate-limit store failed and requests are passing without rate limiting."
     }
   ]

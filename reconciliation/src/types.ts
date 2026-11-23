@@ -331,6 +331,14 @@ export interface TradeContainedAlertPayload {
   openedRunKey: string;
   openedAt: string;
   observationCount: number;
+  /**
+   * Digests of the findings that opened or re-observed the containment, each
+   * listed in the run's signed manifest, and the risk rules applied (Cotsel#951).
+   * Absent on alerts queued before signing shipped.
+   */
+  findingDigests?: string[];
+  rulesVersion?: string;
+  rulesDigest?: string;
 }
 
 export interface TradePauseUnconfirmedAlertPayload {
