@@ -5040,6 +5040,11 @@ components:
         - createdAt
         - updatedAt
       properties:
+        settlementTemplate:
+          description: The template the settlement was created against (Cotsel#940); null for a pre-017 row.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SettlementTemplateReference'
         handoffId:
           type: string
         platformId:
@@ -5286,6 +5291,22 @@ components:
         - rejected
         - reconciled
         - drift_detected
+    SettlementTemplateReference:
+      type: object
+      additionalProperties: false
+      required:
+        - templateId
+        - version
+        - templateHash
+      properties:
+        templateId:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+        templateHash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
     SettlementHandoff:
       type: object
       required:
@@ -5395,24 +5416,10 @@ components:
             - string
             - 'null'
         settlementTemplate:
-          description: The settlement template version the handoff was created against (Cotsel#940). Settlements created before templates existed record v1. Null only for a row written by a gateway image older than migration 017.
-          type:
-            - object
-            - 'null'
-          additionalProperties: false
-          required:
-            - templateId
-            - version
-            - templateHash
-          properties:
-            templateId:
-              type: string
-            version:
-              type: integer
-              minimum: 1
-            templateHash:
-              type: string
-              pattern: ^0x[0-9a-f]{64}$
+          description: The settlement template version the handoff was created against (Cotsel#940). Null only for a row written by a gateway image older than migration 017.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SettlementTemplateReference'
         createdAt:
           type: string
           format: date-time

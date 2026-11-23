@@ -311,6 +311,7 @@ components:
     SettlementReconciliationStatus: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-01.yml#/components/schemas/SettlementReconciliationStatus}
     SettlementCallbackStatus: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-01.yml#/components/schemas/SettlementCallbackStatus}
     SettlementEventType: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-01.yml#/components/schemas/SettlementEventType}
+    SettlementTemplateReference: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-01.yml#/components/schemas/SettlementTemplateReference}
     SettlementHandoff: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-01.yml#/components/schemas/SettlementHandoff}
     SettlementExecutionEvent: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-01.yml#/components/schemas/SettlementExecutionEvent}
     SettlementCallbackDelivery: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-01.yml#/components/schemas/SettlementCallbackDelivery}
