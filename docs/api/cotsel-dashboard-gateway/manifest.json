@@ -20,7 +20,8 @@
     "paths/governance-03.yml",
     "paths/treasury-01.yml",
     "paths/treasury-02.yml",
-    "paths/compliance-01.yml"
+    "paths/compliance-01.yml",
+    "paths/settlement-templates-01.yml"
   ],
   "components": [
     "components/shared.yml",
@@ -35,6 +36,7 @@
     "components/schemas-settlement-02.yml",
     "components/schemas-settlement-03.yml",
     "components/schemas-settlement-04.yml",
+    "components/schemas-settlement-templates-01.yml",
     "components/schemas-reconciliation-01.yml",
     "components/schemas-ricardian-01.yml",
     "components/schemas-governance-01.yml",

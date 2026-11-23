@@ -18,6 +18,8 @@ import {
   parseUrlList,
 } from './envReaders';
 import { loadGaslessEnvironment } from './gaslessEnvironment';
+import { parseTemplateActivationAllowlist } from '../core/settlementTemplateInput';
+import { DEFAULT_TEMPLATE_ACTIVATION_ALLOWLIST } from '../core/settlementTemplateStore';
 
 dotenv.config();
 
@@ -42,6 +44,16 @@ function assertDownstreamServiceAuth(
     `${serviceName} requires a service API key and secret when GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH=false`,
   );
 }
+
+/** Strengths Cotsel auth accepts from the session exchange (auth/src/types.ts). */
+const STEP_UP_STRENGTHS = [
+  'password',
+  'webauthn',
+  'hardware_webauthn',
+  'recovery_code',
+  'auth0_mfa',
+  'unverified',
+];
 
 export function loadConfig(): GatewayConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
@@ -81,6 +93,15 @@ export function loadConfig(): GatewayConfig {
   const governancePreparationTtlSeconds = envNumber(
     'GATEWAY_GOVERNANCE_PREPARATION_TTL_SECONDS',
     900,
+  );
+  const stepUpMaxAgeSeconds = envNumber('GATEWAY_STEP_UP_MAX_AGE_SECONDS', 300);
+  const stepUpAcceptedStrengths = parseAllowlist(
+    process.env.GATEWAY_STEP_UP_ACCEPTED_STRENGTHS ?? 'hardware_webauthn',
+  );
+  const stepUpEnforcement = process.env.GATEWAY_STEP_UP_ENFORCEMENT?.trim() || 'enforce';
+  const settlementTemplateActivationAllowlist = parseTemplateActivationAllowlist(
+    process.env.GATEWAY_TEMPLATE_ACTIVATION_ALLOWLIST ??
+      DEFAULT_TEMPLATE_ACTIVATION_ALLOWLIST.join(','),
   );
   const settlementIngressEnabled = envBool('GATEWAY_SETTLEMENT_INGRESS_ENABLED', false);
   const immediateInspectionAcceptanceEnabled = envBool(
@@ -198,6 +219,21 @@ export function loadConfig(): GatewayConfig {
   assert(
     governancePreparationTtlSeconds >= 60 && governancePreparationTtlSeconds <= 900,
     'GATEWAY_GOVERNANCE_PREPARATION_TTL_SECONDS must be between 60 and 900 seconds',
+  );
+  assert(
+    Number.isInteger(stepUpMaxAgeSeconds) &&
+      stepUpMaxAgeSeconds >= 60 &&
+      stepUpMaxAgeSeconds <= 3600,
+    'GATEWAY_STEP_UP_MAX_AGE_SECONDS must be an integer between 60 and 3600 seconds',
+  );
+  assert(
+    stepUpAcceptedStrengths.length > 0 &&
+      stepUpAcceptedStrengths.every((strength) => STEP_UP_STRENGTHS.includes(strength)),
+    `GATEWAY_STEP_UP_ACCEPTED_STRENGTHS must list one or more of ${STEP_UP_STRENGTHS.join(', ')}`,
+  );
+  assert(
+    stepUpEnforcement === 'enforce' || stepUpEnforcement === 'record',
+    'GATEWAY_STEP_UP_ENFORCEMENT must be enforce or record',
   );
   assert(
     envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS', 300) >= 30,
@@ -396,6 +432,10 @@ export function loadConfig(): GatewayConfig {
     enableMutations,
     writeAllowlist,
     governancePreparationTtlSeconds,
+    stepUpMaxAgeSeconds,
+    stepUpAcceptedStrengths,
+    stepUpEnforcement,
+    settlementTemplateActivationAllowlist,
     settlementIngressEnabled,
     immediateInspectionAcceptanceEnabled,
     settlementServiceAuthApiKeysJson,

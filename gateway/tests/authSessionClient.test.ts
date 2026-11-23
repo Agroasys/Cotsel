@@ -225,6 +225,50 @@ describe('AuthSessionClient contract validation', () => {
     });
   });
 
+  test('accepts authentication assurance and sessions from an auth image that predates it', async () => {
+    const client = createAuthSessionClient(baseConfig);
+    for (const session of [
+      buildAuthSession({
+        authentication: {
+          authTime: 1_800_000_000,
+          method: 'webauthn',
+          strength: 'hardware_webauthn',
+        },
+      }),
+      buildAuthSession({ authentication: { authTime: null, method: null, strength: null } }),
+      buildAuthSession(),
+    ]) {
+      global.fetch = jest.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true, data: session }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+      await expect(client.resolveSession('sess-1', 'req-1')).resolves.toEqual(session);
+    }
+  });
+
+  test.each([
+    { authTime: '1800000000', method: 'webauthn', strength: 'hardware_webauthn' },
+    { authTime: 1.5, method: 'webauthn', strength: 'hardware_webauthn' },
+    { authTime: 1_800_000_000, method: 7, strength: 'hardware_webauthn' },
+    'hardware_webauthn',
+  ])('fails closed on malformed authentication assurance %p', async (authentication) => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ success: true, data: buildAuthSession({ authentication }) }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    const client = createAuthSessionClient(baseConfig);
+    await expect(client.resolveSession('sess-1', 'req-1')).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'UPSTREAM_UNAVAILABLE',
+    });
+  });
+
   test('readiness probes auth dependency readiness, not liveness', async () => {
     const fetchMock = jest.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     global.fetch = fetchMock;

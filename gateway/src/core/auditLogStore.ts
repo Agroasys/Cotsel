@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Pool } from 'pg';
+import { withStepUpEvidence } from './stepUpAudit';
 
 export interface AuditLogEntry {
   eventType: string;
@@ -23,11 +24,18 @@ export interface AuditLogStore {
   append(entry: AuditLogEntry): Promise<void>;
 }
 
-export function createPostgresAuditLogStore(pool: Pool): AuditLogStore {
-  return {
-    async append(entry) {
-      await pool.query(
-        `INSERT INTO audit_log (
+/** Anything that runs a query: the pool, or a client inside a transaction. */
+export interface AuditLogQueryable {
+  query(text: string, values?: unknown[]): Promise<unknown>;
+}
+
+/** Appends one audit row; pass a transaction's client to commit it with the change. */
+export async function appendAuditLogEntry(
+  db: AuditLogQueryable,
+  entry: AuditLogEntry,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO audit_log (
            event_type,
            route,
            method,
@@ -42,23 +50,27 @@ export function createPostgresAuditLogStore(pool: Pool): AuditLogStore {
            status,
            metadata
          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)`,
-        [
-          entry.eventType,
-          entry.route,
-          entry.method,
-          entry.requestId,
-          entry.correlationId || null,
-          entry.actionId || null,
-          entry.idempotencyKey || null,
-          entry.actorId || null,
-          entry.actorUserId || null,
-          entry.actorWalletAddress || null,
-          entry.actorRole || null,
-          entry.status,
-          JSON.stringify(entry.metadata || {}),
-        ],
-      );
-    },
+    [
+      entry.eventType,
+      entry.route,
+      entry.method,
+      entry.requestId,
+      entry.correlationId || null,
+      entry.actionId || null,
+      entry.idempotencyKey || null,
+      entry.actorId || null,
+      entry.actorUserId || null,
+      entry.actorWalletAddress || null,
+      entry.actorRole || null,
+      entry.status,
+      JSON.stringify(withStepUpEvidence(entry.metadata) || {}),
+    ],
+  );
+}
+
+export function createPostgresAuditLogStore(pool: Pool): AuditLogStore {
+  return {
+    append: (entry) => appendAuditLogEntry(pool, entry),
   };
 }
 
@@ -70,7 +82,7 @@ export function createInMemoryAuditLogStore(entries: AuditLogEntry[] = []): Audi
     async append(entry) {
       entries.push({
         ...entry,
-        metadata: entry.metadata ? { ...entry.metadata } : undefined,
+        metadata: withStepUpEvidence(entry.metadata ? { ...entry.metadata } : undefined),
       });
     },
   };

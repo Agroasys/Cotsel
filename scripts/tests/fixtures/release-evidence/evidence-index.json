@@ -3,12 +3,12 @@
   "candidateId": "cotsel-2026-08-05-fixture",
   "manifest": {
     "path": "scripts/tests/fixtures/release-evidence/candidate-manifest.json",
-    "sha256": "7e397ac01256e376c119939cc3f1969514e73491792645581b37272f5be5c84e"
+    "sha256": "ae6b6e69cd82c501422c03f7a516185fb3e3a90da1aff6c4412dd5190d7343dc"
   },
   "environmentReport": {
     "path": "ci-reports/environment-report.json",
     "sha256": "66d51889f1ac4eeee3064c44ab784d5039216adf53c0b1ae073f1c61a5f4e2e1",
-    "manifestSha256": "7e397ac01256e376c119939cc3f1969514e73491792645581b37272f5be5c84e",
+    "manifestSha256": "ae6b6e69cd82c501422c03f7a516185fb3e3a90da1aff6c4412dd5190d7343dc",
     "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
   },
   "generatedAt": "2026-08-05T10:00:00.000Z",
@@ -50,7 +50,7 @@
         "contractDeployedBytecodeSha256": "8ae6bd40151f975007997152aa60a5421b1fccc59e2fc866da27f8467af7b61a",
         "migrationIdentities": [
           "auth@202610140005_admin_authority_changes#sha256:f80d5a158e2ab374bc6b110c291e523c2e7b627fa7b6c7059ae808374f2fb599",
-          "gateway@202610180016_user_action_requests#sha256:551df0d3ebf8cb1ee123d8327d81046869db72dd2cb6d484d1d8b8e054665db9",
+          "gateway@202611230017_settlement_templates#sha256:e186786b16810ab2349f424617636547078949b6df4d968b8d03765e868b359e",
           "indexer@1785800000000_notification_outbox_envelope#sha256:ff043bbd83c1485ddccf5b50ae1b06978619b4f0ac29a8a2cf6634d48d80e229",
           "oracle@202611230001_notification_outbox_envelope#sha256:09f1d46900023cd4c4db79f9458b8cbd90c0d2077799ff254dc4ce8a8158f034",
           "reconciliation@202611230002_run_manifests#sha256:73e1a41ab40d605394d1dcfce6a3e8c7457528d7020fd11f6a4ba69e01605037",
@@ -108,7 +108,7 @@
         "contractDeployedBytecodeSha256": "8ae6bd40151f975007997152aa60a5421b1fccc59e2fc866da27f8467af7b61a",
         "migrationIdentities": [
           "auth@202610140005_admin_authority_changes#sha256:f80d5a158e2ab374bc6b110c291e523c2e7b627fa7b6c7059ae808374f2fb599",
-          "gateway@202610180016_user_action_requests#sha256:551df0d3ebf8cb1ee123d8327d81046869db72dd2cb6d484d1d8b8e054665db9",
+          "gateway@202611230017_settlement_templates#sha256:e186786b16810ab2349f424617636547078949b6df4d968b8d03765e868b359e",
           "indexer@1785800000000_notification_outbox_envelope#sha256:ff043bbd83c1485ddccf5b50ae1b06978619b4f0ac29a8a2cf6634d48d80e229",
           "oracle@202611230001_notification_outbox_envelope#sha256:09f1d46900023cd4c4db79f9458b8cbd90c0d2077799ff254dc4ce8a8158f034",
           "reconciliation@202611230002_run_manifests#sha256:73e1a41ab40d605394d1dcfce6a3e8c7457528d7020fd11f6a4ba69e01605037",

@@ -127,6 +127,11 @@ components:
         - createdAt
         - updatedAt
       properties:
+        settlementTemplate:
+          description: The template the settlement was created against (Cotsel#940); null for a pre-017 row.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SettlementTemplateReference'
         handoffId:
           type: string
         platformId:

@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Pool, PoolClient } from 'pg';
+import { withStepUpEvidence } from './stepUpAudit';
 import { AuditLogEntry, AuditLogStore } from './auditLogStore';
 import {
   GovernanceActionRecord,
@@ -258,7 +259,7 @@ export async function insertGovernanceAuditLog(
       entry.actorWalletAddress || null,
       entry.actorRole || null,
       entry.status,
-      JSON.stringify(entry.metadata || {}),
+      JSON.stringify(withStepUpEvidence(entry.metadata) || {}),
     ],
   );
 }

@@ -39,5 +39,6 @@ tags:
   - name: Governance
   - name: Treasury
   - name: Compliance
+  - name: Settlement Templates
 security:
   - sessionBearer: []
