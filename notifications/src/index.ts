@@ -381,5 +381,6 @@ export class WebhookNotifier implements Notifier, NotificationTransport {
 }
 
 export * from './outbox';
+export * from './envelope';
 export * from './dispatcher';
 export * from './durableNotifier';

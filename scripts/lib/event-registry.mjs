@@ -266,6 +266,24 @@ export function registryProblems(root) {
       if (!registered.has(type))
         problems.push(`notification type ${type} is emitted but not registered`);
     }
+    // The producer library carries its own copy of the registered types; keep it in step.
+    const envelopeSource = path.join(root, 'notifications/src/envelope.ts');
+    if (fs.existsSync(envelopeSource)) {
+      const declared = registeredTypesDeclaredIn(fs.readFileSync(envelopeSource, 'utf8'));
+      const expected = [...registered].sort();
+      if (JSON.stringify([...declared].sort()) !== JSON.stringify(expected)) {
+        problems.push(
+          `notifications/src/envelope.ts REGISTERED_NOTIFICATION_TYPES differs from the registry (${[...declared].sort().join(', ')} vs ${expected.join(', ')})`,
+        );
+      }
+    }
   }
   return problems;
+}
+
+/** Reads the REGISTERED_NOTIFICATION_TYPES array literal from the producer library. */
+export function registeredTypesDeclaredIn(source) {
+  const match = /REGISTERED_NOTIFICATION_TYPES\s*=\s*\[([\s\S]*?)\]/u.exec(source);
+  if (!match) return [];
+  return [...match[1].matchAll(/'([A-Z][A-Z0-9_]+)'/gu)].map((entry) => entry[1]);
 }

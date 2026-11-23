@@ -340,18 +340,18 @@
     },
     {
       "component": "indexer",
-      "headIdentity": "1785700000000_notification_outbox",
-      "checksumSha256": "431c1d012f15da6c54b55dbd57edf1b67b5acdcba702b36f9a41bba50eacba9e"
+      "headIdentity": "1785800000000_notification_outbox_envelope",
+      "checksumSha256": "ff043bbd83c1485ddccf5b50ae1b06978619b4f0ac29a8a2cf6634d48d80e229"
     },
     {
       "component": "oracle",
-      "headIdentity": "202610220001_notification_outbox",
-      "checksumSha256": "796b64b1b93c6a129596bb7414989c3c352dabe9b9f13c9d21edcf3bc56d5d07"
+      "headIdentity": "202611230001_notification_outbox_envelope",
+      "checksumSha256": "09f1d46900023cd4c4db79f9458b8cbd90c0d2077799ff254dc4ce8a8158f034"
     },
     {
       "component": "reconciliation",
-      "headIdentity": "202611010002_enumeration_cycles",
-      "checksumSha256": "40977cf0a81d8bcc7c1169b3b6977b32bb6e77610f5c0643b3eb5824f5bae913"
+      "headIdentity": "202611230001_notification_outbox_envelope",
+      "checksumSha256": "d56899b267a5c46ee87c841d14e5246c2bb64cac8965ef883c34a7b715829985"
     },
     {
       "component": "ricardian",
