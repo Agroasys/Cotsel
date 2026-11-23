@@ -191,22 +191,62 @@ test(
           });
           const previous = process.env.RECONCILIATION_FINDING_PUBLIC_KEYS;
           try {
+            const digestOf = (tradeId: string) =>
+              findingDigest({
+                runKey: 'daemon-1',
+                ...FINDINGS.find((finding) => finding.tradeId === tradeId)!,
+              });
+            const statuses = async () =>
+              Object.fromEntries(
+                (await reportEvidence(pool, 'daemon-1')).findings.map((finding) => [
+                  finding.tradeId ?? `missing:${finding.digest}`,
+                  finding.status,
+                ]),
+              );
             delete process.env.RECONCILIATION_FINDING_PUBLIC_KEYS;
             await completeSignedRun(pool);
-            assert.equal((await reportEvidence(pool, 'daemon-1')).status, 'unverifiable');
+            const unverifiable = await reportEvidence(pool, 'daemon-1');
+            assert.equal(unverifiable.status, 'unverifiable');
+            assert.deepEqual(await statuses(), { '7': 'unverifiable', '8': 'unverifiable' });
+
             process.env.RECONCILIATION_FINDING_PUBLIC_KEYS = keys;
-            assert.deepEqual(await reportEvidence(pool, 'daemon-1'), {
-              status: 'verified',
-              keyId: SIGNER.keyId,
-              findingCount: 2,
+            const verified = await reportEvidence(pool, 'daemon-1');
+            assert.equal(verified.status, 'verified');
+            assert.deepEqual(await statuses(), { '7': 'verified', '8': 'verified' });
+
+            // An altered row fails, and its original digest is reported missing;
+            // the untouched row still verifies.
+            await tamper(
+              pool,
+              `UPDATE reconcile_drifts SET indexed_value = '100' WHERE trade_id = '7'`,
+            );
+            assert.equal((await reportEvidence(pool, 'daemon-1')).status, 'failed');
+            assert.deepEqual(await statuses(), {
+              '7': 'failed',
+              '8': 'verified',
+              [`missing:${digestOf('7')}`]: 'missing',
             });
-            await tamper(pool, `DELETE FROM reconcile_drifts WHERE trade_id = '7'`);
-            assert.deepEqual(await reportEvidence(pool, 'daemon-1'), {
-              status: 'failed',
-              reason: 'findings_mismatch',
+
+            // A deleted row is reported by the digest the manifest still lists.
+            await tamper(pool, `DELETE FROM reconcile_drifts WHERE trade_id = '8'`);
+            assert.deepEqual(await statuses(), {
+              '7': 'failed',
+              [`missing:${digestOf('7')}`]: 'missing',
+              [`missing:${digestOf('8')}`]: 'missing',
             });
+
+            // An injected row is not in the manifest.
+            await tamper(
+              pool,
+              `INSERT INTO reconcile_drifts (run_id, run_key, trade_id, severity, mismatch_code, compared_field, details)
+               SELECT id, run_key, '9', 'LOW', 'STATUS_MISMATCH', 'status', '{}' FROM reconcile_runs WHERE run_key = 'daemon-1'`,
+            );
+            assert.equal((await statuses())['9'], 'failed');
+
             await tamper(pool, `DELETE FROM reconcile_run_manifests`);
-            assert.deepEqual(await reportEvidence(pool, 'daemon-1'), { status: 'unsigned' });
+            const unsigned = await reportEvidence(pool, 'daemon-1');
+            assert.equal(unsigned.status, 'unsigned');
+            assert.ok(unsigned.findings.every((finding) => finding.status === 'unsigned'));
           } finally {
             if (previous === undefined) delete process.env.RECONCILIATION_FINDING_PUBLIC_KEYS;
             else process.env.RECONCILIATION_FINDING_PUBLIC_KEYS = previous;

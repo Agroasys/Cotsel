@@ -213,7 +213,57 @@ async function verifyRunEvidence(db, runKey, publicKeys) {
   return { ok: true, manifest };
 }
 
+/**
+ * Per-finding status for display (Cotsel#951). `verified`: the signature holds
+ * and the row's digest is listed. `failed`: the row is not covered by a valid
+ * manifest (altered, injected, or the signature itself does not verify).
+ * `missing`: the manifest lists a digest no row has, i.e. a deleted finding.
+ * `unsigned`: the run has no manifest. Gates still decide on the whole run via
+ * verifyRunEvidence; this only says which findings are affected.
+ */
+async function classifyRunFindings(db, runKey, publicKeys) {
+  const run = await verifyRunEvidence(db, runKey, publicKeys);
+  const evidence = await readRunEvidence(db, runKey);
+  if (!evidence) return { run, findings: [] };
+  const rows = evidence.findings.map((finding) => ({
+    tradeId: finding.tradeId,
+    mismatchCode: finding.mismatchCode,
+    comparedField: finding.comparedField,
+    digest: findingDigest(finding),
+  }));
+  if (run.ok === false && run.reason === 'unsigned') {
+    return { run, findings: rows.map((row) => ({ ...row, status: 'unsigned' })) };
+  }
+  const sealed = await db.query('SELECT manifest FROM reconcile_run_manifests WHERE run_key = $1', [
+    runKey,
+  ]);
+  const listed = sealed.rows[0]?.manifest?.findings?.digests;
+  const signatureTrusted =
+    run.ok || !['unknown_key', 'manifest_invalid', 'bad_signature'].includes(run.reason);
+  if (!signatureTrusted || !Array.isArray(listed)) {
+    return { run, findings: rows.map((row) => ({ ...row, status: 'failed' })) };
+  }
+  const listedSet = new Set(listed);
+  const present = new Set(rows.map((row) => row.digest));
+  return {
+    run,
+    findings: [
+      ...rows.map((row) => ({ ...row, status: listedSet.has(row.digest) ? 'verified' : 'failed' })),
+      ...listed
+        .filter((digest) => !present.has(digest))
+        .map((digest) => ({
+          tradeId: null,
+          mismatchCode: null,
+          comparedField: null,
+          digest,
+          status: 'missing',
+        })),
+    ],
+  };
+}
+
 module.exports = {
+  classifyRunFindings,
   FINDING_SCHEMA,
   MANIFEST_SCHEMA,
   buildRunManifest,

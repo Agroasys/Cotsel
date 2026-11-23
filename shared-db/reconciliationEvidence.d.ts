@@ -74,3 +74,16 @@ export function verifyRunEvidence(
   runKey: string,
   publicKeys: ReadonlyMap<string, KeyObject>,
 ): Promise<RunVerification>;
+
+export interface ClassifiedFinding {
+  tradeId: string | null;
+  mismatchCode: string | null;
+  comparedField: string | null;
+  digest: string;
+  status: 'verified' | 'failed' | 'missing' | 'unsigned';
+}
+export function classifyRunFindings(
+  db: QueryExecutor,
+  runKey: string,
+  publicKeys: ReadonlyMap<string, KeyObject>,
+): Promise<{ run: RunVerification; findings: ClassifiedFinding[] }>;
