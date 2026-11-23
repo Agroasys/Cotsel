@@ -79,6 +79,8 @@ itself:
 Otherwise the grant is refused with 403 `StepUpRequired`, logged as
 `auth.break_glass_step_up_required`, and nothing is granted. A malformed claim is a 400. Revocation and review do not require a step-up.
 
+**Contract:** `docs/api/fixtures/cotsel-break-glass-grant.v1.json` is the exact grant body Agroasys sends. It is byte-identical to the agroasys-backend fixture (Agroasys/agroasys-backend#823). `auth/tests/breakGlassStepUp.test.ts` shows Cotsel accepts it while the step-up is fresh and refuses it once stale.
+
 **Rollout:** the grant ignores unknown body fields, so the Agroasys admin-control
 client can start sending `operatorAuthentication` before this Cotsel release. Deploy
 it in that order, or emergency grants are refused until Agroasys sends the claims.

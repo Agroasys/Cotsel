@@ -91,3 +91,53 @@ describe('break-glass grant step-up (Cotsel#946)', () => {
     expect(response.status).toHaveBeenCalledWith(201);
   });
 });
+
+describe('the Agroasys break-glass grant contract (cotsel-break-glass-grant.v1.json)', () => {
+  // Byte-identical to agroasys-backend src/contracts/fixtures/cotsel-break-glass-grant.v1.json.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fixture = require('../../docs/api/fixtures/cotsel-break-glass-grant.v1.json');
+
+  function grantFixture(nowSeconds: number) {
+    const grantBreakGlass = jest.fn().mockResolvedValue({
+      accountId: fixture.body.accountId,
+      role: 'buyer',
+      breakGlassRole: 'admin',
+      breakGlassExpiresAt: new Date((nowSeconds + 1800) * 1000),
+    });
+    const controller = new AdminController({ grantBreakGlass } as unknown as AdminService, {
+      policy: DEFAULT_BREAK_GLASS_STEP_UP_POLICY,
+      nowSeconds: () => nowSeconds,
+    });
+    const response = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+    } as unknown as Response & { status: jest.Mock };
+    const request = {
+      body: fixture.body,
+      serviceAuth: {
+        apiKeyId: 'admin-control-key',
+        humanPrincipalId: 'agroasys-user:operator',
+        scheme: 'api_key',
+      },
+    } as unknown as Request;
+    return {
+      run: () => controller.grantBreakGlass(request as never, response),
+      response,
+      grantBreakGlass,
+    };
+  }
+
+  it('accepts the exact body Agroasys sends while its step-up is fresh', async () => {
+    const { run, response, grantBreakGlass } = grantFixture(fixture.operatorSession.authTime + 10);
+    await run();
+    expect(response.status).toHaveBeenCalledWith(201);
+    expect(grantBreakGlass).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses the same body once the step-up is stale', async () => {
+    const { run, response, grantBreakGlass } = grantFixture(fixture.operatorSession.authTime + 301);
+    await run();
+    expect(response.status).toHaveBeenCalledWith(403);
+    expect(grantBreakGlass).not.toHaveBeenCalled();
+  });
+});
