@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import type { SettlementTemplateReference } from './settlementTemplateStore';
 import type { SettlementAmountInput } from './settlementAmount';
 import type { SettlementExecutionBinding } from './settlementExecutionBinding';
 
@@ -82,6 +83,8 @@ export interface SettlementHandoffRecord {
   callbackDeliveredAt: string | null;
   requestId: string;
   sourceApiKeyId: string | null;
+  /** The terms the settlement was created against (Cotsel#940). */
+  settlementTemplate?: SettlementTemplateReference | null;
   createdAt: string;
   updatedAt: string;
 }

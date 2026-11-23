@@ -335,8 +335,8 @@
     },
     {
       "component": "gateway",
-      "headIdentity": "202610180016_user_action_requests",
-      "checksumSha256": "551df0d3ebf8cb1ee123d8327d81046869db72dd2cb6d484d1d8b8e054665db9"
+      "headIdentity": "202611230017_settlement_templates",
+      "checksumSha256": "837f8aedba7a1a1e570cc756b9c213537be5c53032a2fdf3222f3bdd71f70980"
     },
     {
       "component": "indexer",
