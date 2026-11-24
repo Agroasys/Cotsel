@@ -11,7 +11,15 @@ import {
 } from '@agroasys/shared-http';
 import { ExchangeAuthority, ExchangeAuthorityError } from '../core/exchangeAuthority';
 import { SessionService } from '../core/sessionService';
-import { ApiErrorResponse, ApiSuccessResponse, UserRole } from '../types';
+import {
+  ApiErrorResponse,
+  ApiSuccessResponse,
+  AUTHENTICATION_METHODS,
+  AUTHENTICATION_STRENGTHS,
+  AuthenticationAssurance,
+  NO_AUTHENTICATION_ASSURANCE,
+  UserRole,
+} from '../types';
 import { Logger } from '../utils/logger';
 import {
   assertWalletAddress,
@@ -21,6 +29,53 @@ import {
 } from './controllerSupport';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Upstream clocks may lead ours slightly; an authTime further ahead is invalid. */
+export const AUTH_TIME_MAX_FUTURE_SKEW_SECONDS = 60;
+
+/**
+ * Validates the optional authentication assurance in a trusted exchange body
+ * (agroasys-backend#797, fixture cotsel-session-exchange.v1). Absent claims
+ * leave the session without assurance; present but invalid claims fail the
+ * exchange rather than being dropped.
+ */
+export function parseAuthenticationAssurance(
+  body: TrustedSessionExchangeBody,
+  nowSeconds: number,
+): AuthenticationAssurance {
+  const { authTime, authMethod, authStrength } = body;
+  if (authTime === undefined && authMethod === undefined && authStrength === undefined) {
+    return NO_AUTHENTICATION_ASSURANCE;
+  }
+  if (authTime !== undefined) {
+    if (typeof authTime !== 'number' || !Number.isSafeInteger(authTime) || authTime <= 0) {
+      throw new HttpError(400, 'BadRequest', 'authTime must be a positive Unix time in seconds');
+    }
+    if (authTime > nowSeconds + AUTH_TIME_MAX_FUTURE_SKEW_SECONDS) {
+      throw new HttpError(400, 'BadRequest', 'authTime is in the future');
+    }
+  }
+  if (
+    authMethod !== undefined &&
+    !(AUTHENTICATION_METHODS as readonly unknown[]).includes(authMethod)
+  ) {
+    throw new HttpError(400, 'BadRequest', 'authMethod is not a recognised authentication method');
+  }
+  if (
+    authStrength !== undefined &&
+    !(AUTHENTICATION_STRENGTHS as readonly unknown[]).includes(authStrength)
+  ) {
+    throw new HttpError(
+      400,
+      'BadRequest',
+      'authStrength is not a recognised authentication strength',
+    );
+  }
+  return {
+    authTime: authTime ?? null,
+    method: (authMethod as AuthenticationAssurance['method']) ?? null,
+    strength: (authStrength as AuthenticationAssurance['strength']) ?? null,
+  };
+}
 const INACTIVE_BREAK_GLASS_CONTEXT = {
   active: false,
   role: null,
@@ -35,13 +90,16 @@ const INACTIVE_BREAK_GLASS_CONTEXT = {
   reviewStatus: 'none',
 } as const;
 
-interface TrustedSessionExchangeBody {
+export interface TrustedSessionExchangeBody {
   accountId?: string;
   role?: UserRole;
   orgId?: string | null;
   email?: string | null;
   walletAddress?: string | null;
   ttlSeconds?: number;
+  authTime?: unknown;
+  authMethod?: unknown;
+  authStrength?: unknown;
 }
 
 export class SessionController {
@@ -54,6 +112,7 @@ export class SessionController {
     private readonly maxSessionTtlSeconds: number = 86400,
     private readonly exchangeAuthorityFor: (keyId: string) => ExchangeAuthority | undefined = () =>
       undefined,
+    private readonly nowSeconds: () => number = () => Math.floor(Date.now() / 1000),
   ) {}
 
   async refresh(req: Request, res: Response<ApiSuccessResponse | ApiErrorResponse>): Promise<void> {
@@ -77,6 +136,7 @@ export class SessionController {
     let normalizedEmail: string | null;
     let normalizedWallet: string | null;
     let ttlSeconds: number | undefined;
+    let authentication: AuthenticationAssurance;
 
     try {
       const body = requireObject(req.body, 'body') as TrustedSessionExchangeBody;
@@ -97,6 +157,7 @@ export class SessionController {
           ? null
           : assertWalletAddress(walletAddress, 'walletAddress');
       ttlSeconds = parseOptionalSessionTtl(body.ttlSeconds, this.maxSessionTtlSeconds);
+      authentication = parseAuthenticationAssurance(body, this.nowSeconds());
     } catch (error) {
       handleControllerError(
         req,
@@ -140,6 +201,7 @@ export class SessionController {
         },
         authority,
         ttlSeconds,
+        authentication,
       );
       Logger.info('Trusted session exchange successful', { role });
       res.status(201).json(success(result));
@@ -185,6 +247,7 @@ export class SessionController {
         capabilities: session.capabilities,
         signerAuthorizations: session.signerAuthorizations,
         breakGlass: session.breakGlass ?? INACTIVE_BREAK_GLASS_CONTEXT,
+        authentication: session.authentication ?? NO_AUTHENTICATION_ASSURANCE,
         issuedAt: session.issuedAt,
         expiresAt: session.expiresAt,
       }),

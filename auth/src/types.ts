@@ -102,6 +102,37 @@ export interface UserProfile {
   breakGlassReviewedBy: string | null;
 }
 
+/** How the upstream identity provider last authenticated the operator (Cotsel#946). */
+export const AUTHENTICATION_METHODS = ['password', 'webauthn', 'recovery_code', 'auth0'] as const;
+export type AuthenticationMethod = (typeof AUTHENTICATION_METHODS)[number];
+export const AUTHENTICATION_STRENGTHS = [
+  'password',
+  'webauthn',
+  'hardware_webauthn',
+  'recovery_code',
+  'auth0_mfa',
+  'unverified',
+] as const;
+export type AuthenticationStrength = (typeof AUTHENTICATION_STRENGTHS)[number];
+
+/**
+ * Authentication assurance asserted by a trusted session exchange. `authTime`
+ * is the Unix time of the operator's last authentication or step-up upstream;
+ * refreshing a Cotsel session never advances it. Sessions issued without
+ * assurance carry nulls and are never treated as freshly authenticated.
+ */
+export interface AuthenticationAssurance {
+  authTime: number | null;
+  method: AuthenticationMethod | null;
+  strength: AuthenticationStrength | null;
+}
+
+export const NO_AUTHENTICATION_ASSURANCE: AuthenticationAssurance = Object.freeze({
+  authTime: null,
+  method: null,
+  strength: null,
+});
+
 export interface UserSession {
   sessionId: string;
   accountId: string;
@@ -116,6 +147,7 @@ export interface UserSession {
   /** The profile's durable `admin` base role has no active grant in this environment. */
   adminGrantMissing?: boolean;
   breakGlass?: BreakGlassSessionContext;
+  authentication?: AuthenticationAssurance;
   issuedAt: number;
   expiresAt: number;
   revokedAt: number | null;
@@ -216,6 +248,9 @@ export interface AuthConfig {
   adminControlMaxSkewSeconds: number;
   adminControlNonceTtlSeconds: number;
   adminBreakGlassMaxTtlSeconds: number;
+  /** A break-glass grant needs an operator step-up at most this old, of these strengths (Cotsel#946). */
+  breakGlassStepUpMaxAgeSeconds: number;
+  breakGlassStepUpAcceptedStrengths: AuthenticationStrength[];
   adminGrantMaxTtlSeconds: number;
 }
 

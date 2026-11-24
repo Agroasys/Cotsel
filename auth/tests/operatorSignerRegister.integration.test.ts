@@ -126,6 +126,15 @@ async function withPostgres(
           'utf8',
         ),
       );
+      await pool.query(
+        fs.readFileSync(
+          path.resolve(
+            __dirname,
+            '../src/database/schema/006_session_authentication_assurance.sql',
+          ),
+          'utf8',
+        ),
+      );
       await fn(pool);
     } finally {
       await pool.end();
