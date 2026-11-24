@@ -65,6 +65,7 @@ test(
               ['202611230001', 'notification_outbox_envelope'],
               ['202611230002', 'run_manifests'],
               ['202611240003', 'containment_lineage'],
+              ['202611240004', 'governance_freeze_requests'],
             ],
           );
         });

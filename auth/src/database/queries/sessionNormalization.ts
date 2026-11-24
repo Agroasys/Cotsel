@@ -2,6 +2,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  AUTHENTICATION_METHODS,
+  AUTHENTICATION_STRENGTHS,
+  AuthenticationAssurance,
   BreakGlassSessionContext,
   OPERATOR_CAPABILITIES,
   OperatorCapability,
@@ -13,8 +16,17 @@ import { resolveBreakGlassReviewStatus } from '../../core/breakGlassReviewStatus
 
 export type SessionRow = Omit<
   UserSession,
-  'issuedAt' | 'expiresAt' | 'revokedAt' | 'capabilities' | 'signerAuthorizations' | 'breakGlass'
+  | 'issuedAt'
+  | 'expiresAt'
+  | 'revokedAt'
+  | 'capabilities'
+  | 'signerAuthorizations'
+  | 'breakGlass'
+  | 'authentication'
 > & {
+  authTime?: number | string | null;
+  authMethod?: string | null;
+  authStrength?: string | null;
   issuedAt: number | string;
   expiresAt: number | string;
   revokedAt: number | string | null;
@@ -32,7 +44,7 @@ export type SessionRow = Omit<
 
 function parseSessionEpoch(
   value: number | string,
-  field: 'issuedAt' | 'expiresAt' | 'revokedAt',
+  field: 'issuedAt' | 'expiresAt' | 'revokedAt' | 'authTime',
 ): number {
   if (typeof value === 'number' && Number.isSafeInteger(value)) {
     return value;
@@ -102,6 +114,29 @@ function normalizeBreakGlassContext(row: SessionRow): BreakGlassSessionContext {
   };
 }
 
+/**
+ * The database constrains these columns, but an unexpected value is still
+ * rejected rather than passed on as assurance.
+ */
+function normalizeAuthentication(row: SessionRow): AuthenticationAssurance {
+  const method = row.authMethod ?? null;
+  const strength = row.authStrength ?? null;
+  if (method !== null && !(AUTHENTICATION_METHODS as readonly string[]).includes(method)) {
+    throw new Error('Invalid authentication method returned from database');
+  }
+  if (strength !== null && !(AUTHENTICATION_STRENGTHS as readonly string[]).includes(strength)) {
+    throw new Error('Invalid authentication strength returned from database');
+  }
+  return {
+    authTime:
+      row.authTime === null || row.authTime === undefined
+        ? null
+        : parseSessionEpoch(row.authTime, 'authTime'),
+    method: method as AuthenticationAssurance['method'],
+    strength: strength as AuthenticationAssurance['strength'],
+  };
+}
+
 export function normalizeSessionRow(row: SessionRow): UserSession {
   const issuedAt = parseSessionEpoch(row.issuedAt, 'issuedAt');
   return {
@@ -117,6 +152,7 @@ export function normalizeSessionRow(row: SessionRow): UserSession {
     capabilities: deriveOperatorCapabilities(row.role),
     signerAuthorizations: row.role === 'admin' ? [...(row.signerAuthorizations ?? [])] : [],
     breakGlass: normalizeBreakGlassContext(row),
+    authentication: normalizeAuthentication(row),
     issuedAt,
     expiresAt: parseSessionEpoch(row.expiresAt, 'expiresAt'),
     revokedAt: row.revokedAt === null ? null : parseSessionEpoch(row.revokedAt, 'revokedAt'),

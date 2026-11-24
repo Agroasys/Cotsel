@@ -7,6 +7,7 @@ import type { Pool } from 'pg';
 import { findingDigest, type RunManifest } from '@agroasys/shared-db/reconciliationEvidence';
 import {
   openContainment,
+  getContainment,
   recordCleanReconciliation,
   recordPauseObservation,
   releaseContainment,
@@ -119,10 +120,53 @@ test(
         const scenario = scenarioRunner(t, port, admin, 'lineage');
 
         await scenario(
+          'containment timestamps remain UTC with a non-UTC SQL session',
+          async (pool) => {
+            await claimOrThrow(pool, 'timezone-worker', 'timezone-run');
+            const client = await pool.connect();
+            try {
+              await client.query('BEGIN');
+              await client.query("SET LOCAL TIME ZONE 'Africa/Dar_es_Salaam'");
+              const { rows } = await client.query<{ at: Date }>('SELECT NOW() AS at');
+              const { row } = await openContainment(
+                {
+                  tradeId: '7',
+                  incidentReference: 'RECON-TIMEZONE',
+                  runKey: 'timezone-run',
+                  qualifyingCodes: ['AMOUNT_MISMATCH'],
+                  evidence: {},
+                },
+                client,
+              );
+              assert.equal(row.opened_at.getTime(), rows[0]!.at.getTime());
+              assert.equal(row.updated_at.getTime(), rows[0]!.at.getTime());
+              assert.equal(
+                (await getContainment('7', client))!.opened_at.getTime(),
+                rows[0]!.at.getTime(),
+              );
+              await client.query('ROLLBACK');
+            } finally {
+              client.release();
+            }
+          },
+        );
+
+        await scenario(
           'a repeat divergence keeps every cited finding with its run',
           async (pool) => {
             await divergingRun(pool, 'run-a', drift('101'));
+            const firstRequest = await pool.query(
+              'SELECT request_id, request FROM reconcile_governance_freeze_requests',
+            );
+            assert.equal(firstRequest.rows.length, 1);
+            assert.equal(firstRequest.rows[0].request.requiresGovernanceApproval, true);
             await divergingRun(pool, 'run-b', drift('102'));
+            const repeatedRequest = await pool.query(
+              'SELECT request_id FROM reconcile_governance_freeze_requests',
+            );
+            assert.deepEqual(repeatedRequest.rows, [
+              { request_id: firstRequest.rows[0].request_id },
+            ]);
 
             const row = await containment(pool);
             assert.equal(row.opened_run_key, 'run-a');
@@ -148,7 +192,11 @@ test(
           });
           assert.deepEqual(opened.clearances, []);
           assert.equal(opened.containments?.length, 1);
+          const current = await getContainment('7', pool);
+          assert.equal(Date.parse(opened.containments![0].openedAt!), current!.opened_at.getTime());
           assert.deepEqual(opened.containments?.[0], {
+            openedAt: opened.containments![0].openedAt,
+            qualifyingCodes: ['AMOUNT_MISMATCH'],
             tradeId: '7',
             incidentReference: 'RECON-20261124-RUNA',
             episode: 1,
@@ -182,7 +230,10 @@ test(
           await divergingRun(pool, 'run-a', drift('101'));
           await recordPauseObservation(pausedAt('7'), pool);
           await cleanRun(pool, 'run-c');
-          await releaseContainment({ tradeId: '7', evidence: approval() }, pool);
+          await releaseContainment(
+            { tradeId: '7', evidence: approval(), expected: await getContainment('7', pool) },
+            pool,
+          );
 
           await divergingRun(pool, 'run-e', drift('104'));
           const row = await containment(pool);

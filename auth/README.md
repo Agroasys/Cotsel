@@ -98,6 +98,21 @@ This is the primary production path.
   - An organization-bound key is refused for any existing profile in another
     organization, whether or not the request names one. Administrator
     organizations change only through the control plane.
+- **Authentication assurance.** The exchange may carry `authTime` (Unix
+  seconds of the operator's last upstream authentication or step-up),
+  `authMethod` and `authStrength`, as in the signed contract fixture
+  [`cotsel-session-exchange.v1.json`](../docs/api/fixtures/cotsel-session-exchange.v1.json)
+  (agroasys-backend#797). Cotsel stores them on the session
+  (`user_sessions.auth_time`, `auth_method`, `auth_strength`, migration
+  `202611230006`) and returns them as `authentication` from `GET /session`.
+  - An invalid claim refuses the exchange with `400`; it is never dropped.
+    `authTime` may lead this service's clock by at most 60 seconds.
+  - A session without claims carries nulls and is never treated as freshly
+    authenticated.
+  - Refresh copies the parent's claims: a refreshed session never looks more
+    recently authenticated than the exchange that started its lineage.
+  - The gateway uses `authTime` and `authStrength` to require a recent step-up
+    for privileged actions (#946).
 - **Logging.** Routine session logs carry the internal `userId` and role only —
   never tokens, token hashes, wallet addresses, emails, or upstream account IDs.
 - **Deployment.** Migration `202610100004` stops the previous image from

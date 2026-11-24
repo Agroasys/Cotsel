@@ -1,0 +1,867 @@
+{
+  "context": {
+    "chainId": 84532,
+    "escrowAddress": "0x1111111111111111111111111111111111111111"
+  },
+  "keys": {
+    "reconciliation-proof-fixture": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEPjPDCOoaQ0UL/HsNTwFMy+hz3eZ5gACqGcUlGsCi9THIGekjQSz9Mur74+8HtumvvZQv79PnOLwHa7EvrFQxIw=="
+  },
+  "proof": {
+    "containment": {
+      "trade_id": "2001",
+      "incident_reference": "RECON-20261124-E2E2001",
+      "state": "RECONCILED_PENDING_APPROVAL",
+      "opened_run_key": "open-2001",
+      "opened_at": "2026-11-24T07:00:00.000000",
+      "qualifying_codes": ["AMOUNT_MISMATCH"],
+      "cleared_run_key": "clear-2001",
+      "evidence": {
+        "rules": {
+          "version": "cotsel.reconciliation-risk-rules.v1"
+        },
+        "findings": [
+          {
+            "digest": "c28037dd428684d280668e539b5eef38c1f47e86d7ae78cc1a981a10a3280c05"
+          }
+        ]
+      }
+    },
+    "opening": {
+      "runKey": "open-2001",
+      "evidence": {
+        "runKey": "open-2001",
+        "status": "COMPLETED",
+        "completedAt": "2026-11-24T07:00:00.000000",
+        "coverage": {
+          "fromBlock": "1",
+          "toBlock": "2",
+          "complete": true,
+          "fromTradeId": "1",
+          "toTradeId": "9999"
+        },
+        "findings": [
+          {
+            "runKey": "open-2001",
+            "tradeId": "2001",
+            "severity": "CRITICAL",
+            "mismatchCode": "AMOUNT_MISMATCH",
+            "comparedField": "totalAmountLocked",
+            "onchainValue": "100",
+            "indexedValue": "101",
+            "details": {
+              "nested": {
+                "b": 2,
+                "a": true
+              }
+            }
+          }
+        ],
+        "scopeTradeIds": ["2001", "2002"]
+      },
+      "seal": {
+        "keyId": "reconciliation-proof-fixture",
+        "manifest": {
+          "containments": [
+            {
+              "openedAt": "2026-11-24T07:00:00.000000Z",
+              "qualifyingCodes": ["AMOUNT_MISMATCH"],
+              "tradeId": "2001",
+              "incidentReference": "RECON-20261124-E2E2001",
+              "episode": 1,
+              "state": "CONTAINED",
+              "openedRunKey": "open-2001",
+              "clearedRunKey": null,
+              "citedFindings": [
+                {
+                  "runKey": "open-2001",
+                  "digest": "c28037dd428684d280668e539b5eef38c1f47e86d7ae78cc1a981a10a3280c05"
+                }
+              ]
+            }
+          ],
+          "clearances": [],
+          "context": {
+            "chainId": 84532,
+            "escrowAddress": "0x1111111111111111111111111111111111111111"
+          },
+          "schemaVersion": "cotsel.reconciliation-run-manifest.v1",
+          "runKey": "open-2001",
+          "status": "COMPLETED",
+          "completedAt": "2026-11-24T07:00:00.000000",
+          "coverage": {
+            "fromBlock": "1",
+            "toBlock": "2",
+            "complete": true,
+            "fromTradeId": "1",
+            "toTradeId": "9999"
+          },
+          "findings": {
+            "count": 1,
+            "digests": ["c28037dd428684d280668e539b5eef38c1f47e86d7ae78cc1a981a10a3280c05"]
+          },
+          "scope": {
+            "count": 2,
+            "digest": "44a33303dd7090210b551d4c9a90f316bd7d1fa80a65be4ea414081c9d274ab2"
+          },
+          "rules": {
+            "version": "cotsel.reconciliation-risk-rules.v1",
+            "digest": "e00f84b6d9f48aade161ff3dbe6433eb10310ecc7c6da763aa429773884578c3"
+          },
+          "keyId": "reconciliation-proof-fixture"
+        },
+        "signature": "MEUCIEMqQ97cxeCoNEtKaXVM6emH5LVjUV2j2ZKoIceMbMW5AiEAlFKCd5inaBHqvv5e2fK2tAxWfkrvhHoQdV5/cC2QFxA="
+      }
+    },
+    "clearing": {
+      "runKey": "clear-2001",
+      "evidence": {
+        "runKey": "clear-2001",
+        "status": "COMPLETED",
+        "completedAt": "2026-11-24T08:00:00.000000",
+        "coverage": {
+          "fromBlock": "1",
+          "toBlock": "2",
+          "complete": true,
+          "fromTradeId": "1",
+          "toTradeId": "9999"
+        },
+        "findings": [],
+        "scopeTradeIds": ["2001", "2002"]
+      },
+      "seal": {
+        "keyId": "reconciliation-proof-fixture",
+        "manifest": {
+          "containments": [
+            {
+              "openedAt": "2026-11-24T07:00:00.000000Z",
+              "qualifyingCodes": ["AMOUNT_MISMATCH"],
+              "tradeId": "2001",
+              "incidentReference": "RECON-20261124-E2E2001",
+              "episode": 1,
+              "state": "RECONCILED_PENDING_APPROVAL",
+              "openedRunKey": "open-2001",
+              "clearedRunKey": "clear-2001",
+              "citedFindings": [
+                {
+                  "runKey": "open-2001",
+                  "digest": "c28037dd428684d280668e539b5eef38c1f47e86d7ae78cc1a981a10a3280c05"
+                }
+              ]
+            }
+          ],
+          "clearances": [
+            {
+              "tradeId": "2001",
+              "incidentReference": "RECON-20261124-E2E2001",
+              "episode": 1
+            }
+          ],
+          "context": {
+            "chainId": 84532,
+            "escrowAddress": "0x1111111111111111111111111111111111111111"
+          },
+          "schemaVersion": "cotsel.reconciliation-run-manifest.v1",
+          "runKey": "clear-2001",
+          "status": "COMPLETED",
+          "completedAt": "2026-11-24T08:00:00.000000",
+          "coverage": {
+            "fromBlock": "1",
+            "toBlock": "2",
+            "complete": true,
+            "fromTradeId": "1",
+            "toTradeId": "9999"
+          },
+          "findings": {
+            "count": 0,
+            "digests": []
+          },
+          "scope": {
+            "count": 2,
+            "digest": "44a33303dd7090210b551d4c9a90f316bd7d1fa80a65be4ea414081c9d274ab2"
+          },
+          "rules": {
+            "version": "cotsel.reconciliation-risk-rules.v1",
+            "digest": "e00f84b6d9f48aade161ff3dbe6433eb10310ecc7c6da763aa429773884578c3"
+          },
+          "keyId": "reconciliation-proof-fixture"
+        },
+        "signature": "MEUCIHFX0dJfgL76OYXnL7LLTCfmE/wqvDWEsi6qZq7hR19MAiEAvip6UJ5tN3/Wqa+DwLQqBDY0eLLG2gaVTT1P0NoIqqo="
+      }
+    },
+    "recovery": {
+      "tradeId": "2001",
+      "latest": {
+        "runKey": "latest",
+        "seal": {
+          "keyId": "reconciliation-proof-fixture",
+          "manifest": {
+            "containments": [
+              {
+                "openedAt": "2026-11-24T07:00:00.000000Z",
+                "qualifyingCodes": ["AMOUNT_MISMATCH"],
+                "tradeId": "2001",
+                "incidentReference": "RECON-20261124-E2E2001",
+                "episode": 1,
+                "state": "RECONCILED_PENDING_APPROVAL",
+                "openedRunKey": "open-2001",
+                "clearedRunKey": "clear-2001",
+                "citedFindings": [
+                  {
+                    "runKey": "open-2001",
+                    "digest": "c28037dd428684d280668e539b5eef38c1f47e86d7ae78cc1a981a10a3280c05"
+                  }
+                ]
+              },
+              {
+                "openedAt": "2026-11-24T07:00:00.000000Z",
+                "qualifyingCodes": ["AMOUNT_MISMATCH"],
+                "tradeId": "2002",
+                "incidentReference": "RECON-20261124-E2E2002",
+                "episode": 1,
+                "state": "RECONCILED_PENDING_APPROVAL",
+                "openedRunKey": "open-2002",
+                "clearedRunKey": "clear-2002",
+                "citedFindings": [
+                  {
+                    "runKey": "open-2002",
+                    "digest": "566bf89b78e3482f5c42749d8dd8f127aede9b8bd388d2dfda744f91c12891fe"
+                  }
+                ]
+              }
+            ],
+            "clearances": [],
+            "context": {
+              "chainId": 84532,
+              "escrowAddress": "0x1111111111111111111111111111111111111111"
+            },
+            "schemaVersion": "cotsel.reconciliation-run-manifest.v1",
+            "runKey": "latest",
+            "status": "COMPLETED",
+            "completedAt": "2026-11-24T08:10:00.000000",
+            "coverage": {
+              "fromBlock": "1",
+              "toBlock": "2",
+              "complete": true,
+              "fromTradeId": "1",
+              "toTradeId": "9999"
+            },
+            "findings": {
+              "count": 0,
+              "digests": []
+            },
+            "scope": {
+              "count": 2,
+              "digest": "44a33303dd7090210b551d4c9a90f316bd7d1fa80a65be4ea414081c9d274ab2"
+            },
+            "rules": {
+              "version": "cotsel.reconciliation-risk-rules.v1",
+              "digest": "e00f84b6d9f48aade161ff3dbe6433eb10310ecc7c6da763aa429773884578c3"
+            },
+            "keyId": "reconciliation-proof-fixture"
+          },
+          "signature": "MEUCIFHt8rBGOmw/NZqj55I8da4FkmdSL6LoQ5c2DkXiwAOlAiEAnKXWKzLGWhfhFVVGp39+5Wvdb1rFNjas862LAtE9jMM="
+        }
+      },
+      "runs": {
+        "open-2001": {
+          "runKey": "open-2001",
+          "evidence": {
+            "runKey": "open-2001",
+            "status": "COMPLETED",
+            "completedAt": "2026-11-24T07:00:00.000000",
+            "coverage": {
+              "fromBlock": "1",
+              "toBlock": "2",
+              "complete": true,
+              "fromTradeId": "1",
+              "toTradeId": "9999"
+            },
+            "findings": [
+              {
+                "runKey": "open-2001",
+                "tradeId": "2001",
+                "severity": "CRITICAL",
+                "mismatchCode": "AMOUNT_MISMATCH",
+                "comparedField": "totalAmountLocked",
+                "onchainValue": "100",
+                "indexedValue": "101",
+                "details": {
+                  "nested": {
+                    "b": 2,
+                    "a": true
+                  }
+                }
+              }
+            ],
+            "scopeTradeIds": ["2001", "2002"]
+          },
+          "seal": {
+            "keyId": "reconciliation-proof-fixture",
+            "manifest": {
+              "containments": [
+                {
+                  "openedAt": "2026-11-24T07:00:00.000000Z",
+                  "qualifyingCodes": ["AMOUNT_MISMATCH"],
+                  "tradeId": "2001",
+                  "incidentReference": "RECON-20261124-E2E2001",
+                  "episode": 1,
+                  "state": "CONTAINED",
+                  "openedRunKey": "open-2001",
+                  "clearedRunKey": null,
+                  "citedFindings": [
+                    {
+                      "runKey": "open-2001",
+                      "digest": "c28037dd428684d280668e539b5eef38c1f47e86d7ae78cc1a981a10a3280c05"
+                    }
+                  ]
+                }
+              ],
+              "clearances": [],
+              "context": {
+                "chainId": 84532,
+                "escrowAddress": "0x1111111111111111111111111111111111111111"
+              },
+              "schemaVersion": "cotsel.reconciliation-run-manifest.v1",
+              "runKey": "open-2001",
+              "status": "COMPLETED",
+              "completedAt": "2026-11-24T07:00:00.000000",
+              "coverage": {
+                "fromBlock": "1",
+                "toBlock": "2",
+                "complete": true,
+                "fromTradeId": "1",
+                "toTradeId": "9999"
+              },
+              "findings": {
+                "count": 1,
+                "digests": ["c28037dd428684d280668e539b5eef38c1f47e86d7ae78cc1a981a10a3280c05"]
+              },
+              "scope": {
+                "count": 2,
+                "digest": "44a33303dd7090210b551d4c9a90f316bd7d1fa80a65be4ea414081c9d274ab2"
+              },
+              "rules": {
+                "version": "cotsel.reconciliation-risk-rules.v1",
+                "digest": "e00f84b6d9f48aade161ff3dbe6433eb10310ecc7c6da763aa429773884578c3"
+              },
+              "keyId": "reconciliation-proof-fixture"
+            },
+            "signature": "MEUCIEMqQ97cxeCoNEtKaXVM6emH5LVjUV2j2ZKoIceMbMW5AiEAlFKCd5inaBHqvv5e2fK2tAxWfkrvhHoQdV5/cC2QFxA="
+          }
+        },
+        "clear-2001": {
+          "runKey": "clear-2001",
+          "evidence": {
+            "runKey": "clear-2001",
+            "status": "COMPLETED",
+            "completedAt": "2026-11-24T08:00:00.000000",
+            "coverage": {
+              "fromBlock": "1",
+              "toBlock": "2",
+              "complete": true,
+              "fromTradeId": "1",
+              "toTradeId": "9999"
+            },
+            "findings": [],
+            "scopeTradeIds": ["2001", "2002"]
+          },
+          "seal": {
+            "keyId": "reconciliation-proof-fixture",
+            "manifest": {
+              "containments": [
+                {
+                  "openedAt": "2026-11-24T07:00:00.000000Z",
+                  "qualifyingCodes": ["AMOUNT_MISMATCH"],
+                  "tradeId": "2001",
+                  "incidentReference": "RECON-20261124-E2E2001",
+                  "episode": 1,
+                  "state": "RECONCILED_PENDING_APPROVAL",
+                  "openedRunKey": "open-2001",
+                  "clearedRunKey": "clear-2001",
+                  "citedFindings": [
+                    {
+                      "runKey": "open-2001",
+                      "digest": "c28037dd428684d280668e539b5eef38c1f47e86d7ae78cc1a981a10a3280c05"
+                    }
+                  ]
+                }
+              ],
+              "clearances": [
+                {
+                  "tradeId": "2001",
+                  "incidentReference": "RECON-20261124-E2E2001",
+                  "episode": 1
+                }
+              ],
+              "context": {
+                "chainId": 84532,
+                "escrowAddress": "0x1111111111111111111111111111111111111111"
+              },
+              "schemaVersion": "cotsel.reconciliation-run-manifest.v1",
+              "runKey": "clear-2001",
+              "status": "COMPLETED",
+              "completedAt": "2026-11-24T08:00:00.000000",
+              "coverage": {
+                "fromBlock": "1",
+                "toBlock": "2",
+                "complete": true,
+                "fromTradeId": "1",
+                "toTradeId": "9999"
+              },
+              "findings": {
+                "count": 0,
+                "digests": []
+              },
+              "scope": {
+                "count": 2,
+                "digest": "44a33303dd7090210b551d4c9a90f316bd7d1fa80a65be4ea414081c9d274ab2"
+              },
+              "rules": {
+                "version": "cotsel.reconciliation-risk-rules.v1",
+                "digest": "e00f84b6d9f48aade161ff3dbe6433eb10310ecc7c6da763aa429773884578c3"
+              },
+              "keyId": "reconciliation-proof-fixture"
+            },
+            "signature": "MEUCIHFX0dJfgL76OYXnL7LLTCfmE/wqvDWEsi6qZq7hR19MAiEAvip6UJ5tN3/Wqa+DwLQqBDY0eLLG2gaVTT1P0NoIqqo="
+          }
+        }
+      }
+    }
+  },
+  "tamperedProof": {
+    "containment": {
+      "trade_id": "2002",
+      "incident_reference": "RECON-20261124-E2E2002",
+      "state": "RECONCILED_PENDING_APPROVAL",
+      "opened_run_key": "open-2002",
+      "opened_at": "2026-11-24T07:00:00.000000",
+      "qualifying_codes": ["AMOUNT_MISMATCH"],
+      "cleared_run_key": "clear-2002",
+      "evidence": {
+        "rules": {
+          "version": "cotsel.reconciliation-risk-rules.v1"
+        },
+        "findings": [
+          {
+            "digest": "566bf89b78e3482f5c42749d8dd8f127aede9b8bd388d2dfda744f91c12891fe"
+          }
+        ]
+      }
+    },
+    "opening": {
+      "runKey": "open-2002",
+      "evidence": {
+        "runKey": "open-2002",
+        "status": "COMPLETED",
+        "completedAt": "2026-11-24T07:00:00.000000",
+        "coverage": {
+          "fromBlock": "1",
+          "toBlock": "2",
+          "complete": true,
+          "fromTradeId": "1",
+          "toTradeId": "9999"
+        },
+        "findings": [
+          {
+            "runKey": "open-2002",
+            "tradeId": "2002",
+            "severity": "CRITICAL",
+            "mismatchCode": "AMOUNT_MISMATCH",
+            "comparedField": "totalAmountLocked",
+            "onchainValue": "100",
+            "indexedValue": "999",
+            "details": {
+              "nested": {
+                "b": 2,
+                "a": true
+              }
+            }
+          }
+        ],
+        "scopeTradeIds": ["2001", "2002"]
+      },
+      "seal": {
+        "keyId": "reconciliation-proof-fixture",
+        "manifest": {
+          "containments": [
+            {
+              "openedAt": "2026-11-24T07:00:00.000000Z",
+              "qualifyingCodes": ["AMOUNT_MISMATCH"],
+              "tradeId": "2002",
+              "incidentReference": "RECON-20261124-E2E2002",
+              "episode": 1,
+              "state": "CONTAINED",
+              "openedRunKey": "open-2002",
+              "clearedRunKey": null,
+              "citedFindings": [
+                {
+                  "runKey": "open-2002",
+                  "digest": "566bf89b78e3482f5c42749d8dd8f127aede9b8bd388d2dfda744f91c12891fe"
+                }
+              ]
+            }
+          ],
+          "clearances": [],
+          "context": {
+            "chainId": 84532,
+            "escrowAddress": "0x1111111111111111111111111111111111111111"
+          },
+          "schemaVersion": "cotsel.reconciliation-run-manifest.v1",
+          "runKey": "open-2002",
+          "status": "COMPLETED",
+          "completedAt": "2026-11-24T07:00:00.000000",
+          "coverage": {
+            "fromBlock": "1",
+            "toBlock": "2",
+            "complete": true,
+            "fromTradeId": "1",
+            "toTradeId": "9999"
+          },
+          "findings": {
+            "count": 1,
+            "digests": ["566bf89b78e3482f5c42749d8dd8f127aede9b8bd388d2dfda744f91c12891fe"]
+          },
+          "scope": {
+            "count": 2,
+            "digest": "44a33303dd7090210b551d4c9a90f316bd7d1fa80a65be4ea414081c9d274ab2"
+          },
+          "rules": {
+            "version": "cotsel.reconciliation-risk-rules.v1",
+            "digest": "e00f84b6d9f48aade161ff3dbe6433eb10310ecc7c6da763aa429773884578c3"
+          },
+          "keyId": "reconciliation-proof-fixture"
+        },
+        "signature": "MEYCIQDF/JGL4hdUAiu3z/ChZ8llUEo8bMJBT+eyu5nFT4cvjQIhAKHNLtHWZBQqgGOBog4Tfn0xZ/SD2V6anXj/niANm6az"
+      }
+    },
+    "clearing": {
+      "runKey": "clear-2002",
+      "evidence": {
+        "runKey": "clear-2002",
+        "status": "COMPLETED",
+        "completedAt": "2026-11-24T08:00:00.000000",
+        "coverage": {
+          "fromBlock": "1",
+          "toBlock": "2",
+          "complete": true,
+          "fromTradeId": "1",
+          "toTradeId": "9999"
+        },
+        "findings": [],
+        "scopeTradeIds": ["2001", "2002"]
+      },
+      "seal": {
+        "keyId": "reconciliation-proof-fixture",
+        "manifest": {
+          "containments": [
+            {
+              "openedAt": "2026-11-24T07:00:00.000000Z",
+              "qualifyingCodes": ["AMOUNT_MISMATCH"],
+              "tradeId": "2002",
+              "incidentReference": "RECON-20261124-E2E2002",
+              "episode": 1,
+              "state": "RECONCILED_PENDING_APPROVAL",
+              "openedRunKey": "open-2002",
+              "clearedRunKey": "clear-2002",
+              "citedFindings": [
+                {
+                  "runKey": "open-2002",
+                  "digest": "566bf89b78e3482f5c42749d8dd8f127aede9b8bd388d2dfda744f91c12891fe"
+                }
+              ]
+            }
+          ],
+          "clearances": [
+            {
+              "tradeId": "2002",
+              "incidentReference": "RECON-20261124-E2E2002",
+              "episode": 1
+            }
+          ],
+          "context": {
+            "chainId": 84532,
+            "escrowAddress": "0x1111111111111111111111111111111111111111"
+          },
+          "schemaVersion": "cotsel.reconciliation-run-manifest.v1",
+          "runKey": "clear-2002",
+          "status": "COMPLETED",
+          "completedAt": "2026-11-24T08:00:00.000000",
+          "coverage": {
+            "fromBlock": "1",
+            "toBlock": "2",
+            "complete": true,
+            "fromTradeId": "1",
+            "toTradeId": "9999"
+          },
+          "findings": {
+            "count": 0,
+            "digests": []
+          },
+          "scope": {
+            "count": 2,
+            "digest": "44a33303dd7090210b551d4c9a90f316bd7d1fa80a65be4ea414081c9d274ab2"
+          },
+          "rules": {
+            "version": "cotsel.reconciliation-risk-rules.v1",
+            "digest": "e00f84b6d9f48aade161ff3dbe6433eb10310ecc7c6da763aa429773884578c3"
+          },
+          "keyId": "reconciliation-proof-fixture"
+        },
+        "signature": "MEUCIQDNXciM4Pgtm2C9WtzM53tUMBbVAsSDgRfc61hfyhbiXQIgSzQauA/tcEX/2e/VdxYBKsvwar91nCbBc8OH2YmEE2k="
+      }
+    },
+    "recovery": {
+      "tradeId": "2002",
+      "latest": {
+        "runKey": "latest",
+        "seal": {
+          "keyId": "reconciliation-proof-fixture",
+          "manifest": {
+            "containments": [
+              {
+                "openedAt": "2026-11-24T07:00:00.000000Z",
+                "qualifyingCodes": ["AMOUNT_MISMATCH"],
+                "tradeId": "2001",
+                "incidentReference": "RECON-20261124-E2E2001",
+                "episode": 1,
+                "state": "RECONCILED_PENDING_APPROVAL",
+                "openedRunKey": "open-2001",
+                "clearedRunKey": "clear-2001",
+                "citedFindings": [
+                  {
+                    "runKey": "open-2001",
+                    "digest": "c28037dd428684d280668e539b5eef38c1f47e86d7ae78cc1a981a10a3280c05"
+                  }
+                ]
+              },
+              {
+                "openedAt": "2026-11-24T07:00:00.000000Z",
+                "qualifyingCodes": ["AMOUNT_MISMATCH"],
+                "tradeId": "2002",
+                "incidentReference": "RECON-20261124-E2E2002",
+                "episode": 1,
+                "state": "RECONCILED_PENDING_APPROVAL",
+                "openedRunKey": "open-2002",
+                "clearedRunKey": "clear-2002",
+                "citedFindings": [
+                  {
+                    "runKey": "open-2002",
+                    "digest": "566bf89b78e3482f5c42749d8dd8f127aede9b8bd388d2dfda744f91c12891fe"
+                  }
+                ]
+              }
+            ],
+            "clearances": [],
+            "context": {
+              "chainId": 84532,
+              "escrowAddress": "0x1111111111111111111111111111111111111111"
+            },
+            "schemaVersion": "cotsel.reconciliation-run-manifest.v1",
+            "runKey": "latest",
+            "status": "COMPLETED",
+            "completedAt": "2026-11-24T08:10:00.000000",
+            "coverage": {
+              "fromBlock": "1",
+              "toBlock": "2",
+              "complete": true,
+              "fromTradeId": "1",
+              "toTradeId": "9999"
+            },
+            "findings": {
+              "count": 0,
+              "digests": []
+            },
+            "scope": {
+              "count": 2,
+              "digest": "44a33303dd7090210b551d4c9a90f316bd7d1fa80a65be4ea414081c9d274ab2"
+            },
+            "rules": {
+              "version": "cotsel.reconciliation-risk-rules.v1",
+              "digest": "e00f84b6d9f48aade161ff3dbe6433eb10310ecc7c6da763aa429773884578c3"
+            },
+            "keyId": "reconciliation-proof-fixture"
+          },
+          "signature": "MEUCIFHt8rBGOmw/NZqj55I8da4FkmdSL6LoQ5c2DkXiwAOlAiEAnKXWKzLGWhfhFVVGp39+5Wvdb1rFNjas862LAtE9jMM="
+        }
+      },
+      "runs": {
+        "open-2002": {
+          "runKey": "open-2002",
+          "evidence": {
+            "runKey": "open-2002",
+            "status": "COMPLETED",
+            "completedAt": "2026-11-24T07:00:00.000000",
+            "coverage": {
+              "fromBlock": "1",
+              "toBlock": "2",
+              "complete": true,
+              "fromTradeId": "1",
+              "toTradeId": "9999"
+            },
+            "findings": [
+              {
+                "runKey": "open-2002",
+                "tradeId": "2002",
+                "severity": "CRITICAL",
+                "mismatchCode": "AMOUNT_MISMATCH",
+                "comparedField": "totalAmountLocked",
+                "onchainValue": "100",
+                "indexedValue": "999",
+                "details": {
+                  "nested": {
+                    "b": 2,
+                    "a": true
+                  }
+                }
+              }
+            ],
+            "scopeTradeIds": ["2001", "2002"]
+          },
+          "seal": {
+            "keyId": "reconciliation-proof-fixture",
+            "manifest": {
+              "containments": [
+                {
+                  "openedAt": "2026-11-24T07:00:00.000000Z",
+                  "qualifyingCodes": ["AMOUNT_MISMATCH"],
+                  "tradeId": "2002",
+                  "incidentReference": "RECON-20261124-E2E2002",
+                  "episode": 1,
+                  "state": "CONTAINED",
+                  "openedRunKey": "open-2002",
+                  "clearedRunKey": null,
+                  "citedFindings": [
+                    {
+                      "runKey": "open-2002",
+                      "digest": "566bf89b78e3482f5c42749d8dd8f127aede9b8bd388d2dfda744f91c12891fe"
+                    }
+                  ]
+                }
+              ],
+              "clearances": [],
+              "context": {
+                "chainId": 84532,
+                "escrowAddress": "0x1111111111111111111111111111111111111111"
+              },
+              "schemaVersion": "cotsel.reconciliation-run-manifest.v1",
+              "runKey": "open-2002",
+              "status": "COMPLETED",
+              "completedAt": "2026-11-24T07:00:00.000000",
+              "coverage": {
+                "fromBlock": "1",
+                "toBlock": "2",
+                "complete": true,
+                "fromTradeId": "1",
+                "toTradeId": "9999"
+              },
+              "findings": {
+                "count": 1,
+                "digests": ["566bf89b78e3482f5c42749d8dd8f127aede9b8bd388d2dfda744f91c12891fe"]
+              },
+              "scope": {
+                "count": 2,
+                "digest": "44a33303dd7090210b551d4c9a90f316bd7d1fa80a65be4ea414081c9d274ab2"
+              },
+              "rules": {
+                "version": "cotsel.reconciliation-risk-rules.v1",
+                "digest": "e00f84b6d9f48aade161ff3dbe6433eb10310ecc7c6da763aa429773884578c3"
+              },
+              "keyId": "reconciliation-proof-fixture"
+            },
+            "signature": "MEYCIQDF/JGL4hdUAiu3z/ChZ8llUEo8bMJBT+eyu5nFT4cvjQIhAKHNLtHWZBQqgGOBog4Tfn0xZ/SD2V6anXj/niANm6az"
+          }
+        },
+        "clear-2002": {
+          "runKey": "clear-2002",
+          "evidence": {
+            "runKey": "clear-2002",
+            "status": "COMPLETED",
+            "completedAt": "2026-11-24T08:00:00.000000",
+            "coverage": {
+              "fromBlock": "1",
+              "toBlock": "2",
+              "complete": true,
+              "fromTradeId": "1",
+              "toTradeId": "9999"
+            },
+            "findings": [],
+            "scopeTradeIds": ["2001", "2002"]
+          },
+          "seal": {
+            "keyId": "reconciliation-proof-fixture",
+            "manifest": {
+              "containments": [
+                {
+                  "openedAt": "2026-11-24T07:00:00.000000Z",
+                  "qualifyingCodes": ["AMOUNT_MISMATCH"],
+                  "tradeId": "2002",
+                  "incidentReference": "RECON-20261124-E2E2002",
+                  "episode": 1,
+                  "state": "RECONCILED_PENDING_APPROVAL",
+                  "openedRunKey": "open-2002",
+                  "clearedRunKey": "clear-2002",
+                  "citedFindings": [
+                    {
+                      "runKey": "open-2002",
+                      "digest": "566bf89b78e3482f5c42749d8dd8f127aede9b8bd388d2dfda744f91c12891fe"
+                    }
+                  ]
+                }
+              ],
+              "clearances": [
+                {
+                  "tradeId": "2002",
+                  "incidentReference": "RECON-20261124-E2E2002",
+                  "episode": 1
+                }
+              ],
+              "context": {
+                "chainId": 84532,
+                "escrowAddress": "0x1111111111111111111111111111111111111111"
+              },
+              "schemaVersion": "cotsel.reconciliation-run-manifest.v1",
+              "runKey": "clear-2002",
+              "status": "COMPLETED",
+              "completedAt": "2026-11-24T08:00:00.000000",
+              "coverage": {
+                "fromBlock": "1",
+                "toBlock": "2",
+                "complete": true,
+                "fromTradeId": "1",
+                "toTradeId": "9999"
+              },
+              "findings": {
+                "count": 0,
+                "digests": []
+              },
+              "scope": {
+                "count": 2,
+                "digest": "44a33303dd7090210b551d4c9a90f316bd7d1fa80a65be4ea414081c9d274ab2"
+              },
+              "rules": {
+                "version": "cotsel.reconciliation-risk-rules.v1",
+                "digest": "e00f84b6d9f48aade161ff3dbe6433eb10310ecc7c6da763aa429773884578c3"
+              },
+              "keyId": "reconciliation-proof-fixture"
+            },
+            "signature": "MEUCIQDNXciM4Pgtm2C9WtzM53tUMBbVAsSDgRfc61hfyhbiXQIgSzQauA/tcEX/2e/VdxYBKsvwar91nCbBc8OH2YmEE2k="
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "findings": [
+      {
+        "digest": "c28037dd428684d280668e539b5eef38c1f47e86d7ae78cc1a981a10a3280c05",
+        "mismatchCode": "AMOUNT_MISMATCH",
+        "comparedField": "totalAmountLocked",
+        "status": "verified"
+      }
+    ],
+    "evidence": {
+      "status": "verified",
+      "reason": null
+    }
+  }
+}

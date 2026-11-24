@@ -51,6 +51,8 @@ export interface RunManifest {
 
 /** An open incident as the sealing run saw it (review R01/R03). */
 export interface SealedContainment {
+  openedAt?: string;
+  qualifyingCodes?: string[];
   tradeId: string;
   incidentReference: string;
   episode: number;
@@ -128,3 +130,88 @@ export function classifyRunFindings(
   runKey: string,
   publicKeys: ReadonlyMap<string, KeyObject>,
 ): Promise<{ run: RunVerification; findings: ClassifiedFinding[] }>;
+
+export interface ContainmentEvidence {
+  findings: Array<{
+    digest: string;
+    mismatchCode: string | null;
+    comparedField: string | null;
+    status: ClassifiedFinding['status'];
+  }>;
+  evidence: { status: 'verified' | 'failed' | 'unsigned'; reason: string | null };
+}
+export function verifyContainmentEvidence(
+  db: QueryExecutor,
+  row: {
+    opened_run_key: string;
+    cleared_run_key: string | null;
+    evidence: {
+      findings?: Array<{ digest?: string; mismatchCode?: string; comparedField?: string }>;
+    } | null;
+  },
+  publicKeys: ReadonlyMap<string, KeyObject>,
+): Promise<ContainmentEvidence>;
+
+/** A run's evidence rows and seal, as plain JSON (loadable or received over HTTP). */
+export interface RunEvidenceBundle {
+  runKey: string;
+  seal: { manifest: RunManifest; signature: string; keyId: string } | null;
+  evidence: RunEvidence | null;
+}
+export interface ContainmentRow {
+  trade_id: string;
+  incident_reference: string;
+  state: 'CONTAINED' | 'RECONCILED_PENDING_APPROVAL' | 'RELEASED';
+  opened_run_key: string;
+  opened_at: string;
+  qualifying_codes: string[];
+  cleared_run_key: string | null;
+  evidence: {
+    rules?: { version?: string };
+    findings?: Array<{ digest?: string; mismatchCode?: string; comparedField?: string }>;
+  } | null;
+}
+export interface ContainmentEvidenceBundle {
+  recovery?: import('./containmentRecovery').ContainmentRecoveryBundle | null;
+  containment: ContainmentRow;
+  opening: RunEvidenceBundle;
+  clearing: RunEvidenceBundle | null;
+}
+export function loadRunEvidenceBundle(
+  db: QueryExecutor,
+  runKey: string,
+): Promise<RunEvidenceBundle>;
+export function verifyRunEvidenceBundle(
+  bundle: RunEvidenceBundle,
+  publicKeys: ReadonlyMap<string, KeyObject>,
+  options?: { signatureOnly?: boolean },
+): RunVerification;
+export function classifyRunEvidenceBundle(
+  bundle: RunEvidenceBundle,
+  publicKeys: ReadonlyMap<string, KeyObject>,
+): { run: RunVerification; findings: ClassifiedFinding[] };
+export function loadContainmentEvidenceBundle(
+  db: QueryExecutor,
+  tradeId: string,
+): Promise<ContainmentEvidenceBundle | null>;
+export function loadOpenContainmentEvidenceBundles(
+  db: QueryExecutor,
+  limit?: number,
+): Promise<ContainmentEvidenceBundle[]>;
+export interface ContainmentPageOptions {
+  limit?: number;
+  cursor?: string;
+}
+export function validateContainmentPageOptions(options?: ContainmentPageOptions): {
+  limit: number;
+  after: { openedAt: string; tradeId: string } | null;
+};
+export function loadContainmentEvidencePage(
+  db: QueryExecutor,
+  options?: ContainmentPageOptions,
+): Promise<{ items: ContainmentEvidenceBundle[]; nextCursor: string | null }>;
+export function verifyContainmentBundle(
+  bundle: ContainmentEvidenceBundle,
+  publicKeys: ReadonlyMap<string, KeyObject>,
+  options?: { context?: SealedChainContext },
+): ContainmentEvidence;

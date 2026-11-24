@@ -14,6 +14,7 @@ import {
 } from '../core/findingSigner';
 import { RISK_RULES_V1_DIGEST, RISK_RULES_VERSION } from '../core/riskRules';
 import { Logger } from '../utils/logger';
+import { recordRunFreezeRequests } from './freezeRequests';
 
 let configuredSigner: FindingSigner | undefined;
 
@@ -82,5 +83,6 @@ export async function sealRunManifest(
       signer.keyId,
     ],
   );
+  await recordRunFreezeRequests(client, manifest);
   return manifest;
 }

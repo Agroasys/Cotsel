@@ -5,6 +5,7 @@ import http from 'http';
 import { serializeTelemetryRecord } from '@agroasys/shared-telemetry';
 import { config } from './config';
 import { readFinancialCoverage } from './core/financialCoverage';
+import { serveContainmentEvidence } from './containmentEvidenceHttp';
 import { pool, testConnection } from './database/connection';
 import { serviceNotifications } from './core/notifications';
 
@@ -89,6 +90,18 @@ export function startHealthServer(): http.Server {
       }
 
       const path = new URL(req.url ?? '/', 'http://reconciliation.internal');
+      if (
+        path.pathname.startsWith('/containments') ||
+        path.pathname.startsWith('/freeze-requests/')
+      ) {
+        try {
+          const served = await serveContainmentEvidence(pool, path.pathname, path.searchParams);
+          json(res, served?.status ?? 404, served?.body ?? { error: 'not_found' });
+        } catch {
+          json(res, 503, { error: 'containment_evidence_unavailable' });
+        }
+        return;
+      }
       if (path.pathname === '/coverage') {
         try {
           const tradeId = path.searchParams.get('tradeId');

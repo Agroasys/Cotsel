@@ -1,5 +1,11 @@
-import { closeConnection } from './database/connection';
 import { EscrowGovernanceReader } from './blockchain/escrowGovernance';
+import { parsePublicKeys } from '@agroasys/shared-db/reconciliationEvidence';
+import {
+  loadContainmentRecoveryBundle,
+  verifyContainmentRecovery,
+} from '@agroasys/shared-db/containmentRecovery';
+import { config } from './config';
+import { closeConnection, pool } from './database/connection';
 import {
   ReplayedApprovalError,
   getContainment,
@@ -132,6 +138,41 @@ async function release(tradeId: string, approvalTxHash: string): Promise<TradeCo
     );
   }
 
+  // Cotsel#951: a release rests on signed evidence. The findings that opened the
+  // incident, and the clean run that cleared it, must verify before any release.
+  const keys = process.env.RECONCILIATION_FINDING_PUBLIC_KEYS?.trim();
+  if (!keys) {
+    throw new Error(
+      'RECONCILIATION_FINDING_PUBLIC_KEYS is required to release: the containment evidence must verify.',
+    );
+  }
+  const client = await pool.connect();
+  let bundle;
+  try {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    bundle = await loadContainmentRecoveryBundle(client, tradeId);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  const signed = verifyContainmentRecovery(bundle, {
+    publicKeys: parsePublicKeys(keys),
+    context: { chainId: config.chainId, escrowAddress: config.escrowAddress },
+    expectedTradeId: tradeId,
+    maxAgeSeconds: 900,
+    matchesIncident: (reference) => reference === current.incident_reference,
+    incidentIsReconciliation: true,
+  });
+  if (signed.decision !== 'reconciliation_recovery_verified') {
+    throw new Error(
+      `Trade ${tradeId}'s containment recovery does not verify (${signed.decision === 'refused' ? signed.reason : signed.decision}); ` +
+        'it cannot be released. Treat this as tampering: preserve the database and open an incident.',
+    );
+  }
+
   const reader = new EscrowGovernanceReader();
   const evidence = evaluateGovernedUnpause(await reader.readGovernedUnpause(approvalTxHash), {
     tradeId,
@@ -139,7 +180,7 @@ async function release(tradeId: string, approvalTxHash: string): Promise<TradeCo
     openedAt: current.opened_at,
   });
 
-  const released = await releaseContainment({ tradeId, evidence });
+  const released = await releaseContainment({ tradeId, evidence, expected: current });
   if (!released) {
     // The row moved between the checks above and the write — a fresh divergence
     // reopened the incident, or another operator released it first.

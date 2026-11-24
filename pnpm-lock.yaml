@@ -64,6 +64,9 @@ patchedDependencies:
   glob@13.0.6:
     hash: 3eae7d01c361a7acda6b682a963c3b6ceb254da74e5007e8e4ee57ba82616154
     path: patches/glob@13.0.6.patch
+  i18next@25.8.12:
+    hash: 6e0b536cedba4ea6a7b7b1399cff6bce0bb97e78a1264ed37fb6a20a7b392227
+    path: patches/i18next@25.8.12.patch
   minimatch@10.2.5:
     hash: 22cdec6c47402add7095162a13280d3663ea55e66f3e6eedacf8f53f420091a1
     path: patches/minimatch@10.2.5.patch
@@ -14323,10 +14326,10 @@ snapshots:
       color: 5.0.3
       copy-to-clipboard: 3.3.3
       deepmerge: 4.3.1(patch_hash=75f9fc55c3162b8db6082253627cf293309cb30fc0f9b29c18bdfb8591d54281)
-      i18next: 25.8.12(typescript@6.0.3)
+      i18next: 25.8.12(patch_hash=6e0b536cedba4ea6a7b7b1399cff6bce0bb97e78a1264ed37fb6a20a7b392227)(typescript@6.0.3)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
-      react-i18next: 16.5.4(i18next@25.8.12(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
+      react-i18next: 16.5.4(i18next@25.8.12(patch_hash=6e0b536cedba4ea6a7b7b1399cff6bce0bb97e78a1264ed37fb6a20a7b392227)(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
       react-qrcode-logo: 4.0.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       tailwind-merge: 3.5.0
     optionalDependencies:
@@ -16252,7 +16255,7 @@ snapshots:
 
   husky@9.1.7: {}
 
-  i18next@25.8.12(typescript@6.0.3):
+  i18next@25.8.12(patch_hash=6e0b536cedba4ea6a7b7b1399cff6bce0bb97e78a1264ed37fb6a20a7b392227)(typescript@6.0.3):
     dependencies:
       '@babel/runtime': 7.28.6
     optionalDependencies:
@@ -17727,11 +17730,11 @@ snapshots:
       react: 19.2.4
       scheduler: 0.27.0
 
-  react-i18next@16.5.4(i18next@25.8.12(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3):
+  react-i18next@16.5.4(i18next@25.8.12(patch_hash=6e0b536cedba4ea6a7b7b1399cff6bce0bb97e78a1264ed37fb6a20a7b392227)(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3):
     dependencies:
       '@babel/runtime': 7.28.6
       html-parse-stringify: 3.0.1
-      i18next: 25.8.12(typescript@6.0.3)
+      i18next: 25.8.12(patch_hash=6e0b536cedba4ea6a7b7b1399cff6bce0bb97e78a1264ed37fb6a20a7b392227)(typescript@6.0.3)
       react: 19.2.4
       use-sync-external-store: 1.6.0(react@19.2.4)
     optionalDependencies:

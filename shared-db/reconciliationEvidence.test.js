@@ -24,6 +24,14 @@ const finding = {
   details: { b: 2, a: null, c: true },
 };
 
+test('shared browser fixture verifies with the production Node verifier', () => {
+  const fixture = require('./fixtures/reconciliation-proof.v1.json');
+  const { verifyContainmentBundle } = require('./reconciliationEvidence');
+  const keys = parsePublicKeys(JSON.stringify(fixture.keys));
+  assert.deepEqual(verifyContainmentBundle(fixture.proof, keys), fixture.expected);
+  assert.equal(verifyContainmentBundle(fixture.tamperedProof, keys).evidence.status, 'failed');
+});
+
 test('canonical JSON sorts keys at every depth and rejects what JSON cannot carry', () => {
   assert.equal(canonicalJson({ b: [{ d: 1, c: 2 }], a: 'x' }), '{"a":"x","b":[{"c":2,"d":1}]}');
   assert.throws(() => canonicalJson({ a: 1n }), TypeError);

@@ -88,3 +88,20 @@ test('a published rule version never changes', () => {
   );
   assert.ok(Object.isFrozen(RISK_RULES_V1));
 });
+
+// Verifiers outside reconciliation (the gateway, Dash) decide on the copy in
+// @agroasys/shared-db/containmentRecovery; it must stay this rule set exactly.
+test('the shared verifier copy of the rules equals RISK_RULES_V1 and its digest', async () => {
+  const { RISK_RULE_SETS, ruleSetDigest } = await import('@agroasys/shared-db/containmentRecovery');
+  const shared = RISK_RULE_SETS[RISK_RULES_VERSION];
+  assert.ok(shared);
+  assert.deepEqual(
+    [...shared.contain].sort(),
+    DRIFT_CODES.filter((code) => RISK_RULES_V1[code].outcome === 'contain').sort(),
+  );
+  assert.deepEqual(
+    [...shared.record].sort(),
+    DRIFT_CODES.filter((code) => RISK_RULES_V1[code].outcome === 'record').sort(),
+  );
+  assert.equal(ruleSetDigest(RISK_RULES_VERSION), RISK_RULES_V1_DIGEST);
+});
