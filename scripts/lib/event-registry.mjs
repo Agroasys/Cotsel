@@ -248,6 +248,14 @@ export function registryProblems(root) {
     if (fixture.contractVersion !== contract.id) {
       problems.push(`${contract.id}: fixture declares ${fixture.contractVersion}`);
     }
+    if (contract.id === 'cotsel.settlement-callback.v1') {
+      const source = fs.readFileSync(path.join(root, 'gateway/src/core/settlementCallbackEnvelope.ts'), 'utf8');
+      const block = /SETTLEMENT_CALLBACK_EVENT\s*=\s*\{([\s\S]*?)\}/u.exec(source)?.[1] ?? '';
+      const declared = Object.fromEntries([...block.matchAll(/(\w+):\s*'([^']+)'/gu)].map((entry) => [entry[1], entry[2]]));
+      if (!contract.envelope || ['type', 'version', 'producer', 'outbox'].some((key) => contract.envelope[key] !== declared[key])) {
+        problems.push(`${contract.id}: producer envelope differs from the registry`);
+      }
+    }
   }
 
   const notification = byType.get('cotsel.notification');

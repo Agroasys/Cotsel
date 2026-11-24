@@ -20,6 +20,8 @@ import {
   parseSettlementAmount,
   storedSettlementAmountToNumber,
 } from './settlementAmount';
+import { LAUNCH_SETTLEMENT_TEMPLATE_ID } from './settlementTemplateStore';
+import { buildSettlementCallbackEnvelope } from './settlementCallbackEnvelope';
 
 export * from './settlementStoreTypes';
 import type {
@@ -64,9 +66,47 @@ interface SettlementHandoffRow {
   callbackDeliveredAt: Date | null;
   requestId: string;
   sourceApiKeyId: string | null;
+  templateId: string | null;
+  templateVersion: number | null;
+  templateHash: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+// Every handoff read returns the same columns, including the template terms
+// the settlement was created against (Cotsel#940).
+const HANDOFF_COLUMNS = `
+  handoff_id AS "handoffId",
+  platform_id AS "platformId",
+  platform_handoff_id AS "platformHandoffId",
+  trade_id AS "tradeId",
+  phase,
+  settlement_channel AS "settlementChannel",
+  display_currency AS "displayCurrency",
+  display_amount AS "displayAmount",
+  asset_symbol AS "assetSymbol",
+  asset_amount AS "assetAmount",
+  ricardian_hash AS "ricardianHash",
+  external_reference AS "externalReference",
+  execution_binding AS "executionBinding",
+  metadata,
+  execution_status AS "executionStatus",
+  reconciliation_status AS "reconciliationStatus",
+  callback_status AS "callbackStatus",
+  provider_status AS "providerStatus",
+  tx_hash AS "txHash",
+  latest_event_id AS "latestEventId",
+  latest_event_type AS "latestEventType",
+  latest_event_detail AS "latestEventDetail",
+  latest_event_at AS "latestEventAt",
+  callback_delivered_at AS "callbackDeliveredAt",
+  request_id AS "requestId",
+  source_api_key_id AS "sourceApiKeyId",
+  template_id AS "templateId",
+  template_version AS "templateVersion",
+  template_hash AS "templateHash",
+  created_at AS "createdAt",
+  updated_at AS "updatedAt"`;
 
 interface SettlementExecutionEventRow {
   eventId: string;
@@ -119,6 +159,14 @@ function mapHandoffRow(row: SettlementHandoffRow): SettlementHandoffRecord {
     callbackDeliveredAt: row.callbackDeliveredAt ? row.callbackDeliveredAt.toISOString() : null,
     requestId: row.requestId,
     sourceApiKeyId: row.sourceApiKeyId,
+    settlementTemplate:
+      row.templateId === null || row.templateVersion === null || row.templateHash === null
+        ? null
+        : {
+            templateId: row.templateId,
+            version: row.templateVersion,
+            templateHash: row.templateHash,
+          },
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -180,34 +228,7 @@ async function getHandoffWithClient(
 ): Promise<SettlementHandoffRecord | null> {
   const result = await client.query<SettlementHandoffRow>(
     `SELECT
-       handoff_id AS "handoffId",
-       platform_id AS "platformId",
-       platform_handoff_id AS "platformHandoffId",
-       trade_id AS "tradeId",
-       phase,
-       settlement_channel AS "settlementChannel",
-       display_currency AS "displayCurrency",
-       display_amount AS "displayAmount",
-       asset_symbol AS "assetSymbol",
-       asset_amount AS "assetAmount",
-       ricardian_hash AS "ricardianHash",
-       external_reference AS "externalReference",
-       execution_binding AS "executionBinding",
-       metadata,
-       execution_status AS "executionStatus",
-       reconciliation_status AS "reconciliationStatus",
-       callback_status AS "callbackStatus",
-       provider_status AS "providerStatus",
-       tx_hash AS "txHash",
-       latest_event_id AS "latestEventId",
-       latest_event_type AS "latestEventType",
-       latest_event_detail AS "latestEventDetail",
-       latest_event_at AS "latestEventAt",
-       callback_delivered_at AS "callbackDeliveredAt",
-       request_id AS "requestId",
-       source_api_key_id AS "sourceApiKeyId",
-       created_at AS "createdAt",
-       updated_at AS "updatedAt"
+       ${HANDOFF_COLUMNS}
      FROM settlement_handoffs
      WHERE handoff_id = $1
      ${forUpdate ? 'FOR UPDATE' : ''}`,
@@ -321,8 +342,9 @@ async function createCallbackDeliveryWithClient(
        status,
        attempt_count,
        next_attempt_at,
-       request_id
-     ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, 0, $7, $8)
+       request_id,
+       envelope
+     ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, 0, $7, $8, $9::jsonb)
      RETURNING
        delivery_id AS "deliveryId",
        handoff_id AS "handoffId",
@@ -350,6 +372,7 @@ async function createCallbackDeliveryWithClient(
       input.status,
       input.nextAttemptAt,
       input.requestId,
+      JSON.stringify(buildSettlementCallbackEnvelope(input.requestBody, input.eventId)),
     ],
   );
 
@@ -376,34 +399,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
   const getHandoff = async (handoffId: string): Promise<SettlementHandoffRecord | null> => {
     const result = await pool.query<SettlementHandoffRow>(
       `SELECT
-         handoff_id AS "handoffId",
-         platform_id AS "platformId",
-         platform_handoff_id AS "platformHandoffId",
-         trade_id AS "tradeId",
-         phase,
-         settlement_channel AS "settlementChannel",
-         display_currency AS "displayCurrency",
-         display_amount AS "displayAmount",
-         asset_symbol AS "assetSymbol",
-         asset_amount AS "assetAmount",
-         ricardian_hash AS "ricardianHash",
-         external_reference AS "externalReference",
-         execution_binding AS "executionBinding",
-         metadata,
-         execution_status AS "executionStatus",
-         reconciliation_status AS "reconciliationStatus",
-         callback_status AS "callbackStatus",
-         provider_status AS "providerStatus",
-         tx_hash AS "txHash",
-         latest_event_id AS "latestEventId",
-         latest_event_type AS "latestEventType",
-         latest_event_detail AS "latestEventDetail",
-         latest_event_at AS "latestEventAt",
-         callback_delivered_at AS "callbackDeliveredAt",
-         request_id AS "requestId",
-         source_api_key_id AS "sourceApiKeyId",
-         created_at AS "createdAt",
-         updated_at AS "updatedAt"
+         ${HANDOFF_COLUMNS}
        FROM settlement_handoffs
        WHERE handoff_id = $1`,
       [handoffId],
@@ -418,34 +414,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
   ): Promise<SettlementHandoffRow | null> => {
     const result = await pool.query<SettlementHandoffRow>(
       `SELECT
-         handoff_id AS "handoffId",
-         platform_id AS "platformId",
-         platform_handoff_id AS "platformHandoffId",
-         trade_id AS "tradeId",
-         phase,
-         settlement_channel AS "settlementChannel",
-         display_currency AS "displayCurrency",
-         display_amount AS "displayAmount",
-         asset_symbol AS "assetSymbol",
-         asset_amount AS "assetAmount",
-         ricardian_hash AS "ricardianHash",
-         external_reference AS "externalReference",
-         execution_binding AS "executionBinding",
-         metadata,
-         execution_status AS "executionStatus",
-         reconciliation_status AS "reconciliationStatus",
-         callback_status AS "callbackStatus",
-         provider_status AS "providerStatus",
-         tx_hash AS "txHash",
-         latest_event_id AS "latestEventId",
-         latest_event_type AS "latestEventType",
-         latest_event_detail AS "latestEventDetail",
-         latest_event_at AS "latestEventAt",
-         callback_delivered_at AS "callbackDeliveredAt",
-         request_id AS "requestId",
-         source_api_key_id AS "sourceApiKeyId",
-         created_at AS "createdAt",
-         updated_at AS "updatedAt"
+         ${HANDOFF_COLUMNS}
        FROM settlement_handoffs
        WHERE platform_id = $1 AND platform_handoff_id = $2`,
       [platformId, platformHandoffId],
@@ -531,37 +500,17 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
            callback_status,
            request_id,
            source_api_key_id,
-           execution_binding
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, 'pending', 'pending', 'pending', $14, $15, $16::jsonb)
+           execution_binding,
+           template_id,
+           template_version,
+           template_hash
+         )
+         SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, 'pending', 'pending', 'pending', $14, $15, $16::jsonb,
+                t.template_id, t.version, t.template_hash
+         FROM settlement_templates t
+         WHERE t.template_id = $17 AND t.status = 'active'
          RETURNING
-           handoff_id AS "handoffId",
-           platform_id AS "platformId",
-           platform_handoff_id AS "platformHandoffId",
-           trade_id AS "tradeId",
-           phase,
-           settlement_channel AS "settlementChannel",
-           display_currency AS "displayCurrency",
-           display_amount AS "displayAmount",
-           asset_symbol AS "assetSymbol",
-           asset_amount AS "assetAmount",
-           ricardian_hash AS "ricardianHash",
-           external_reference AS "externalReference",
-           execution_binding AS "executionBinding",
-           metadata,
-           execution_status AS "executionStatus",
-           reconciliation_status AS "reconciliationStatus",
-           callback_status AS "callbackStatus",
-           provider_status AS "providerStatus",
-           tx_hash AS "txHash",
-           latest_event_id AS "latestEventId",
-           latest_event_type AS "latestEventType",
-           latest_event_detail AS "latestEventDetail",
-           latest_event_at AS "latestEventAt",
-           callback_delivered_at AS "callbackDeliveredAt",
-           request_id AS "requestId",
-           source_api_key_id AS "sourceApiKeyId",
-           created_at AS "createdAt",
-           updated_at AS "updatedAt"`,
+           ${HANDOFF_COLUMNS}`,
         [
           handoffId,
           input.platformId,
@@ -579,12 +528,18 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
           input.requestId,
           input.sourceApiKeyId ?? null,
           input.executionBinding ? JSON.stringify(input.executionBinding) : null,
+          LAUNCH_SETTLEMENT_TEMPLATE_ID,
         ],
       );
 
       const row = result.rows[0];
       if (!row) {
-        throw new GatewayError(500, 'INTERNAL_ERROR', 'Failed to persist settlement handoff');
+        // The insert selects the active template, so no row means none is active.
+        // A settlement is never created without recorded terms.
+        throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'No settlement template is active', {
+          reason: 'no_active_settlement_template',
+          templateId: LAUNCH_SETTLEMENT_TEMPLATE_ID,
+        });
       }
 
       return mapHandoffRow(row);
@@ -599,34 +554,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
       const [rowsResult, summaryResult] = await Promise.all([
         pool.query<SettlementHandoffRow>(
           `SELECT
-             handoff_id AS "handoffId",
-             platform_id AS "platformId",
-             platform_handoff_id AS "platformHandoffId",
-             trade_id AS "tradeId",
-             phase,
-             settlement_channel AS "settlementChannel",
-             display_currency AS "displayCurrency",
-             display_amount AS "displayAmount",
-             asset_symbol AS "assetSymbol",
-             asset_amount AS "assetAmount",
-             ricardian_hash AS "ricardianHash",
-             external_reference AS "externalReference",
-             execution_binding AS "executionBinding",
-             metadata,
-             execution_status AS "executionStatus",
-             reconciliation_status AS "reconciliationStatus",
-             callback_status AS "callbackStatus",
-             provider_status AS "providerStatus",
-             tx_hash AS "txHash",
-             latest_event_id AS "latestEventId",
-             latest_event_type AS "latestEventType",
-             latest_event_detail AS "latestEventDetail",
-             latest_event_at AS "latestEventAt",
-             callback_delivered_at AS "callbackDeliveredAt",
-             request_id AS "requestId",
-             source_api_key_id AS "sourceApiKeyId",
-             created_at AS "createdAt",
-             updated_at AS "updatedAt"
+             ${HANDOFF_COLUMNS}
            FROM settlement_handoffs
            ${clause}
            ORDER BY updated_at DESC, handoff_id DESC
@@ -818,34 +746,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
 
       const result = await pool.query<SettlementHandoffRow>(
         `SELECT DISTINCT ON (trade_id)
-           handoff_id AS "handoffId",
-           platform_id AS "platformId",
-           platform_handoff_id AS "platformHandoffId",
-           trade_id AS "tradeId",
-           phase,
-           settlement_channel AS "settlementChannel",
-           display_currency AS "displayCurrency",
-           display_amount AS "displayAmount",
-           asset_symbol AS "assetSymbol",
-           asset_amount AS "assetAmount",
-           ricardian_hash AS "ricardianHash",
-           external_reference AS "externalReference",
-           execution_binding AS "executionBinding",
-           metadata,
-           execution_status AS "executionStatus",
-           reconciliation_status AS "reconciliationStatus",
-           callback_status AS "callbackStatus",
-           provider_status AS "providerStatus",
-           tx_hash AS "txHash",
-           latest_event_id AS "latestEventId",
-           latest_event_type AS "latestEventType",
-           latest_event_detail AS "latestEventDetail",
-           latest_event_at AS "latestEventAt",
-           callback_delivered_at AS "callbackDeliveredAt",
-           request_id AS "requestId",
-           source_api_key_id AS "sourceApiKeyId",
-           created_at AS "createdAt",
-           updated_at AS "updatedAt"
+           ${HANDOFF_COLUMNS}
          FROM settlement_handoffs
          WHERE trade_id = ANY($1::text[])
          ORDER BY trade_id, updated_at DESC, handoff_id DESC`,
@@ -873,6 +774,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
           latestEventDetail: handoff.latestEventDetail,
           latestEventAt: handoff.latestEventAt,
           callbackDeliveredAt: handoff.callbackDeliveredAt,
+          settlementTemplate: handoff.settlementTemplate ?? null,
           createdAt: handoff.createdAt,
           updatedAt: handoff.updatedAt,
         });

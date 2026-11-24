@@ -13,8 +13,10 @@ export const NOTIFICATION_ENVELOPE_SCHEMA_VERSION = 'v1';
 /**
  * The notification types registered in docs/api/events (notification-event v1).
  * scripts/check-event-registry.mjs fails CI if this list and the registry
- * differ, or if a producer emits a type that is not registered. It is not a
- * runtime gate: an alert must never be dropped because of its schema.
+ * differ, or if a producer emits a type that is not registered. If one still
+ * reaches runtime, it is a code defect: `assertRegisteredNotificationType`
+ * refuses it before any outbox write or delivery path (review R10), and the
+ * refusal is logged at error level with the event's details.
  */
 export const REGISTERED_NOTIFICATION_TYPES = [
   'INDEXER_POISON_LOG',
@@ -55,15 +57,20 @@ export class UnregisteredNotificationTypeError extends Error {
   }
 }
 
+/** Throws UnregisteredNotificationTypeError for a type outside the registry. */
+export function assertRegisteredNotificationType(type: string): void {
+  if (!(REGISTERED_NOTIFICATION_TYPES as readonly string[]).includes(type)) {
+    throw new UnregisteredNotificationTypeError(type);
+  }
+}
+
 export function buildNotificationEnvelope(
   event: NotificationEvent,
   options: EnvelopeOptions = {},
 ): EventEnvelope<NotificationEvent> {
   // CI keeps every emitted type registered; reaching this throw is a code
   // defect, and it fails at enqueue rather than producing an unregistered event.
-  if (!(REGISTERED_NOTIFICATION_TYPES as readonly string[]).includes(event.type)) {
-    throw new UnregisteredNotificationTypeError(event.type);
-  }
+  assertRegisteredNotificationType(event.type);
   return {
     eventId: options.eventId ?? randomUUID(),
     type: NOTIFICATION_ENVELOPE_TYPE,

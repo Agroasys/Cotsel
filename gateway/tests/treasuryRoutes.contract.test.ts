@@ -11,6 +11,8 @@ import type { AuthSessionClient } from '../src/core/authSessionClient';
 import type { TreasuryReadReader } from '../src/core/treasuryReadService';
 import type { TreasuryWorkflowClient } from '../src/core/treasuryWorkflowService';
 import { sendInProcessRequest } from './support/inProcessHttp';
+import { freshStepUp } from './support/stepUp';
+import { createTreasurySessionClient } from './support/treasurySessions';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -289,69 +291,7 @@ async function startServer(
     session?: Partial<NonNullable<Awaited<ReturnType<AuthSessionClient['resolveSession']>>>>;
   },
 ) {
-  const authSessionClient: AuthSessionClient = {
-    resolveSession: jest.fn().mockImplementation(async () => {
-      if (role === null) {
-        return null;
-      }
-
-      return {
-        accountId: `acct-${role}`,
-        userId: `uid-${role}`,
-        walletAddress: '0x00000000000000000000000000000000000000aa',
-        role,
-        capabilities:
-          role === 'admin'
-            ? [
-                'treasury:read',
-                'treasury:prepare',
-                'treasury:approve',
-                'treasury:execute_match',
-                'treasury:close',
-              ]
-            : [],
-        signerAuthorizations:
-          role === 'admin'
-            ? [
-                {
-                  bindingId: 'binding-treasury-approve',
-                  walletAddress: '0x00000000000000000000000000000000000000aa',
-                  actionClass: 'treasury_approve',
-                  environment: 'test',
-                  approvedAt: '2026-03-14T00:00:00.000Z',
-                  approvedBy: 'ops-admin-control',
-                  ticketRef: 'FIN-900',
-                  notes: null,
-                },
-                {
-                  bindingId: 'binding-treasury-execute',
-                  walletAddress: '0x00000000000000000000000000000000000000aa',
-                  actionClass: 'treasury_execute',
-                  environment: 'test',
-                  approvedAt: '2026-03-14T00:00:00.000Z',
-                  approvedBy: 'ops-admin-control',
-                  ticketRef: 'FIN-901',
-                  notes: null,
-                },
-                {
-                  bindingId: 'binding-treasury-close',
-                  walletAddress: '0x00000000000000000000000000000000000000aa',
-                  actionClass: 'treasury_close',
-                  environment: 'test',
-                  approvedAt: '2026-03-14T00:00:00.000Z',
-                  approvedBy: 'ops-admin-control',
-                  ticketRef: 'FIN-902',
-                  notes: null,
-                },
-              ]
-            : [],
-        issuedAt: Date.now(),
-        expiresAt: Date.now() + 60000,
-        ...(options?.session ?? {}),
-      };
-    }),
-    checkReadiness: jest.fn(),
-  };
+  const authSessionClient = createTreasurySessionClient(role, options?.session);
 
   const treasuryReadService: TreasuryReadReader = {
     getTreasurySnapshot: jest.fn().mockResolvedValue(treasuryFixture),
@@ -629,6 +569,52 @@ describe('gateway treasury routes contract', () => {
 
     expect(blockedResponse.status).toBe(403);
   });
+
+  test.each([
+    ['enforce', 403],
+    ['record', 201],
+  ] as const)(
+    'treasury mutations with a stale step-up in %s mode return %s',
+    async (enforcement, status) => {
+      const app = await startServer('admin', {
+        config: {
+          enableMutations: true,
+          writeAllowlist: ['uid-admin'],
+          stepUpEnforcement: enforcement,
+        },
+        session: { authentication: freshStepUp(3600) },
+        treasuryWorkflow: {
+          createAccountingPeriod: jest.fn().mockResolvedValue(accountingPeriodsFixture[0]),
+        },
+      });
+
+      const response = await sendInProcessRequest(app, {
+        method: 'POST',
+        path: '/api/dashboard-gateway/v1/treasury/accounting-periods',
+        headers: { authorization: 'Bearer sess-admin', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          periodKey: '2026-Q3',
+          startsAt: '2026-07-01T00:00:00.000Z',
+          endsAt: '2026-09-30T23:59:59.000Z',
+          audit: {
+            reason: 'Open next revenue close period',
+            ticketRef: 'FIN-946',
+            evidenceReferences: ['evidence://ticket/FIN-946'],
+          },
+        }),
+      });
+
+      expect(response.status).toBe(status);
+      if (status === 403) {
+        expect(
+          response.json<{ error: { details: Record<string, unknown> } }>().error.details,
+        ).toMatchObject({
+          reason: 'step_up_required',
+          refusal: 'stale',
+        });
+      }
+    },
+  );
 
   test('signer-required treasury actions accept a walletless session when an approved signer wallet is supplied explicitly', async () => {
     const markSweepBatchExecuted = jest.fn().mockResolvedValue({

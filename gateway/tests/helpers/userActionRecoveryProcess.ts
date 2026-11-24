@@ -1,6 +1,7 @@
 /** SPDX-License-Identifier: Apache-2.0 */
 // Controlled local process fixture. No real RPC, signer service, or external submission.
 import { Pool } from 'pg';
+import { testPostgresPort } from './userActionEnginePostgres';
 import { FeeData, Transaction, Wallet, type TransactionReceipt } from 'ethers';
 import type { GaslessUserActionExecutionInput } from '../../src/core/gaslessExecutionTypes';
 import { createPostgresSettlementStore } from '../../src/core/settlementStore';
@@ -61,7 +62,7 @@ async function run(message: RecoveryProcessInput) {
   if (!/^ua_[0-9a-f]{32}$/.test(message.database)) throw new Error('Scratch database required');
   const pool = new Pool({
     host: '127.0.0.1',
-    port: 5432,
+    port: testPostgresPort(),
     database: message.database,
     user: message.database,
     password: 'local-test-only',

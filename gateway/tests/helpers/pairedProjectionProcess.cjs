@@ -4,6 +4,13 @@ const { spawn } = require('node:child_process');
 const { createRequire } = require('node:module');
 const { randomBytes } = require('node:crypto');
 const path = require('node:path');
+
+// Same source as testPostgresPort() in userActionEnginePostgres.ts: CI uses 5432,
+// a local run can point SETTLEMENT_ACTIVITY_DATABASE_URL at a disposable container.
+const PG_PORT =
+  (process.env.SETTLEMENT_ACTIVITY_DATABASE_URL &&
+    Number(new URL(process.env.SETTLEMENT_ACTIVITY_DATABASE_URL).port)) ||
+  5432;
 const net = require('node:net');
 const root = path.resolve(__dirname, '../../..');
 const fromIndexer = createRequire(path.join(root, 'indexer/package.json'));
@@ -66,7 +73,7 @@ async function close() {
   await Promise.all(children.map(exited));
   await Promise.all(pools.map((pool) => pool.end()));
   const admin = new Pool({
-    connectionString: 'postgresql://postgres:postgres@127.0.0.1:5432/postgres',
+    connectionString: `postgresql://postgres:postgres@127.0.0.1:${PG_PORT}/postgres`,
   });
   try {
     for (const name of databases)
@@ -93,7 +100,7 @@ async function initialize(input) {
     reconRole = `rev2_recon_app_${suffix}`;
   const password = randomBytes(24).toString('hex');
   const admin = new Pool({
-    connectionString: 'postgresql://postgres:postgres@127.0.0.1:5432/postgres',
+    connectionString: `postgresql://postgres:postgres@127.0.0.1:${PG_PORT}/postgres`,
   });
   try {
     for (const name of [indexerRole, reconRole]) {
@@ -112,7 +119,7 @@ async function initialize(input) {
   }
   const indexerPool = new Pool({
     host: '127.0.0.1',
-    port: 5432,
+    port: PG_PORT,
     database: indexerDb,
     user: 'postgres',
     password: 'postgres',
@@ -120,7 +127,7 @@ async function initialize(input) {
   pools.push(indexerPool);
   const reconAdmin = new Pool({
     host: '127.0.0.1',
-    port: 5432,
+    port: PG_PORT,
     database: reconDb,
     user: 'postgres',
     password: 'postgres',
@@ -132,7 +139,7 @@ async function initialize(input) {
     NODE_ENV: 'test',
     COTSEL_ENVIRONMENT: 'local',
     DB_HOST: '127.0.0.1',
-    DB_PORT: '5432',
+    DB_PORT: String(PG_PORT),
     DB_PASSWORD: password,
     CHAIN_ID: '84532',
     ESCROW_ADDRESS: input.escrowAddress,

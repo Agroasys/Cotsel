@@ -147,6 +147,7 @@ export function repositoryViolations(root) {
 
   const composePaths = [
     join(root, 'docker-compose.services.yml'),
+    join(root, 'docker-compose.gateway.yml'),
     join(root, 'indexer', 'docker-compose.yml'),
     join(root, 'oracle', 'docker-compose.yml'),
   ];

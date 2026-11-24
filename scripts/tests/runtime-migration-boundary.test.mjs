@@ -46,7 +46,9 @@ test('long-running Cotsel services cannot receive migration credentials', async 
 
   const gatewayIam = await readFile('infra/terraform/staging-platform/iam.tf', 'utf8');
 
-  const compose = await readFile('docker-compose.services.yml', 'utf8');
+  const compose =
+    (await readFile('docker-compose.services.yml', 'utf8')) +
+    (await readFile('docker-compose.gateway.yml', 'utf8'));
   for (const service of ['ricardian', 'auth', 'gateway', 'treasury', 'oracle', 'reconciliation']) {
     const [, remainder] = compose.split(`\n  ${service}:\n`);
     assert.ok(remainder, `missing compose service ${service}`);
@@ -142,7 +144,9 @@ test('every non-indexer schema has a dedicated one-off migration task', async ()
 });
 
 test('local runtimes wait for their dedicated migration jobs', async () => {
-  const compose = await readFile('docker-compose.services.yml', 'utf8');
+  const compose =
+    (await readFile('docker-compose.services.yml', 'utf8')) +
+    (await readFile('docker-compose.gateway.yml', 'utf8'));
   const migrations = await readFile('docker-compose.migrations.yml', 'utf8');
 
   assert.match(compose, /include:\n {2}- docker-compose\.migrations\.yml/);
@@ -186,6 +190,9 @@ test('service migration manifests pin immutable schema checksums', async () => {
           { version: '202610160014', name: 'funded_progression_binding' },
           { version: '202610170015', name: 'user_action_binding' },
           { version: '202610180016', name: 'user_action_requests' },
+          { version: '202611230017', name: 'settlement_templates' },
+          { version: '202611240018', name: 'settlement_template_activations' },
+          { version: '202611240019', name: 'settlement_callback_envelope' },
         ],
       );
       assert.match(manifest.migrations[1].schema_sha256, /^[a-f0-9]{64}$/);

@@ -6,6 +6,7 @@ import {
   type NotificationDispatcherConfig,
 } from './dispatcher';
 import { NotificationOutbox, type EnqueueResult, type OutboxQueryExecutor } from './outbox';
+import { assertRegisteredNotificationType } from './envelope';
 
 export type DurableEnqueueResult = EnqueueResult | 'disabled';
 
@@ -39,14 +40,31 @@ export class DurableNotifier implements Notifier {
     event: NotificationEvent,
     executor?: OutboxQueryExecutor,
   ): Promise<DurableEnqueueResult> {
+    assertRegisteredNotificationType(event.type);
     if (!this.config.enabled) {
       return 'disabled';
     }
     return this.config.outbox.enqueue(event, this.config.cooldownMs, executor);
   }
 
-  /** Never throws: an alert that cannot be recorded falls back to direct delivery. */
+  /**
+   * Never throws. An alert the outbox cannot record (an infrastructure
+   * failure) falls back to direct delivery. An unregistered type is a
+   * validation failure: it is refused and never delivered by any path.
+   */
   async notify(event: NotificationEvent): Promise<boolean> {
+    try {
+      assertRegisteredNotificationType(event.type);
+    } catch (error: unknown) {
+      this.config.logger?.error('Refused notification with an unregistered type', {
+        source: event.source,
+        type: event.type,
+        severity: event.severity,
+        dedupKey: event.dedupKey,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
     let result: DurableEnqueueResult;
     try {
       result = await this.enqueue(event);
