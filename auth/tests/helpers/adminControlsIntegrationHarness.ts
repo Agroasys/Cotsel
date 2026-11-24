@@ -160,7 +160,7 @@ export async function withPostgres(fn: (pool: Pool) => Promise<void>): Promise<v
     }
   } finally {
     try {
-      docker(['rm', '-f', containerName], { stdio: ['ignore', 'ignore', 'ignore'] });
+      docker(['rm', '-f', '-v', containerName], { stdio: ['ignore', 'ignore', 'ignore'] });
     } catch {
       // best-effort cleanup
     }

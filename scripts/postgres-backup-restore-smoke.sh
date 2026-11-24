@@ -84,8 +84,8 @@ PY
 }
 
 cleanup() {
-  docker rm -f "$SRC_CONTAINER" >/dev/null 2>&1 || true
-  docker rm -f "$DST_CONTAINER" >/dev/null 2>&1 || true
+  docker rm -f -v "$SRC_CONTAINER" >/dev/null 2>&1 || true
+  docker rm -f -v "$DST_CONTAINER" >/dev/null 2>&1 || true
 }
 
 on_error() {
