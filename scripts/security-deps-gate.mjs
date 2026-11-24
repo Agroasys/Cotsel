@@ -8,6 +8,21 @@ import { verifiedProductionDispositions } from './production-dependency-disposit
 
 const locallyPatchedAdvisories = new Map([
   [
+    'GHSA-6jcc-5g8w-32mx',
+    {
+      moduleName: 'i18next',
+      severity: 'moderate',
+      versions: new Set(['25.8.12']),
+      vulnerableVersions: '<26.3.4',
+      patchedVersions: '>=26.3.4',
+      overviewHash: '8bc45d72c3fc812f9bdf165bbe05998e0839391853024496db30b8b934acc925',
+      patchFile: 'patches/i18next@25.8.12.patch',
+      upstreamCommit: '642137b',
+      disposition:
+        'upstream own-property merge fix backported and tested across all seven distributed JavaScript builds',
+    },
+  ],
+  [
     'GHSA-848j-6mx2-7j84',
     {
       moduleName: 'elliptic',
