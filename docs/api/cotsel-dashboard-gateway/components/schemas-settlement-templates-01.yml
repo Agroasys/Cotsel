@@ -132,6 +132,71 @@ components:
               items:
                 $ref: '#/components/schemas/SettlementTemplateVersion'
         timestamp: { type: string, format: date-time }
+    SettlementTemplateActivationPreparation:
+      type: object
+      additionalProperties: false
+      required:
+        - preparationId
+        - templateId
+        - version
+        - templateHash
+        - expectedActiveVersion
+        - expectedActiveHash
+        - state
+        - preparedBy
+        - preparedAt
+        - expiresAt
+        - approvedBy
+        - approvedAt
+        - confirmedBy
+        - confirmedAt
+        - supersededAt
+        - supersededReason
+      properties:
+        preparationId:
+          type: string
+          pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        templateId:
+          $ref: '#/components/schemas/SettlementTemplateId'
+        version: { type: integer, minimum: 1 }
+        templateHash: { type: string, pattern: '^0x[0-9a-f]{64}$' }
+        expectedActiveVersion: { type: ['integer', 'null'], minimum: 1 }
+        expectedActiveHash: { type: ['string', 'null'], pattern: '^0x[0-9a-f]{64}$' }
+        state:
+          type: string
+          enum: [prepared, approved, confirmed, superseded]
+        preparedBy: { type: string }
+        preparedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        approvedBy: { type: ['string', 'null'] }
+        approvedAt: { type: ['string', 'null'], format: date-time }
+        confirmedBy: { type: ['string', 'null'] }
+        confirmedAt: { type: ['string', 'null'], format: date-time }
+        supersededAt: { type: ['string', 'null'], format: date-time }
+        supersededReason: { type: ['string', 'null'] }
+    SettlementTemplateActivationPreparationResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
+        timestamp: { type: string, format: date-time }
+    SettlementTemplateActivationPreparationListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: object
+          additionalProperties: false
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
+        timestamp: { type: string, format: date-time }
     SettlementTemplateActivationResponse:
       type: object
       required: [success, data, timestamp]
@@ -140,8 +205,10 @@ components:
         data:
           type: object
           additionalProperties: false
-          required: [activated, retired]
+          required: [preparation, activated, retired]
           properties:
+            preparation:
+              $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
             activated:
               $ref: '#/components/schemas/SettlementTemplateVersion'
             retired:

@@ -3086,18 +3086,49 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '409':
           $ref: '#/components/responses/ConflictError'
-  /settlement-templates/{templateId}/versions/{version}/activate:
+  /settlement-templates/activations:
+    get:
+      tags:
+        - Settlement Templates
+      summary: List template activation preparations
+      description: |
+        Every governed activation preparation (review R05), newest first, with its exact target,
+        the version it expects to replace, who prepared, approved and confirmed it, and why a
+        superseded one was invalidated.
+      operationId: listSettlementTemplateActivations
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: templateId
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/SettlementTemplateId'
+      responses:
+        '200':
+          description: Activation preparations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateActivationPreparationListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /settlement-templates/{templateId}/versions/{version}/activations:
     post:
       tags:
         - Settlement Templates
-      summary: Activate a reviewed settlement template version
+      summary: Prepare the activation of a reviewed settlement template version
       description: |
-        Makes a reviewed version active and retires the previously active one in the same
-        transaction. The activator must not be the author, and the version must be listed in
-        `GATEWAY_TEMPLATE_ACTIVATION_ALLOWLIST` (409 with
+        Records a durable preparation that binds the exact target (template id, version and terms
+        hash) to the exact version it will replace, or none. Nothing is activated yet. The version
+        must be `reviewed` and listed in `GATEWAY_TEMPLATE_ACTIVATION_ALLOWLIST` (409 with
         `details.reason = template_not_enforced_by_contract` otherwise), because the escrow
-        enforces only those terms until #955.
-      operationId: activateSettlementTemplate
+        enforces only those terms until #955. A preparation expires after 24 hours.
+      operationId: prepareSettlementTemplateActivation
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/XCorrelationId'
@@ -3105,8 +3136,80 @@ paths:
         - $ref: '#/components/parameters/SettlementTemplateIdPath'
         - $ref: '#/components/parameters/SettlementTemplateVersionPath'
       responses:
+        '201':
+          description: Activation prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateActivationPreparationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement-templates/activations/{preparationId}/approve:
+    post:
+      tags:
+        - Settlement Templates
+      summary: Approve a prepared template activation
+      description: |
+        Independent approval of that exact preparation. The approver must be neither its
+        preparer nor the template's author (409 `independent_approval_required`). A preparation
+        whose target or expected predecessor changed is marked superseded and refused (409
+        `activation_preparation_stale`); an expired one is refused (409
+        `activation_preparation_expired`).
+      operationId: approveSettlementTemplateActivation
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/SettlementTemplateActivationPreparationIdPath'
+      responses:
         '200':
-          description: Version active. `retired` is the version it replaced, if any.
+          description: Activation approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateActivationPreparationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement-templates/activations/{preparationId}/confirm:
+    post:
+      tags:
+        - Settlement Templates
+      summary: Confirm an approved template activation
+      description: |
+        Under lock, re-checks that the target is still the reviewed terms that were approved and
+        that the active version is still the one the preparation expected. Then, in one
+        transaction, it retires that predecessor, activates the target and records the audit
+        entry. A changed target or predecessor supersedes the preparation (409
+        `activation_preparation_stale`). The template's author cannot confirm (409
+        `independent_activation_required`). A confirmed preparation is never confirmed again
+        (409 `activation_already_confirmed`). There is no other way to activate a version.
+      operationId: confirmSettlementTemplateActivation
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/SettlementTemplateActivationPreparationIdPath'
+      responses:
+        '200':
+          description: |
+            Version active. `retired` is the version it replaced (the expected predecessor), if
+            any, and `preparation` is the confirmed preparation.
           content:
             application/json:
               schema:
@@ -3208,6 +3311,13 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/SettlementTemplateId'
+    SettlementTemplateActivationPreparationIdPath:
+      name: preparationId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
     SettlementTemplateVersionPath:
       name: version
       in: path
@@ -6759,6 +6869,128 @@ components:
         timestamp:
           type: string
           format: date-time
+    SettlementTemplateActivationPreparation:
+      type: object
+      additionalProperties: false
+      required:
+        - preparationId
+        - templateId
+        - version
+        - templateHash
+        - expectedActiveVersion
+        - expectedActiveHash
+        - state
+        - preparedBy
+        - preparedAt
+        - expiresAt
+        - approvedBy
+        - approvedAt
+        - confirmedBy
+        - confirmedAt
+        - supersededAt
+        - supersededReason
+      properties:
+        preparationId:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+        templateId:
+          $ref: '#/components/schemas/SettlementTemplateId'
+        version:
+          type: integer
+          minimum: 1
+        templateHash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        expectedActiveVersion:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        expectedActiveHash:
+          type:
+            - string
+            - 'null'
+          pattern: ^0x[0-9a-f]{64}$
+        state:
+          type: string
+          enum:
+            - prepared
+            - approved
+            - confirmed
+            - superseded
+        preparedBy:
+          type: string
+        preparedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        approvedBy:
+          type:
+            - string
+            - 'null'
+        approvedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        confirmedBy:
+          type:
+            - string
+            - 'null'
+        confirmedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        supersededAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        supersededReason:
+          type:
+            - string
+            - 'null'
+    SettlementTemplateActivationPreparationResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementTemplateActivationPreparationListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
+        timestamp:
+          type: string
+          format: date-time
     SettlementTemplateActivationResponse:
       type: object
       required:
@@ -6773,9 +7005,12 @@ components:
           type: object
           additionalProperties: false
           required:
+            - preparation
             - activated
             - retired
           properties:
+            preparation:
+              $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
             activated:
               $ref: '#/components/schemas/SettlementTemplateVersion'
             retired:

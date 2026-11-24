@@ -56,6 +56,7 @@ import { createCapabilitiesRouter } from './routes/capabilities';
 import { createComplianceRouter } from './routes/compliance';
 import { createSettlementTemplateRouter } from './routes/settlementTemplates';
 import { createPostgresSettlementTemplateStore } from './core/settlementTemplateStore';
+import { createPostgresTemplateActivationStore } from './core/settlementTemplateActivationStore';
 import { createDashboardSettlementRouter } from './routes/dashboardSettlement';
 import { createEvidenceBundleRouter } from './routes/evidenceBundles';
 import { createOperationsRouter } from './routes/operations';
@@ -91,7 +92,8 @@ const idempotencyStore = createPostgresIdempotencyStore(
 );
 const roleAssignmentStore = createPostgresRoleAssignmentStore(pool);
 const settlementStore = createPostgresSettlementStore(pool);
-const settlementTemplateStore = createPostgresSettlementTemplateStore(pool, {
+const settlementTemplateStore = createPostgresSettlementTemplateStore(pool);
+const settlementTemplateActivationStore = createPostgresTemplateActivationStore(pool, {
   activationAllowlist: config.settlementTemplateActivationAllowlist,
 });
 const settlementNonceStore = createGatewayServiceAuthNonceStore(pool);
@@ -313,6 +315,7 @@ async function bootstrap(): Promise<void> {
       authSessionClient,
       config,
       templateStore: settlementTemplateStore,
+      activationStore: settlementTemplateActivationStore,
       idempotencyStore,
       auditLogStore,
     }),

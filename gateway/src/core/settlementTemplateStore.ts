@@ -79,16 +79,15 @@ export interface SettlementTemplateStore {
     audit?: SettlementTemplateAudit;
   }): Promise<SettlementTemplateRecord>;
   review(input: SettlementTemplateTransitionInput): Promise<SettlementTemplateRecord>;
-  /** Activates a reviewed version and retires the previously active one atomically. */
-  activate(input: SettlementTemplateTransitionInput): Promise<{
-    activated: SettlementTemplateRecord;
-    retired: SettlementTemplateRecord | null;
-  }>;
-  /** Retires a draft or reviewed version; the active one is replaced via activate. */
+  /**
+   * Retires a draft or reviewed version. A version becomes active, and the
+   * active one is retired, only through the governed activation workflow
+   * (settlementTemplateActivationStore, migration 018).
+   */
   retire(input: SettlementTemplateTransitionInput): Promise<SettlementTemplateRecord>;
 }
 
-interface SettlementTemplateRow {
+export interface SettlementTemplateRow {
   templateId: string;
   version: number;
   schemaVersion: string;
@@ -106,7 +105,7 @@ interface SettlementTemplateRow {
   requestId: string;
 }
 
-const COLUMNS = `
+export const SETTLEMENT_TEMPLATE_COLUMNS = `
   template_id AS "templateId",
   version,
   schema_version AS "schemaVersion",
@@ -125,7 +124,7 @@ const COLUMNS = `
 
 const iso = (value: Date | null) => (value ? value.toISOString() : null);
 
-function mapRow(row: SettlementTemplateRow): SettlementTemplateRecord {
+export function mapSettlementTemplateRow(row: SettlementTemplateRow): SettlementTemplateRecord {
   // JSONB does not keep key order, so the hash is recomputed canonically. A
   // mismatch means the stored terms are not the ones that were reviewed.
   if (settlementTemplateHash(row.template) !== row.templateHash) {
@@ -156,21 +155,14 @@ function conflict(message: string, details: Record<string, unknown>): GatewayErr
   return new GatewayError(409, 'CONFLICT', message, details);
 }
 
-export function createPostgresSettlementTemplateStore(
-  pool: Pool,
-  options: { activationAllowlist?: readonly string[] } = {},
-): SettlementTemplateStore {
-  const activationAllowlist = new Set(
-    options.activationAllowlist ?? DEFAULT_TEMPLATE_ACTIVATION_ALLOWLIST,
-  );
-
+export function createPostgresSettlementTemplateStore(pool: Pool): SettlementTemplateStore {
   async function lockVersion(
     client: PoolClient,
     templateId: string,
     version: number,
   ): Promise<SettlementTemplateRow> {
     const result = await client.query<SettlementTemplateRow>(
-      `SELECT ${COLUMNS} FROM settlement_templates
+      `SELECT ${SETTLEMENT_TEMPLATE_COLUMNS} FROM settlement_templates
        WHERE template_id = $1 AND version = $2 FOR UPDATE`,
       [templateId, version],
     );
@@ -204,37 +196,37 @@ export function createPostgresSettlementTemplateStore(
       `UPDATE settlement_templates
        SET status = $3, ${actorColumn}_by = $4, ${actorColumn}_at = NOW()
        WHERE template_id = $1 AND version = $2
-       RETURNING ${COLUMNS}`,
+       RETURNING ${SETTLEMENT_TEMPLATE_COLUMNS}`,
       [row.templateId, row.version, status, actor],
     );
-    return mapRow(result.rows[0]);
+    return mapSettlementTemplateRow(result.rows[0]);
   }
 
   return {
     async list(templateId) {
       const result = await pool.query<SettlementTemplateRow>(
-        `SELECT ${COLUMNS} FROM settlement_templates
+        `SELECT ${SETTLEMENT_TEMPLATE_COLUMNS} FROM settlement_templates
          WHERE ($1::text IS NULL OR template_id = $1)
          ORDER BY template_id, version`,
         [templateId ?? null],
       );
-      return result.rows.map(mapRow);
+      return result.rows.map(mapSettlementTemplateRow);
     },
 
     async get(templateId, version) {
       const result = await pool.query<SettlementTemplateRow>(
-        `SELECT ${COLUMNS} FROM settlement_templates WHERE template_id = $1 AND version = $2`,
+        `SELECT ${SETTLEMENT_TEMPLATE_COLUMNS} FROM settlement_templates WHERE template_id = $1 AND version = $2`,
         [templateId, version],
       );
-      return result.rows[0] ? mapRow(result.rows[0]) : null;
+      return result.rows[0] ? mapSettlementTemplateRow(result.rows[0]) : null;
     },
 
     async getActive(templateId) {
       const result = await pool.query<SettlementTemplateRow>(
-        `SELECT ${COLUMNS} FROM settlement_templates WHERE template_id = $1 AND status = 'active'`,
+        `SELECT ${SETTLEMENT_TEMPLATE_COLUMNS} FROM settlement_templates WHERE template_id = $1 AND status = 'active'`,
         [templateId],
       );
-      return result.rows[0] ? mapRow(result.rows[0]) : null;
+      return result.rows[0] ? mapSettlementTemplateRow(result.rows[0]) : null;
     },
 
     async createDraft({ template, actor, requestId, audit }) {
@@ -251,7 +243,7 @@ export function createPostgresSettlementTemplateStore(
            template_id, version, schema_version, template, template_hash, created_by, request_id
          ) VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
          ON CONFLICT DO NOTHING
-         RETURNING ${COLUMNS}`,
+         RETURNING ${SETTLEMENT_TEMPLATE_COLUMNS}`,
           [
             template.templateId,
             template.version,
@@ -269,7 +261,7 @@ export function createPostgresSettlementTemplateStore(
             templateHash,
           });
         }
-        const record = mapRow(result.rows[0]);
+        const record = mapSettlementTemplateRow(result.rows[0]);
         await audit?.(client, { action: 'created', record });
         return record;
       });
@@ -294,43 +286,6 @@ export function createPostgresSettlementTemplateStore(
         const record = await transition(client, row, 'reviewed', 'reviewed', actor);
         await audit?.(client, { action: 'reviewed', record });
         return record;
-      });
-    },
-
-    activate({ templateId, version, actor, audit }) {
-      return inTransaction(async (client) => {
-        const row = await lockVersion(client, templateId, version);
-        if (row.status !== 'reviewed') {
-          throw conflict('Only a reviewed template can be activated', {
-            templateId,
-            version,
-            status: row.status,
-          });
-        }
-        if (row.createdBy === actor) {
-          throw conflict('A template must be activated by someone other than its author', {
-            templateId,
-            version,
-          });
-        }
-        if (!activationAllowlist.has(`${templateId}:${version}`)) {
-          throw conflict('The escrow contract does not enforce this template version', {
-            templateId,
-            version,
-            reason: 'template_not_enforced_by_contract',
-          });
-        }
-        const previous = await client.query<SettlementTemplateRow>(
-          `SELECT ${COLUMNS} FROM settlement_templates
-           WHERE template_id = $1 AND status = 'active' FOR UPDATE`,
-          [templateId],
-        );
-        const retired = previous.rows[0]
-          ? await transition(client, previous.rows[0], 'retired', 'retired', actor)
-          : null;
-        const activated = await transition(client, row, 'active', 'activated', actor);
-        await audit?.(client, { action: 'activated', record: activated, replaced: retired });
-        return { activated, retired };
       });
     },
 
