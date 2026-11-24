@@ -232,6 +232,53 @@ describePostgres('settlement templates through PostgreSQL (Cotsel#940)', () => {
     });
   });
 
+  // Review R06: approval evidence is the actor AND the time; both are frozen.
+  it('freezes approval timestamps once recorded, under the runtime role', async () => {
+    const rewrite = (column: string, version: number) =>
+      db.runtime.query(
+        `UPDATE settlement_templates SET ${column} = ${column} - INTERVAL '1 day'
+         WHERE template_id = 'agroasys.launch' AND version = $1`,
+        [version],
+      );
+    const active = await db.runtime.query<{ version: number }>(
+      `SELECT version FROM settlement_templates
+       WHERE template_id = 'agroasys.launch' AND status = 'active'`,
+    );
+    const activeVersion = active.rows[0]!.version;
+    await expect(rewrite('reviewed_at', activeVersion)).rejects.toMatchObject({ code: '23514' });
+    await expect(rewrite('activated_at', activeVersion)).rejects.toMatchObject({ code: '23514' });
+    const retired = await db.runtime.query<{ version: number }>(
+      `SELECT version FROM settlement_templates
+       WHERE template_id = 'agroasys.launch' AND status = 'retired' LIMIT 1`,
+    );
+    expect(retired.rows).toHaveLength(1);
+    await expect(rewrite('retired_at', retired.rows[0]!.version)).rejects.toMatchObject({
+      code: '23514',
+    });
+
+    // A reviewed version's review time is frozen too, while its status stays reviewed.
+    const store = createPostgresSettlementTemplateStore(db.runtime);
+    const draft = await store.createDraft({
+      template: { ...V2, version: 12 },
+      actor: 'erin',
+      requestId: 'req-v12',
+    });
+    await store.review({
+      templateId: draft.templateId,
+      version: draft.version,
+      actor: 'frank',
+    });
+    await expect(rewrite('reviewed_at', draft.version)).rejects.toMatchObject({ code: '23514' });
+    // A pair is filled only by its own transition: no activation stamp on a reviewed row.
+    await expect(
+      db.runtime.query(
+        `UPDATE settlement_templates SET retired_by = 'frank', retired_at = NOW()
+         WHERE template_id = 'agroasys.launch' AND version = $1`,
+        [draft.version],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+  });
+
   it('never leaves the gateway without terms, and refuses settlements if it is', async () => {
     const store = createPostgresSettlementTemplateStore(db.runtime);
     await store.createDraft({

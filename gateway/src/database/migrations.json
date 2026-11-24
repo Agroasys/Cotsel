@@ -111,8 +111,8 @@
       "version": "202611230017",
       "name": "settlement_templates",
       "file": "schema/017_settlement_templates.sql",
-      "sha256": "63b65b3c0096677fa6bc02bfcfd0489305e4872bd6730dd4de75517db8f92644",
-      "schema_sha256": "f289e8bd611ca8aa9238343760ffec014f58176d82ec4eb1e9fa3dd215b4186c"
+      "sha256": "c252a13a92f50d7e400d9952e5c392e6d4b5ab138af0f81303598145d90ae525",
+      "schema_sha256": "02d95dd8d1c8b053a61991a9970d54c50b7032c5297449b0c0f5e1fb3651cac0"
     }
   ]
 }

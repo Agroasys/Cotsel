@@ -70,9 +70,21 @@ BEGIN
         OR NEW.created_by IS DISTINCT FROM OLD.created_by
         OR NEW.created_at IS DISTINCT FROM OLD.created_at
         OR NEW.request_id IS DISTINCT FROM OLD.request_id
+        -- Approval evidence is the actor and the time together: once recorded,
+        -- neither changes.
         OR (OLD.reviewed_by IS NOT NULL AND NEW.reviewed_by IS DISTINCT FROM OLD.reviewed_by)
+        OR (OLD.reviewed_at IS NOT NULL AND NEW.reviewed_at IS DISTINCT FROM OLD.reviewed_at)
         OR (OLD.activated_by IS NOT NULL AND NEW.activated_by IS DISTINCT FROM OLD.activated_by)
+        OR (OLD.activated_at IS NOT NULL AND NEW.activated_at IS DISTINCT FROM OLD.activated_at)
         OR (OLD.retired_by IS NOT NULL AND NEW.retired_by IS DISTINCT FROM OLD.retired_by)
+        OR (OLD.retired_at IS NOT NULL AND NEW.retired_at IS DISTINCT FROM OLD.retired_at)
+        -- An empty pair is filled only by its own lifecycle transition.
+        OR (OLD.reviewed_by IS NULL AND NEW.reviewed_by IS NOT NULL
+            AND NOT (OLD.status = 'draft' AND NEW.status = 'reviewed'))
+        OR (OLD.activated_by IS NULL AND NEW.activated_by IS NOT NULL
+            AND NOT (OLD.status = 'reviewed' AND NEW.status = 'active'))
+        OR (OLD.retired_by IS NULL AND NEW.retired_by IS NOT NULL
+            AND NOT (OLD.status <> 'retired' AND NEW.status = 'retired'))
         OR (OLD.reviewed_by IS NULL AND NEW.reviewed_by = 'migration:017')
         OR (OLD.activated_by IS NULL AND NEW.activated_by = 'migration:017')
     THEN
