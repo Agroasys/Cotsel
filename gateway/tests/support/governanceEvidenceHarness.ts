@@ -6,7 +6,7 @@
  * evidence verifies. Global and claims unpauses are unaffected.
  */
 import type { Server } from 'http';
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { createApp } from '../../src/app';
 import type { GatewayConfig } from '../../src/config/env';
 import { createGovernanceRouter } from '../../src/routes/governance';
@@ -79,6 +79,7 @@ export async function startGovernanceEvidenceServer(
   proposal: UnpauseProposalState,
   containmentEvidence: ContainmentEvidenceService | undefined,
   dbPool?: Pool,
+  requestRateLimitMiddleware?: RequestHandler,
 ) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockResolvedValue({
@@ -181,6 +182,7 @@ export async function startGovernanceEvidenceServer(
     buildTime: config.buildTime,
     readinessCheck: async () => [{ name: 'postgres', status: 'ok' }],
     extraRouter: router,
+    requestRateLimitMiddleware,
   });
   const server = await new Promise<Server>((resolve) => {
     const instance = app.listen(0, () => resolve(instance));
