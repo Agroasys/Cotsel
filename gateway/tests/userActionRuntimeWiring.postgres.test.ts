@@ -22,8 +22,14 @@ describeLocal(
       jest.restoreAllMocks();
       await db?.close();
     });
-    async function setup(throughVersion?: '202610170015') {
-      db = await createUserActionEnginePostgres(throughVersion);
+    // withoutLifecycleTables builds every migration except 016, which adds the
+    // lifecycle request tables. Readiness refuses such a schema in production;
+    // this isolates how the observer behaves when those tables are missing.
+    async function setup(withoutLifecycleTables = false) {
+      db = await createUserActionEnginePostgres(
+        undefined,
+        withoutLifecycleTables ? { withoutVersions: ['202610180016'] } : {},
+      );
       const f = await userActionEngineFixture(db.runtime);
       const provider = {
         getTransactionReceipt: jest.fn(
@@ -94,8 +100,8 @@ describeLocal(
         );
       },
     );
-    test('migration015 without lifecycle request tables still observes existing funding outcomes and logs only a safe repair reason', async () => {
-      const f = await setup('202610170015');
+    test('a schema without the migration 016 lifecycle request tables still observes existing funding outcomes and logs only a safe repair reason', async () => {
+      const f = await setup(true);
       expect(
         (await db.runtime.query("SELECT to_regclass('gasless_user_action_requests') AS name"))
           .rows[0].name,

@@ -23,4 +23,23 @@ Run the check with:
 pnpm run events:registry:check
 ```
 
-The release gate runs the same command. Producers still write their existing outbox rows; emitting the envelope from every outbox is the next slice of #949.
+The release gate runs the same command.
+
+## Where the envelope is written
+
+`@agroasys/notifications` (`NotificationOutbox.enqueue`) stores the envelope in `notification_outbox.envelope` for every notification that oracle, reconciliation and indexer raise. It is built by `buildNotificationEnvelope` in `notifications/src/envelope.ts`:
+
+- **Field values:** `eventId` is a fresh UUID; `producer` is the event `source`; `settlementId` is `correlation.tradeId`, or `null`; `orderingKey` is the dedup key; and `payload` is the notification.
+- **Repeats:** a merged repeat of the same incident keeps the first envelope, so `eventId` is stable while `occurrences` counts the repeats. The `event` column holds the latest occurrence.
+- **Integrity:** the column is constrained to the envelope shape, and a trigger makes a written envelope immutable. Rows written before the migration have a `NULL` envelope.
+- **Migrations:** oracle `202611230001`, reconciliation `202611230001`, indexer `1785800000000`.
+- **Type list:** `notifications/src/envelope.ts` keeps its own `REGISTERED_NOTIFICATION_TYPES`, and the check fails if it differs from the registry. `buildNotificationEnvelope` throws `UnregisteredNotificationTypeError` for any other type, and the registry check scans every `notify`, `raise` and `enqueue` call site, so an unregistered type fails in CI before it can reach a producer.
+
+Relays and consumers (#957, #958) read `envelope`, deduplicate on `eventId`, and order by `orderingKey`.
+
+The gateway stores callback envelopes in `settlement_callback_deliveries.envelope` through migration `202611240019`.
+The registered type is `cotsel.settlement-callback`, version `v1`, with producer `gateway`.
+Its event identifier is the callback event identifier, and its ordering key is the trade identifier.
+The payload remains the frozen `cotsel.settlement-callback.v1` contract. HTTP delivery and signatures use the existing request body.
+Retries preserve the stored envelope. A database trigger rejects changes after publication.
+Historical rows and older images can leave the additive column null.

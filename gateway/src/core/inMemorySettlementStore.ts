@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { isDeepStrictEqual } from 'util';
 import { GatewayError } from '../errors';
 import { validateExecutionTransition } from './settlementStateMachine';
+import { AGROASYS_LAUNCH_TEMPLATE_V1, settlementTemplateHash } from '@agroasys/sdk';
 import {
   ASSET_AMOUNT_SPEC,
   DISPLAY_AMOUNT_SPEC,
@@ -20,6 +21,13 @@ import type {
   SettlementStore,
   TradeSettlementProjection,
 } from './settlementStore';
+
+// No template registry in memory: handoffs record the seeded launch terms.
+const LAUNCH_TEMPLATE_REFERENCE = Object.freeze({
+  templateId: AGROASYS_LAUNCH_TEMPLATE_V1.templateId,
+  version: AGROASYS_LAUNCH_TEMPLATE_V1.version,
+  templateHash: settlementTemplateHash(AGROASYS_LAUNCH_TEMPLATE_V1),
+});
 
 export function createInMemorySettlementStore(
   initialHandoffs: SettlementHandoffRecord[] = [],
@@ -127,6 +135,7 @@ export function createInMemorySettlementStore(
         callbackDeliveredAt: null,
         requestId: input.requestId,
         sourceApiKeyId: input.sourceApiKeyId ?? null,
+        settlementTemplate: { ...LAUNCH_TEMPLATE_REFERENCE },
         createdAt: now,
         updatedAt: now,
       };
@@ -468,6 +477,7 @@ export function createInMemorySettlementStore(
           latestEventDetail: record.latestEventDetail,
           latestEventAt: record.latestEventAt,
           callbackDeliveredAt: record.callbackDeliveredAt,
+          settlementTemplate: record.settlementTemplate ?? null,
           createdAt: record.createdAt,
           updatedAt: record.updatedAt,
         });

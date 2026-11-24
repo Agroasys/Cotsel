@@ -13,11 +13,13 @@ import { createDefaultTransactionVerifier } from './core/governanceTransactionVe
 import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore';
 import type { IdempotencyStore } from './core/idempotencyStore';
 import { createGovernanceRouter } from './routes/governance';
+import { createPostgresAuditLogStore } from './core/auditLogStore';
 
 export function createGovernanceRuntime(config: GatewayConfig, pool: Pool) {
   const governanceActionStore = createPostgresGovernanceActionStore(pool);
   const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);
   const governanceTransitionStore = createPostgresGovernanceTransitionStore(pool);
+  const auditLogStore = createPostgresAuditLogStore(pool);
   const verifier = createDefaultTransactionVerifier(config);
   const governanceMutationService = new GovernanceMutationService(
     config,
@@ -39,6 +41,7 @@ export function createGovernanceRuntime(config: GatewayConfig, pool: Pool) {
         governanceActionStore,
         governanceMutationService,
         idempotencyStore,
+        auditLogStore,
       }),
     start: () => monitor.start(),
     stop: () => monitor.stop(),

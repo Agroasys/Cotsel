@@ -283,6 +283,7 @@ export function createRouter(
               reason?: string;
               ttlSeconds?: number;
               baseRole?: Exclude<import('../types').UserRole, 'admin'>;
+              operatorAuthentication?: unknown;
             }
           >,
           res,

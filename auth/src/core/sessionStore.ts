@@ -3,7 +3,14 @@
  */
 import crypto from 'crypto';
 import { Pool } from 'pg';
-import { UserSession, UserProfile, SessionIssueResult, SessionLifetimePolicy } from '../types';
+import {
+  AuthenticationAssurance,
+  NO_AUTHENTICATION_ASSURANCE,
+  UserSession,
+  UserProfile,
+  SessionIssueResult,
+  SessionLifetimePolicy,
+} from '../types';
 import {
   insertSession,
   findSessionByTokenHash,
@@ -18,7 +25,11 @@ export type SessionRotationResult =
   | { status: 'lifetime_exhausted' };
 
 export interface SessionStore {
-  issue(profile: UserProfile, ttlSeconds: number): Promise<SessionIssueResult>;
+  issue(
+    profile: UserProfile,
+    ttlSeconds: number,
+    authentication?: AuthenticationAssurance,
+  ): Promise<SessionIssueResult>;
   /**
    * Atomically revokes `sessionToken` and issues its single successor, bounded by
    * the lineage's absolute lifetime.
@@ -55,7 +66,7 @@ function nowSeconds(): number {
  */
 export function createPostgresSessionStore(pool: Pool, environment: string): SessionStore {
   return {
-    async issue(profile, ttlSeconds) {
+    async issue(profile, ttlSeconds, authentication = NO_AUTHENTICATION_ASSURANCE) {
       const sessionId = newSessionToken();
       const issuedAt = nowSeconds();
       const expiresAt = issuedAt + ttlSeconds;
@@ -65,6 +76,7 @@ export function createPostgresSessionStore(pool: Pool, environment: string): Ses
         issuedAt,
         expiresAt,
         lineageStartedAt: issuedAt,
+        authentication,
       });
       return { sessionId, expiresAt };
     },

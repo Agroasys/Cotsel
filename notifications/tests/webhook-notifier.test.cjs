@@ -170,7 +170,8 @@ test('scrubs credentials, URLs and personal data from rendered webhook fields', 
     retryAttempts: 0,
   });
 
-  const sent = await notifier.notify(
+  // Escalations are sent by the dispatcher through deliver(), never notify().
+  await notifier.deliver(
     createEvent({
       type: 'NOTIFICATION_ESCALATION',
       message: 'RPC https://base-sepolia.g.alchemy.com/v2/alchemy-key-0123456789 refused',
@@ -182,7 +183,6 @@ test('scrubs credentials, URLs and personal data from rendered webhook fields', 
     }),
   );
 
-  assert.equal(sent, true);
   assert.doesNotMatch(body, /alchemy-key-0123456789/);
   assert.doesNotMatch(body, /buyer\.person@example\.com/);
   assert.doesNotMatch(body, /sk_live_0123456789abcdef/);

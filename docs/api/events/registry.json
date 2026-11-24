@@ -23,6 +23,12 @@
       "schema": "CotselSettlementCallbackV1",
       "fixture": "docs/api/fixtures/cotsel-settlement-callback.v1.json",
       "consumer": "Agroasys/agroasys-backend",
+      "envelope": {
+        "type": "cotsel.settlement-callback",
+        "version": "v1",
+        "producer": "gateway",
+        "outbox": "settlement_callback_deliveries"
+      },
       "sha256": "9c83a419a840e33e748675e684468a71f80f09f447e250c42bc6cda324be45a3"
     }
   ]

@@ -45,6 +45,22 @@ components:
         - rejected
         - reconciled
         - drift_detected
+    SettlementTemplateReference:
+      type: object
+      additionalProperties: false
+      required:
+        - templateId
+        - version
+        - templateHash
+      properties:
+        templateId:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+        templateHash:
+          type: string
+          pattern: '^0x[0-9a-f]{64}$'
     SettlementHandoff:
       type: object
       required:
@@ -153,6 +169,14 @@ components:
           type:
             - string
             - 'null'
+        settlementTemplate:
+          description: >-
+            The settlement template version the handoff was created against
+            (Cotsel#940). Null only for a row written by a gateway image older
+            than migration 017.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SettlementTemplateReference'
         createdAt:
           type: string
           format: date-time

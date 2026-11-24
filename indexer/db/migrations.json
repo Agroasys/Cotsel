@@ -119,6 +119,12 @@
       "name": "notification_outbox",
       "file": "migrations/1785700000000-NotificationOutbox.js",
       "sha256": "97cf23808f0ec3c85363058f23d7206535e95b9b17838c15a4ea5514acd5e09e"
+    },
+    {
+      "version": "1785800000000",
+      "name": "notification_outbox_envelope",
+      "file": "migrations/1785800000000-NotificationOutboxEnvelope.js",
+      "sha256": "4259bef05bd94151bef01a59d5f66e045fbd202cd8be7db29c3345d8b5673f6b"
     }
   ]
 }

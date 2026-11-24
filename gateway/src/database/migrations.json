@@ -106,6 +106,27 @@
       "file": "schema/016_user_action_requests.sql",
       "sha256": "9fac7b6061994f44a39c3df60e9126a880a052cba14a6f1ba40c7c6ef8ab4841",
       "schema_sha256": "32f16444995685ae8df1c5fd8154d1784959d812faff77d6a757492ff98aba3a"
+    },
+    {
+      "version": "202611230017",
+      "name": "settlement_templates",
+      "file": "schema/017_settlement_templates.sql",
+      "sha256": "c252a13a92f50d7e400d9952e5c392e6d4b5ab138af0f81303598145d90ae525",
+      "schema_sha256": "02d95dd8d1c8b053a61991a9970d54c50b7032c5297449b0c0f5e1fb3651cac0"
+    },
+    {
+      "version": "202611240018",
+      "name": "settlement_template_activations",
+      "file": "schema/018_settlement_template_activations.sql",
+      "sha256": "97cefc386a141e5ee1df20fd6a1943c081e5287c7b29fad847f7b9c5cca5487a",
+      "schema_sha256": "0c5642ba81ff4f3da67c3b9bab88f659bfa809a576b20a62a51eb2f38b3a281b"
+    },
+    {
+      "version": "202611240019",
+      "name": "settlement_callback_envelope",
+      "file": "schema/019_settlement_callback_envelope.sql",
+      "sha256": "7b3bbfd89dd3791154b648d986711e4ab8e694afa9a5458e09229c4e4068f131",
+      "schema_sha256": "8dc8dbbbe44e35f1105eab50808c79858baeb35e5dc26469a7fce1e0c0bd8021"
     }
   ]
 }

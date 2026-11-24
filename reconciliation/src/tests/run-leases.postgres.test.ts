@@ -62,6 +62,7 @@ test(
               ['202610220001', 'notification_outbox'],
               ['202611010001', 'completed_evidence'],
               ['202611010002', 'enumeration_cycles'],
+              ['202611230001', 'notification_outbox_envelope'],
             ],
           );
         });

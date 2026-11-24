@@ -100,6 +100,7 @@ describe('SessionController.exchangeTrustedSession', () => {
       },
       ANY_ROLE_AUTHORITY,
       undefined,
+      { authTime: null, method: null, strength: null },
     );
   });
 
@@ -122,6 +123,7 @@ describe('SessionController.exchangeTrustedSession', () => {
       }),
       ANY_ROLE_AUTHORITY,
       undefined,
+      { authTime: null, method: null, strength: null },
     );
   });
 

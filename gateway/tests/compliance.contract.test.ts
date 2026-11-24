@@ -5,7 +5,6 @@ import type { Server } from 'http';
 import { Router } from 'express';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
-import type { AuthSessionClient } from '../src/core/authSessionClient';
 import { createInMemoryAuditLogStore } from '../src/core/auditLogStore';
 import { ComplianceService } from '../src/core/complianceService';
 import { createInMemoryComplianceStore } from '../src/core/complianceStore';
@@ -16,6 +15,7 @@ import { createInMemoryIdempotencyStore } from '../src/core/idempotencyStore';
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createComplianceRouter } from '../src/routes/compliance';
+import { createComplianceSessionClient } from './support/complianceSessions';
 
 const baseConfig: GatewayConfig = {
   port: 3600,
@@ -127,50 +127,7 @@ async function startServer(options: StartServerOptions = {}) {
     writeAllowlist: options.writeAllowlist ?? baseConfig.writeAllowlist,
   };
 
-  const authSessionClient: AuthSessionClient = {
-    resolveSession: jest.fn().mockImplementation(async (token: string) => {
-      if (options.sessionRole === null) {
-        return null;
-      }
-
-      const role =
-        options.sessionRole ??
-        (token === 'session-admin-2' || token === 'session-admin' ? 'admin' : 'buyer');
-      const sessionToken = token || 'session-admin';
-      return {
-        accountId:
-          role === 'admin'
-            ? sessionToken === 'session-admin-2'
-              ? 'acct-admin-2'
-              : 'acct-admin'
-            : 'acct-buyer',
-        userId:
-          role === 'admin'
-            ? sessionToken === 'session-admin-2'
-              ? 'uid-admin-2'
-              : 'uid-admin'
-            : 'uid-buyer',
-        walletAddress:
-          role === 'admin'
-            ? sessionToken === 'session-admin-2'
-              ? '0x00000000000000000000000000000000000000ac'
-              : '0x00000000000000000000000000000000000000aa'
-            : '0x00000000000000000000000000000000000000bb',
-        role,
-        email:
-          role === 'admin'
-            ? sessionToken === 'session-admin-2'
-              ? 'admin2@agroasys.io'
-              : 'admin@agroasys.io'
-            : 'buyer@agroasys.io',
-        capabilities: role === 'admin' ? ['compliance:write'] : [],
-        signerAuthorizations: [],
-        issuedAt: Date.now(),
-        expiresAt: Date.now() + 60_000,
-      };
-    }),
-    checkReadiness: jest.fn(),
-  };
+  const authSessionClient = createComplianceSessionClient(options.sessionRole);
 
   const complianceStore = createInMemoryComplianceStore();
   const auditLogStore = createInMemoryAuditLogStore();
@@ -231,11 +188,12 @@ async function createDecision(
   baseUrl: string,
   body: Record<string, unknown>,
   idempotencyKey: string,
+  sessionToken = 'session-admin',
 ) {
   return fetch(`${baseUrl}/compliance/decisions`, {
     method: 'POST',
     headers: {
-      Authorization: 'Bearer session-admin',
+      Authorization: `Bearer ${sessionToken}`,
       'Content-Type': 'application/json',
       'Idempotency-Key': idempotencyKey,
     },
@@ -304,7 +262,37 @@ describe('gateway compliance routes contract', () => {
         actionId: payload.data.decisionId,
         idempotencyKey: 'idem-create-1',
         actorId: 'account:acct-admin',
+        // Cotsel#946: the action's own audit entry names its step-up.
+        metadata: expect.objectContaining({
+          stepUp: expect.objectContaining({
+            method: 'webauthn',
+            strength: 'hardware_webauthn',
+            enforcement: 'enforce',
+          }),
+        }),
       });
+    } finally {
+      server.close();
+    }
+  });
+
+  test('compliance mutations refuse a session whose step-up is stale', async () => {
+    const { server, baseUrl, auditLogStore } = await startServer({
+      writeAllowlist: ['uid-admin'],
+    });
+
+    try {
+      const response = await createDecision(
+        baseUrl,
+        buildDecisionBody(),
+        'idem-stale-step-up',
+        'session-admin-stale',
+      );
+      const payload = await response.json();
+      expect(response.status).toBe(403);
+      expect(payload.error.code).toBe('FORBIDDEN');
+      expect(payload.error.details).toMatchObject({ reason: 'step_up_required', refusal: 'stale' });
+      expect(auditLogStore.entries).toHaveLength(0);
     } finally {
       server.close();
     }
