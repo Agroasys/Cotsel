@@ -7,7 +7,12 @@ import { Pool } from 'pg';
 import { runVersionedMigrations } from '@agroasys/shared-db/migrate';
 import { createPostgresGaslessTransactionOutcomeRecorder } from '../src/core/gaslessTransactionOutcomeStore';
 import { createPostgresIdempotencyStore } from '../src/core/idempotencyStore';
+import {
+  SETTLEMENT_CALLBACK_CONTRACT_VERSION,
+  SettlementService,
+} from '../src/core/settlementService';
 import { createPostgresSettlementStore } from '../src/core/settlementStore';
+import { baseTestGatewayConfig } from '../tests/support/testConfig';
 
 const ACTIVITY_COUNT = 64;
 const MIGRATION_MANIFEST_PATH = path.resolve(__dirname, '../src/database/migrations.json');
@@ -61,11 +66,21 @@ async function main(): Promise<void> {
       manifestPath: MIGRATION_MANIFEST_PATH,
       runtimeDbUser: GATEWAY_RUNTIME_DB_USER,
     });
-    const store = createPostgresSettlementStore(pool);
+    const service = new SettlementService(
+      {
+        ...baseTestGatewayConfig,
+        settlementCallbackEnabled: true,
+        settlementCallbackUrl: 'https://agroasys.example.test/settlement/callback',
+        settlementCallbackApiKey: 'activity-proof-key',
+        settlementCallbackApiSecret: 'activity-proof-secret',
+      },
+      createPostgresSettlementStore(pool),
+    );
 
     const handoffs = await Promise.all(
-      Array.from({ length: ACTIVITY_COUNT }, (_, index) =>
-        store.createHandoff({
+      Array.from({ length: ACTIVITY_COUNT }, (_, index) => {
+        const ricardianHash = sha256(`${token}:ricardian:${index}`);
+        return service.createHandoff({
           platformId,
           platformHandoffId: `order-${shortToken}-${index}`,
           tradeId: String(10_000 + index),
@@ -75,18 +90,19 @@ async function main(): Promise<void> {
           displayAmount: 1_000 + index,
           assetSymbol: 'USDC',
           assetAmount: 1_000 + index,
-          ricardianHash: sha256(`${token}:ricardian:${index}`),
+          ricardianHash,
           externalReference: `invoice-${shortToken}-${index}`,
           metadata: {
             activityIndex: index,
             orderId: 50_000 + index,
             invoiceNumber: `INV-${shortToken}-${index}`,
             amountBaseUnits: String(BigInt(1_000 + index) * 1_000_000n),
+            ricardianHash,
           },
           requestId: `create-${shortToken}-${index}`,
           sourceApiKeyId: 'activity-database-proof',
-        }),
-      ),
+        });
+      }),
     );
 
     const replayPairs = await Promise.all(
@@ -107,27 +123,11 @@ async function main(): Promise<void> {
           observedAt: new Date(Date.now() + index).toISOString(),
           requestId: `event-${shortToken}-${index}`,
           sourceApiKeyId: 'activity-database-proof',
-          dedupeKey: `submitted-${shortToken}-${index}`,
-        };
-        const callback = {
-          targetUrl: 'https://agroasys.example.test/settlement/callback',
-          requestId: `callback-${shortToken}-${index}`,
-          status: 'pending' as const,
-          nextAttemptAt: new Date(Date.now() + 60_000).toISOString(),
-          buildRequestBody: () => ({
-            platformHandoffId: handoff.platformHandoffId,
-            tradeId: handoff.tradeId,
-            displayAmount: handoff.displayAmount,
-            ricardianHash: handoff.ricardianHash,
-            activityIndex: index,
-            orderId: 50_000 + index,
-            invoiceNumber: `INV-${shortToken}-${index}`,
-          }),
         };
 
         return Promise.all([
-          store.recordExecutionEvent(input, callback),
-          store.recordExecutionEvent(input, callback),
+          service.recordExecutionEvent(input),
+          service.recordExecutionEvent(input),
         ]);
       }),
     );
@@ -153,19 +153,28 @@ async function main(): Promise<void> {
         invoiceNumber: string;
         amountBaseUnits: string;
       };
+      eventId: string;
+      eventObservedAt: Date;
       eventMetadata: {
         activityIndex: number;
         orderId: number;
         amountBaseUnits: string;
       };
+      callbackStatus: string;
       requestBody: {
+        contractVersion: string;
+        eventId: string;
+        observedAt: string;
         platformHandoffId: string;
         tradeId: string;
         displayAmount: number;
-        ricardianHash: string;
-        activityIndex: number;
-        orderId: number;
-        invoiceNumber: string;
+        metadata: {
+          ricardianHash: string;
+          activityIndex: number;
+          orderId: number;
+          invoiceNumber: string;
+          amountBaseUnits: string;
+        };
       };
     }>(
       `SELECT
@@ -175,7 +184,10 @@ async function main(): Promise<void> {
          h.ricardian_hash AS "ricardianHash",
          h.external_reference AS "externalReference",
          h.metadata AS "handoffMetadata",
+         e.event_id AS "eventId",
+         e.observed_at AS "eventObservedAt",
          e.metadata AS "eventMetadata",
+         c.status AS "callbackStatus",
          c.request_body AS "requestBody"
        FROM settlement_handoffs h
        JOIN settlement_execution_events e ON e.handoff_id = h.handoff_id
@@ -213,13 +225,18 @@ async function main(): Promise<void> {
         row.eventMetadata.activityIndex !== index ||
         row.eventMetadata.orderId !== expectedOrderId ||
         row.eventMetadata.amountBaseUnits !== expectedBaseUnits ||
+        row.callbackStatus !== 'pending' ||
+        row.requestBody.contractVersion !== SETTLEMENT_CALLBACK_CONTRACT_VERSION ||
+        row.requestBody.eventId !== row.eventId ||
+        row.requestBody.observedAt !== row.eventObservedAt.toISOString() ||
         row.requestBody.platformHandoffId !== expectedPlatformHandoffId ||
         row.requestBody.tradeId !== String(10_000 + index) ||
         row.requestBody.displayAmount !== expectedAmount ||
-        row.requestBody.ricardianHash !== expectedHash ||
-        row.requestBody.activityIndex !== index ||
-        row.requestBody.orderId !== expectedOrderId ||
-        row.requestBody.invoiceNumber !== expectedInvoiceNumber
+        row.requestBody.metadata.ricardianHash !== expectedHash ||
+        row.requestBody.metadata.activityIndex !== index ||
+        row.requestBody.metadata.orderId !== expectedOrderId ||
+        row.requestBody.metadata.invoiceNumber !== expectedInvoiceNumber ||
+        row.requestBody.metadata.amountBaseUnits !== expectedBaseUnits
       ) {
         throw new Error(`Settlement identity or amount crossed activity boundary ${index}.`);
       }
