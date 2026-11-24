@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { hashSessionToken } from '../src/core/sessionStore';
+import { freshOperatorAuthentication } from './helpers/operatorAuthentication';
 import { ANY_ROLE_AUTHORITY } from './helpers/exchangeAuthority';
 import { OPERATOR_CAPABILITIES } from '../src/types';
 import {
@@ -181,6 +182,7 @@ describe('admin controls persistence integration', () => {
             accountId: 'agroasys-user:admin-2',
             baseRole: 'buyer',
             ttlSeconds: 300,
+            operatorAuthentication: freshOperatorAuthentication(),
             reason: 'INC-1999 reject break-glass for durable admin integration proof',
           });
           const rejectedAdminGrant = await fetch(`${app.baseUrl}${grantPath}`, {
@@ -199,6 +201,7 @@ describe('admin controls persistence integration', () => {
             accountId: 'agroasys-user:bg-1',
             baseRole: 'buyer',
             ttlSeconds: 300,
+            operatorAuthentication: freshOperatorAuthentication(),
             reason: 'INC-2000 temporary admin integration proof',
           });
           const grant = await fetch(`${app.baseUrl}${grantPath}`, {
@@ -304,6 +307,7 @@ describe('admin controls persistence integration', () => {
             accountId: 'agroasys-user:supplier-bg',
             baseRole: 'buyer',
             ttlSeconds: 300,
+            operatorAuthentication: freshOperatorAuthentication(),
             reason: 'INC-2001 temporary admin keeps existing durable supplier base role',
           });
           const supplierGrant = await fetch(`${app.baseUrl}${grantPath}`, {

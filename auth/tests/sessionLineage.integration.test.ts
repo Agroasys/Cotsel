@@ -361,6 +361,7 @@ describe('session lineage persistence integration', () => {
           for (const file of [
             'schema/004_session_token_hash_lineage.sql',
             'schema/005_admin_authority_changes.sql',
+            'schema/006_session_authentication_assurance.sql',
           ]) {
             await legacyPool.query(fs.readFileSync(path.join(SCHEMA_ROOT, file), 'utf8'));
           }
