@@ -111,9 +111,22 @@ export function createContainmentEvidenceService(
     } catch {
       throw unavailable('request_failed');
     }
-    if (response.status === 404) return null;
+    const text = await response.text().catch(() => '');
+    let body: unknown;
+    try {
+      body = text ? JSON.parse(text) : undefined;
+    } catch {
+      body = undefined;
+    }
+    // Only reconciliation's own "no such containment" is a not-found. Any
+    // other 404 (an image without /containments) means evidence is unavailable.
+    if (response.status === 404) {
+      if (isRecord(body) && body.error === 'containment_not_found') return null;
+      throw unavailable('endpoint_missing');
+    }
     if (!response.ok) throw unavailable(`status_${response.status}`);
-    return response.json();
+    if (body === undefined) throw unavailable('invalid_json');
+    return body;
   }
 
   function malformed(tradeId: string): VerifiedContainment {

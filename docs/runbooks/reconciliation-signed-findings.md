@@ -77,6 +77,7 @@ An incident from before signing cites no digests, so it is `unsigned`.
 1. Apply the foundation stack (it creates the key and grant), then the platform stack.
 2. Deploy reconciliation. Every run completed from then on is sealed.
 3. Deploy treasury with `RECONCILIATION_FINDING_PUBLIC_KEYS`. Until a signed run completes, the latest run is unsigned and exports are blocked with `reconciliation_evidence_unsigned`. That lasts one daemon interval.
+4. Deploy the gateway with `RECONCILIATION_FINDING_PUBLIC_KEYS`, after the reconciliation image that serves `/containments`. If the gateway runs first, the containment API and trade-unpause approvals fail closed with 503 `reconciliation_evidence_unavailable` (`endpoint_missing`) until reconciliation is deployed.
 
 **During the cutover:**
 
@@ -88,7 +89,7 @@ An incident from before signing cites no digests, so it is `unsigned`.
 
 **Order of applies:** the platform stack reads the foundation outputs `reconciliation_finding_key_arn`, so the foundation must be applied first.
 
-**Rollback:** reverting reconciliation stops sealing, and a treasury still verifying then blocks exports. Revert treasury first, then reconciliation. Manifests already written stay valid, and migration 009 is additive.
+**Rollback:** reverting reconciliation stops sealing and removes `/containments`, so a treasury or gateway still verifying then blocks exports and trade-unpause approvals. Revert the gateway and treasury first, then reconciliation. Manifests already written stay valid, and migration 009 is additive.
 
 ## Response
 

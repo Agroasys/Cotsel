@@ -281,6 +281,29 @@ describePostgres('reconciliation containments with verified evidence (Cotsel#951
     await expect(offline.requireVerified('42')).rejects.toMatchObject({ statusCode: 503 });
   });
 
+  it('treats an older reconciliation without /containments as unavailable, not as no containment', async () => {
+    const legacy = createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => legacy.listen(0, resolve));
+    const address = legacy.address();
+    if (!address || typeof address === 'string') throw new Error('no legacy address');
+    try {
+      const old = createContainmentEvidenceService({
+        baseUrl: `http://127.0.0.1:${address.port}`,
+        publicKeys: KEYS,
+        timeoutMs: 1000,
+      });
+      await expect(old.requireVerified('42')).rejects.toMatchObject({
+        statusCode: 503,
+        details: expect.objectContaining({ detail: 'endpoint_missing' }),
+      });
+    } finally {
+      await new Promise((resolve) => legacy.close(resolve));
+    }
+  });
+
   it('reports tampered evidence as failed and refuses a release on it', async () => {
     const client = await owner.connect();
     try {
