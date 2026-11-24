@@ -1,8 +1,10 @@
 import { EscrowGovernanceReader } from './blockchain/escrowGovernance';
+import { parsePublicKeys } from '@agroasys/shared-db/reconciliationEvidence';
 import {
-  parsePublicKeys,
-  verifyContainmentEvidence,
-} from '@agroasys/shared-db/reconciliationEvidence';
+  loadContainmentRecoveryBundle,
+  verifyContainmentRecovery,
+} from '@agroasys/shared-db/containmentRecovery';
+import { config } from './config';
 import { closeConnection, pool } from './database/connection';
 import {
   ReplayedApprovalError,
@@ -144,10 +146,29 @@ async function release(tradeId: string, approvalTxHash: string): Promise<TradeCo
       'RECONCILIATION_FINDING_PUBLIC_KEYS is required to release: the containment evidence must verify.',
     );
   }
-  const signed = await verifyContainmentEvidence(pool, current, parsePublicKeys(keys));
-  if (signed.evidence.status !== 'verified') {
+  const client = await pool.connect();
+  let bundle;
+  try {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    bundle = await loadContainmentRecoveryBundle(client, tradeId);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  const signed = verifyContainmentRecovery(bundle, {
+    publicKeys: parsePublicKeys(keys),
+    context: { chainId: config.chainId, escrowAddress: config.escrowAddress },
+    expectedTradeId: tradeId,
+    maxAgeSeconds: 900,
+    matchesIncident: (reference) => reference === current.incident_reference,
+    incidentIsReconciliation: true,
+  });
+  if (signed.decision !== 'reconciliation_recovery_verified') {
     throw new Error(
-      `Trade ${tradeId}'s containment evidence does not verify (${signed.evidence.reason}); ` +
+      `Trade ${tradeId}'s containment recovery does not verify (${signed.decision === 'refused' ? signed.reason : signed.decision}); ` +
         'it cannot be released. Treat this as tampering: preserve the database and open an incident.',
     );
   }
@@ -159,7 +180,7 @@ async function release(tradeId: string, approvalTxHash: string): Promise<TradeCo
     openedAt: current.opened_at,
   });
 
-  const released = await releaseContainment({ tradeId, evidence });
+  const released = await releaseContainment({ tradeId, evidence, expected: current });
   if (!released) {
     // The row moved between the checks above and the write — a fresh divergence
     // reopened the incident, or another operator released it first.

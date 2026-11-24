@@ -137,7 +137,7 @@ Capture evidence when escalating:
 
 ## Rollback Procedure
 
-1. Revert to previous known-good notifications package commit. The `notification_outbox` migrations are additive and may stay applied; an older image ignores the table. Before reverting, drain or record any `PENDING` and `DEAD_LETTER` rows, because the older image will not deliver them.
+1. Stop the affected producer if it cannot publish valid events. Keep its outbox and delivery evidence. An older service image can fail the immutable migration check after an outbox migration, even when its schema change is additive. Use a forward fix that retains all applied migrations. A package-only revert needs a reviewed compatibility build and delivery rehearsal; do not edit the migration ledger.
 2. Restore prior template version mapping in `NOTIFICATION_TEMPLATE_VERSIONS`.
 3. Re-run notifications tests and the deterministic gate probe:
    - `pnpm --filter ./notifications run build`
@@ -173,3 +173,12 @@ pnpm --filter ./notifications run lint
 pnpm --filter ./notifications run build
 scripts/notifications-gate.sh runtime
 ```
+
+## Refused event types
+
+A producer refuses an unregistered or invalid notification before durable enqueue. It does not fall back to direct delivery. This preserves the registry and outbox contract, but it can leave an operator notification unsent.
+
+1. Preserve the producer error, event type, dedup key and correlation identifiers. Do not log secrets or raw credentials.
+2. Check the event against `docs/api/events/registry.json` and its frozen schema. Correct the producer, or review a compatible registry addition and producer change together.
+3. Run `pnpm run events:registry:check` and the producer's outbox tests.
+4. Deploy the reviewed forward fix, then repeat or redrive the source operation through its supported idempotent path. Confirm the outbox row and delivery state. Do not bypass the outbox or invent a replacement event type to suppress the error.

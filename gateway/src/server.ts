@@ -6,6 +6,7 @@ import {
   UNCONFIGURED_CONTAINMENT_EVIDENCE,
 } from './core/containmentEvidence';
 import { createReconciliationContainmentRouter } from './routes/reconciliationContainments';
+import { createPostgresFreezeReviewStore } from './core/freezeReviewStore';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -62,6 +63,7 @@ import { createCapabilitiesRouter } from './routes/capabilities';
 import { createComplianceRouter } from './routes/compliance';
 import { createSettlementTemplateRouter } from './routes/settlementTemplates';
 import { createPostgresSettlementTemplateStore } from './core/settlementTemplateStore';
+import { createPostgresTemplateActivationStore } from './core/settlementTemplateActivationStore';
 import { createDashboardSettlementRouter } from './routes/dashboardSettlement';
 import { createEvidenceBundleRouter } from './routes/evidenceBundles';
 import { createOperationsRouter } from './routes/operations';
@@ -89,7 +91,13 @@ const complianceService = new ComplianceService(complianceStore, complianceWrite
 const evidenceBundleStore = createPostgresEvidenceBundleStore(pool);
 const governanceRuntime = createGovernanceRuntime(config, pool);
 // Cotsel#951: signed reconciliation evidence, verified by the gateway itself.
-const reconciliationEvidenceConfig = loadReconciliationEvidenceConfig(config.reconciliationBaseUrl);
+const reconciliationEvidenceConfig = loadReconciliationEvidenceConfig(
+  config.reconciliationBaseUrl,
+  {
+    chainId: config.chainId,
+    escrowAddress: config.escrowAddress,
+  },
+);
 const containmentEvidence = reconciliationEvidenceConfig
   ? createContainmentEvidenceService(reconciliationEvidenceConfig)
   : UNCONFIGURED_CONTAINMENT_EVIDENCE;
@@ -102,7 +110,8 @@ const idempotencyStore = createPostgresIdempotencyStore(
 );
 const roleAssignmentStore = createPostgresRoleAssignmentStore(pool);
 const settlementStore = createPostgresSettlementStore(pool);
-const settlementTemplateStore = createPostgresSettlementTemplateStore(pool, {
+const settlementTemplateStore = createPostgresSettlementTemplateStore(pool);
+const settlementTemplateActivationStore = createPostgresTemplateActivationStore(pool, {
   activationAllowlist: config.settlementTemplateActivationAllowlist,
 });
 const settlementNonceStore = createGatewayServiceAuthNonceStore(pool);
@@ -324,6 +333,7 @@ async function bootstrap(): Promise<void> {
       authSessionClient,
       config,
       templateStore: settlementTemplateStore,
+      activationStore: settlementTemplateActivationStore,
       idempotencyStore,
       auditLogStore,
     }),
@@ -340,7 +350,12 @@ async function bootstrap(): Promise<void> {
     governanceRuntime.createRouter(authSessionClient, idempotencyStore, containmentEvidence),
   );
   extraRouter.use(
-    createReconciliationContainmentRouter({ authSessionClient, config, containmentEvidence }),
+    createReconciliationContainmentRouter({
+      authSessionClient,
+      config,
+      containmentEvidence,
+      freezeReviewStore: createPostgresFreezeReviewStore(pool),
+    }),
   );
   extraRouter.use(
     createTreasuryRouter({

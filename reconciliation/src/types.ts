@@ -250,6 +250,10 @@ export interface TradeContainmentRow {
   state: ContainmentState;
   opened_run_key: string;
   opened_at: Date;
+  /** Every finding the current incident cites, with the signed run it came from. */
+  cited_findings: Array<{ runKey: string; digest: string }>;
+  /** Incident number for this trade; a divergence after release starts the next. */
+  episode: number;
   qualifying_codes: string[];
   evidence: Record<string, unknown>;
   observation_count: number;

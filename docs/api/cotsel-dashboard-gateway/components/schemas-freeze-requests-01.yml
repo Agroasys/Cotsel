@@ -1,0 +1,202 @@
+components:
+  schemas:
+    ReconciliationFreezeRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - schemaVersion
+        - requestId
+        - tradeId
+        - incidentReference
+        - episode
+        - runKey
+        - context
+        - rules
+        - findings
+        - requiresGovernanceApproval
+      properties:
+        schemaVersion:
+          type: string
+          const: cotsel.governance-freeze-request.v1
+        requestId:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        tradeId:
+          type: string
+        incidentReference:
+          type: string
+        episode:
+          type: integer
+          minimum: 1
+        runKey:
+          type: string
+        context:
+          type: object
+          additionalProperties: false
+          required:
+            - chainId
+            - escrowAddress
+          properties:
+            chainId:
+              type:
+                - integer
+                - 'null'
+            escrowAddress:
+              type: string
+        rules:
+          type: object
+          additionalProperties: false
+          required:
+            - version
+            - digest
+          properties:
+            version:
+              type: string
+            digest:
+              type: string
+              pattern: ^[a-f0-9]{64}$
+        findings:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - runKey
+              - digest
+            properties:
+              runKey:
+                type: string
+              digest:
+                type: string
+                pattern: ^[a-f0-9]{64}$
+        requiresGovernanceApproval:
+          type: boolean
+          const: true
+    ReconciliationFreezeReview:
+      type: object
+      additionalProperties: false
+      required:
+        - requestId
+        - request
+        - decision
+        - reviewedBy
+        - reviewedAt
+        - reason
+        - ticketRef
+      properties:
+        requestId:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        request:
+          $ref: '#/components/schemas/ReconciliationFreezeRequest'
+        decision:
+          type: string
+          enum:
+            - approved
+            - rejected
+        reviewedBy:
+          type: string
+        reviewedAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+        ticketRef:
+          type: string
+    ReconciliationFreezeAction:
+      type: object
+      additionalProperties: false
+      required:
+        - actionId
+        - status
+        - verificationState
+        - txHash
+      properties:
+        actionId:
+          type: string
+        status:
+          type: string
+        verificationState:
+          type: string
+        txHash:
+          type:
+            - string
+            - 'null'
+    ReconciliationFreezeStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - review
+        - action
+      properties:
+        review:
+          anyOf:
+            - $ref: '#/components/schemas/ReconciliationFreezeReview'
+            - type: 'null'
+        action:
+          anyOf:
+            - $ref: '#/components/schemas/ReconciliationFreezeAction'
+            - type: 'null'
+    ReconciliationFreezeReviewRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - decision
+        - audit
+      properties:
+        decision:
+          type: string
+          enum:
+            - approved
+            - rejected
+        audit:
+          $ref: '#/components/schemas/MutationAuditInput'
+    ReconciliationFreezeReviewResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/ReconciliationFreezeReview'
+        timestamp:
+          type: string
+          format: date-time
+    ReconciliationFreezeRequestResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - request
+            - review
+            - action
+          properties:
+            request:
+              $ref: '#/components/schemas/ReconciliationFreezeRequest'
+            review:
+              anyOf:
+                - $ref: '#/components/schemas/ReconciliationFreezeReview'
+                - type: 'null'
+            action:
+              anyOf:
+                - $ref: '#/components/schemas/ReconciliationFreezeAction'
+                - type: 'null'
+        timestamp:
+          type: string
+          format: date-time

@@ -15,6 +15,7 @@ import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore'
 import type { IdempotencyStore } from './core/idempotencyStore';
 import { createGovernanceRouter } from './routes/governance';
 import { createPostgresAuditLogStore } from './core/auditLogStore';
+import { createPostgresFreezeReviewStore } from './core/freezeReviewStore';
 
 export function createGovernanceRuntime(config: GatewayConfig, pool: Pool) {
   const governanceActionStore = createPostgresGovernanceActionStore(pool);
@@ -48,6 +49,7 @@ export function createGovernanceRuntime(config: GatewayConfig, pool: Pool) {
         idempotencyStore,
         auditLogStore,
         containmentEvidence,
+        freezeReviewStore: createPostgresFreezeReviewStore(pool),
       }),
     start: () => monitor.start(),
     stop: () => monitor.stop(),

@@ -36,6 +36,13 @@
       "file": "schema/005_admin_authority_changes.sql",
       "sha256": "23b3197a2fe8a5ae501b3375a0166ba1f4aad6d3da0b69a8d5ef91c636f24a4f",
       "schema_sha256": "ad29eaba3fbb954e1171e5612f240fbc55358abe223bb938f7f2adc45110c93f"
+    },
+    {
+      "version": "202611230006",
+      "name": "session_authentication_assurance",
+      "file": "schema/006_session_authentication_assurance.sql",
+      "sha256": "2d45c3994426f869c182c53458f1888d5c6f4ef0e7c32d5b6aad9618ef03a3df",
+      "schema_sha256": "18f0fa65e7be2482bae21e5a96d5acf7c09e20474d79436ea74c96ecc8ff8d03"
     }
   ]
 }

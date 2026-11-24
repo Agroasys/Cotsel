@@ -1,4 +1,5 @@
 import { scrubString, serializeTelemetryRecord } from '@agroasys/shared-telemetry';
+import { assertRegisteredNotificationType } from './envelope';
 
 export type NotificationSeverity = 'info' | 'warning' | 'critical';
 export type NotificationSeverityRoute = 'informational' | 'operations' | 'pager';
@@ -312,6 +313,17 @@ export class WebhookNotifier implements Notifier, NotificationTransport {
 
   async notify(event: NotificationEvent): Promise<boolean> {
     if (!this.config.enabled) {
+      return false;
+    }
+    // Every delivery path refuses an unregistered type (review R10).
+    try {
+      assertRegisteredNotificationType(event.type);
+    } catch (error: unknown) {
+      this.logError('Refused notification with an unregistered type', {
+        source: event.source,
+        type: event.type,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return false;
     }
 

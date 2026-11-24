@@ -6,13 +6,8 @@ info:
   description: |
     Contract-first API specification for the Cotsel-Dash admin/operator dashboard to interact with Cotsel.
 
-    Discovery outcome:
-    - Dedicated in-repo dashboard gateway runtime: `gateway/` Express + TypeScript service.
-    - Existing repo auth/session surface: `auth` service issues Bearer session tokens.
-    - Existing repo governance source of truth: `contracts/src/AgroasysEscrow.sol`, `sdk/src/modules/adminSDK.ts`, and governance runbooks.
-    - Existing repo compliance source of truth: policy/runbooks only; no dedicated compliance HTTP service exists yet.
-
-    This specification is therefore contract-first for the dashboard gateway, but it is grounded in existing repo truth.
+    The gateway serves operator read models and authorized settlement, treasury, compliance, and governance actions.
+    Auth supplies operator identity. The deployed escrow remains authoritative for on-chain state.
 
     Gateway authorization policy:
     - Auth uses existing auth-service Bearer sessions.

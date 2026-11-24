@@ -185,6 +185,7 @@ describePostgres('treasury ledger export coverage', () => {
   it('refuses a continuation after a pre-cutoff transaction commits between pages', async () => {
     const writer = await pool.connect();
     let committed = false;
+    const exportCutoff = new Date('2026-01-02T00:00:00.000Z');
     try {
       await writer.query('BEGIN');
       await writer.query(
@@ -192,10 +193,10 @@ describePostgres('treasury ledger export coverage', () => {
            entry_key, trade_id, tx_hash, block_number, event_name,
            component_type, amount_raw, source_timestamp, created_at
          ) VALUES ('export-late-commit', 'trade-late-commit', '0xtx-late-commit',
-                   100, 'PlatformFeesPaidStage1', 'PLATFORM_FEE', '1', NOW(), NOW())`,
+                   100, 'PlatformFeesPaidStage1', 'PLATFORM_FEE', '1', $1, $1)`,
+        [cutoff],
       );
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      const exportCutoff = new Date();
+      // Explicitly pre-cutoff and uncommitted; no host/VM clock comparison.
       const first = await loadExportPage(
         parseExportRequest({ cutoff: exportCutoff.toISOString(), limit: '1' }),
         async (entries) => entries.map((entry) => ({ ...entry, eligibleForExport: true })),

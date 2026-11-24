@@ -34,6 +34,7 @@ locals {
     { name = "GATEWAY_RATE_LIMIT_FAIL_OPEN", value = "false" },
     { name = "GATEWAY_RATE_LIMIT_REDIS_URL", value = "rediss://${local.redis_primary_endpoint}:6379" },
     { name = "GATEWAY_RECONCILIATION_BASE_URL", value = "http://reconciliation.cotsel-staging.internal:9090" },
+    { name = "GATEWAY_RECONCILIATION_EVIDENCE_MAX_AGE_SECONDS", value = "900" },
     # Cotsel#951. The gateway verifies the signed containment evidence that
     # reconciliation serves over HTTP with the foundation evidence key.
     { name = "RECONCILIATION_FINDING_PUBLIC_KEYS", value = jsonencode({ (data.terraform_remote_state.foundation.outputs.reconciliation_finding_key_arn) = data.terraform_remote_state.foundation.outputs.reconciliation_finding_public_key }) },

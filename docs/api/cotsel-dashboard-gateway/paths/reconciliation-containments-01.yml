@@ -11,6 +11,12 @@ paths:
         the clearing run (if any) verifies too. A trade-scoped unpause approval is refused otherwise.
       operationId: listReconciliationContainments
       parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 1024 }
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/XCorrelationId'
       responses:

@@ -25,8 +25,10 @@ import { GatewayError } from '../errors';
 import { registerGovernanceDirectSignRoutes } from './governanceDirectSignMutations';
 import { requireRecentStepUp } from '../middleware/stepUp';
 import type { AuditLogStore } from '../core/auditLogStore';
+import type { FreezeReviewStore } from '../core/freezeReviewStore';
 
 export interface GovernanceRouterOptions {
+  freezeReviewStore?: FreezeReviewStore;
   authSessionClient: AuthSessionClient;
   config: GatewayConfig;
   governanceStatusService: GovernanceMutationPreflightReader;
@@ -123,6 +125,28 @@ export function createGovernanceRouter(options: GovernanceRouterOptions): Router
     },
   );
 
+  router.get(
+    '/governance/freeze-requests/:requestId',
+    authenticate,
+    requireGatewayRole('operator:read'),
+    async (req, res, next) => {
+      try {
+        if (!options.containmentEvidence || !options.freezeReviewStore)
+          throw new GatewayError(
+            503,
+            'UPSTREAM_UNAVAILABLE',
+            'Freeze request review is not configured',
+          );
+        const id = typeof req.params.requestId === 'string' ? req.params.requestId : '';
+        const request = await options.containmentEvidence.freezeRequest(id);
+        const statuses = await options.freezeReviewStore.statuses([id]);
+        res.status(200).json(successResponse({ request, ...statuses[id] }));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   const mutationRouter = Router();
   mutationRouter.use(
     '/governance',
@@ -140,6 +164,7 @@ export function createGovernanceRouter(options: GovernanceRouterOptions): Router
       governanceReader: options.governanceStatusService,
       mutationService: options.governanceMutationService,
       containmentEvidence: options.containmentEvidence,
+      freezeReviewStore: options.freezeReviewStore,
     },
   );
   router.use(mutationRouter);

@@ -125,35 +125,15 @@ export async function withPostgres(fn: (pool: Pool) => Promise<void>): Promise<v
     });
     try {
       await pool.query("SET app.service_name = 'auth'");
-      const schema = fs.readFileSync(
-        path.resolve(__dirname, '../../src/database/schema.sql'),
-        'utf8',
-      );
-      await pool.query(schema);
-      const signerMigration = fs.readFileSync(
-        path.resolve(__dirname, '../../src/database/schema/002_operator_signer_register.sql'),
-        'utf8',
-      );
-      await pool.query(signerMigration);
-      const signerApprovalMigration = fs.readFileSync(
-        path.resolve(
-          __dirname,
-          '../../src/database/schema/003_operator_signer_two_person_activation.sql',
-        ),
-        'utf8',
-      );
-      await pool.query(signerApprovalMigration);
-      const sessionLineageMigration = fs.readFileSync(
-        path.resolve(__dirname, '../../src/database/schema/004_session_token_hash_lineage.sql'),
-        'utf8',
-      );
-      await pool.query(sessionLineageMigration);
-      await pool.query(
-        fs.readFileSync(
-          path.resolve(__dirname, '../../src/database/schema/005_admin_authority_changes.sql'),
-          'utf8',
-        ),
-      );
+      // Apply every migration in manifest order, so a new migration is never
+      // silently missing from the integration schema.
+      const databaseRoot = path.resolve(__dirname, '../../src/database');
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(databaseRoot, 'migrations.json'), 'utf8'),
+      ) as { migrations: Array<{ file: string }> };
+      for (const migration of manifest.migrations) {
+        await pool.query(fs.readFileSync(path.join(databaseRoot, migration.file), 'utf8'));
+      }
       await fn(pool);
     } finally {
       await pool.end();

@@ -8,11 +8,13 @@ import { Router } from 'express';
 import type { GatewayConfig } from '../config/env';
 import type { AuthSessionClient } from '../core/authSessionClient';
 import type { ContainmentEvidenceService } from '../core/containmentEvidence';
+import type { FreezeReviewStore } from '../core/freezeReviewStore';
 import { GatewayError } from '../errors';
 import { createAuthenticationMiddleware, requireGatewayRole } from '../middleware/auth';
 import { successResponse } from '../responses';
 
 export interface ReconciliationContainmentRouterOptions {
+  freezeReviewStore?: FreezeReviewStore;
   authSessionClient: AuthSessionClient;
   config: GatewayConfig;
   containmentEvidence: ContainmentEvidenceService;
@@ -35,9 +37,29 @@ export function createReconciliationContainmentRouter(
     requireGatewayRole('operator:read'),
   );
 
-  router.get('/reconciliation/containments', async (_req, res, next) => {
+  router.get('/reconciliation/containments', async (req, res, next) => {
     try {
-      res.status(200).json(successResponse({ items: await options.containmentEvidence.list() }));
+      if (
+        (req.query.cursor !== undefined && typeof req.query.cursor !== 'string') ||
+        (req.query.limit !== undefined && typeof req.query.limit !== 'string')
+      )
+        throw new GatewayError(400, 'VALIDATION_ERROR', 'Invalid containment page parameters');
+      const page = await options.containmentEvidence.listPage({
+        limit: req.query.limit === undefined ? undefined : Number(req.query.limit),
+        cursor: req.query.cursor,
+      });
+      const statuses = await options.freezeReviewStore?.statuses(
+        page.items.flatMap((item) => (item.freezeRequestId ? [item.freezeRequestId] : [])),
+      );
+      res.status(200).json(
+        successResponse({
+          ...page,
+          items: page.items.map((item) => ({
+            ...item,
+            freezeReview: item.freezeRequestId ? (statuses?.[item.freezeRequestId] ?? null) : null,
+          })),
+        }),
+      );
     } catch (error) {
       next(error);
     }

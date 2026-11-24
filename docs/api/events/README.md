@@ -36,3 +36,10 @@ The release gate runs the same command.
 - **Type list:** `notifications/src/envelope.ts` keeps its own `REGISTERED_NOTIFICATION_TYPES`, and the check fails if it differs from the registry. `buildNotificationEnvelope` throws `UnregisteredNotificationTypeError` for any other type, and the registry check scans every `notify`, `raise` and `enqueue` call site, so an unregistered type fails in CI before it can reach a producer.
 
 Relays and consumers (#957, #958) read `envelope`, deduplicate on `eventId`, and order by `orderingKey`.
+
+The gateway stores callback envelopes in `settlement_callback_deliveries.envelope` through migration `202611240019`.
+The registered type is `cotsel.settlement-callback`, version `v1`, with producer `gateway`.
+Its event identifier is the callback event identifier, and its ordering key is the trade identifier.
+The payload remains the frozen `cotsel.settlement-callback.v1` contract. HTTP delivery and signatures use the existing request body.
+Retries preserve the stored envelope. A database trigger rejects changes after publication.
+Historical rows and older images can leave the additive column null.

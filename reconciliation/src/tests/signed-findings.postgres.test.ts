@@ -1,3 +1,4 @@
+import { verifyActionEvidence } from '@agroasys/shared-db/actionEvidence';
 // Must come first: the database modules below load src/config.ts on import,
 // and the config needs a valid environment before that happens.
 import './helpers/reconciliationEnv';
@@ -13,6 +14,7 @@ import {
   verifyRunEvidence,
 } from '@agroasys/shared-db/reconciliationEvidence';
 import { serveContainmentEvidence } from '../containmentEvidenceHttp';
+import { openContainment, getContainment } from '../database/containments';
 import { finalizeRun, upsertDrift, upsertRunTradeScope } from '../database/queries';
 import {
   createLocalFindingSigner,
@@ -68,7 +70,11 @@ const FINDINGS: DriftFinding[] = [
 ];
 
 /** Completes run daemon-1 with FINDINGS and a three-trade scope, sealed by `signer`. */
-async function completeSignedRun(pool: Pool, signer = SIGNER): Promise<void> {
+async function completeSignedRun(
+  pool: Pool,
+  signer = SIGNER,
+  containment?: 'signed' | 'legacy',
+): Promise<void> {
   const run = await claimOrThrow(pool, 'worker-a');
   await finalizeRun(
     {
@@ -79,6 +85,22 @@ async function completeSignedRun(pool: Pool, signer = SIGNER): Promise<void> {
           await upsertRunTradeScope(run.row.id, 'daemon-1', tradeId, client);
         }
         for (const finding of FINDINGS) await upsertDrift(run.row.id, 'daemon-1', finding, client);
+        if (containment)
+          await openContainment(
+            {
+              tradeId: '7',
+              incidentReference: 'RECON-20261124-BBBB0001',
+              runKey: 'daemon-1',
+              qualifyingCodes: ['AMOUNT_MISMATCH'],
+              evidence: {
+                findings:
+                  containment === 'legacy'
+                    ? []
+                    : [{ digest: findingDigest({ runKey: 'daemon-1', ...FINDINGS[0] }) }],
+              },
+            },
+            client,
+          );
       },
       cursor: { advance: false, tailFirstSeenAt: null },
     },
@@ -257,47 +279,21 @@ test(
         });
 
         await scenario('a containment verifies only on signed, intact evidence', async (pool) => {
-          await completeSignedRun(pool);
-          const cited = FINDINGS.slice(0, 1).map((finding) => ({
-            digest: findingDigest({ runKey: 'daemon-1', ...finding }),
-            mismatchCode: finding.mismatchCode,
-            comparedField: finding.comparedField,
-          }));
-          const containment = {
-            opened_run_key: 'daemon-1',
-            cleared_run_key: null,
-            evidence: { findings: cited },
-          };
+          await completeSignedRun(pool, SIGNER, 'signed');
+          const containment = (await getContainment('7', pool))!;
           assert.deepEqual((await verifyContainmentEvidence(pool, containment, KEYS)).evidence, {
             status: 'verified',
             reason: null,
           });
-          // An incident from before signing cites no digests.
-          assert.deepEqual(
-            (
-              await verifyContainmentEvidence(
-                pool,
-                { ...containment, evidence: { findings: [{ mismatchCode: 'AMOUNT_MISMATCH' }] } },
-                KEYS,
-              )
-            ).evidence,
-            { status: 'unsigned', reason: 'containment_predates_signed_findings' },
+          await pool.query(`INSERT INTO reconcile_runs (run_key, mode, status)
+            VALUES ('daemon-clean', 'DAEMON', 'RUNNING')`);
+          const forged = await verifyContainmentEvidence(
+            pool,
+            { ...containment, cleared_run_key: 'daemon-clean' },
+            KEYS,
           );
-          // A clearing run that was never sealed cannot justify a release.
-          await pool.query(
-            `INSERT INTO reconcile_runs (run_key, mode, status) VALUES ('daemon-clean', 'DAEMON', 'RUNNING')`,
-          );
-          assert.equal(
-            (
-              await verifyContainmentEvidence(
-                pool,
-                { ...containment, cleared_run_key: 'daemon-clean' },
-                KEYS,
-              )
-            ).evidence.reason,
-            'clearing_run_unsigned',
-          );
-          // Tampering with the cited finding past the triggers fails it.
+          assert.equal(forged.evidence.status, 'failed');
+          assert.equal(forged.evidence.reason, 'incident_snapshot_mismatch');
           await tamper(
             pool,
             `UPDATE reconcile_drifts SET indexed_value = '100' WHERE trade_id = '7'`,
@@ -306,23 +302,23 @@ test(
           assert.equal(tampered.evidence.status, 'failed');
           assert.equal(tampered.findings[0].status, 'missing');
         });
-
+        await scenario(
+          'historical incidents without signed finding references remain unsigned',
+          async (pool) => {
+            await completeSignedRun(pool, SIGNER, 'legacy');
+            const containment = (await getContainment('7', pool))!;
+            assert.deepEqual((await verifyContainmentEvidence(pool, containment, KEYS)).evidence, {
+              status: 'unsigned',
+              reason: 'containment_predates_signed_findings',
+            });
+          },
+        );
         await scenario(
           'the internal endpoint serves bundles the gateway can verify',
           async (pool) => {
-            await completeSignedRun(pool);
-            await pool.query(
-              `INSERT INTO reconcile_trade_containments (trade_id, incident_reference, state, opened_run_key, qualifying_codes, evidence)
-             VALUES ('7', 'RECON-20261124-BBBB0001', 'CONTAINED', 'daemon-1', ARRAY['AMOUNT_MISMATCH'], $1::jsonb)`,
-              [
-                JSON.stringify({
-                  findings: [{ digest: findingDigest({ runKey: 'daemon-1', ...FINDINGS[0] }) }],
-                }),
-              ],
-            );
+            await completeSignedRun(pool, SIGNER, 'signed');
             const one = await serveContainmentEvidence(pool, '/containments/7');
             assert.equal(one?.status, 200);
-            // Over the wire and back, exactly as the gateway receives it.
             const bundle = JSON.parse(JSON.stringify(one?.body));
             assert.deepEqual(verifyContainmentBundle(bundle, KEYS).evidence, {
               status: 'verified',
@@ -330,6 +326,63 @@ test(
             });
             const list = await serveContainmentEvidence(pool, '/containments');
             assert.equal((list?.body as { items: unknown[] }).items.length, 1);
+            assert.equal((list?.body as { nextCursor: string | null }).nextCursor, null);
+            const freezeId = (
+              await pool.query('SELECT request_id FROM reconcile_governance_freeze_requests')
+            ).rows[0].request_id;
+            const freezeResource = `/freeze-requests/${freezeId}`;
+            const freezeResponse = await serveContainmentEvidence(
+              pool,
+              freezeResource,
+              new URLSearchParams({ challenge: 'c'.repeat(64) }),
+              { signer: () => SIGNER },
+            );
+            assert.equal(
+              verifyActionEvidence(freezeResponse?.body, {
+                challenge: 'c'.repeat(64),
+                resource: freezeResource,
+                context: { chainId: 31337, escrowAddress: BASE_TEST_ENV.ESCROW_ADDRESS },
+                publicKeys: KEYS,
+              }),
+              true,
+            );
+            const resource = '/containments/7/recovery',
+              challenge = 'a'.repeat(64);
+            const response = await serveContainmentEvidence(
+              pool,
+              resource,
+              new URLSearchParams({ challenge }),
+              { signer: () => SIGNER },
+            );
+            const context = { chainId: 31337, escrowAddress: BASE_TEST_ENV.ESCROW_ADDRESS };
+            assert.equal(
+              verifyActionEvidence(response?.body, {
+                challenge,
+                resource,
+                context,
+                publicKeys: KEYS,
+              }),
+              true,
+            );
+            assert.equal(
+              verifyActionEvidence(response?.body, {
+                challenge: 'b'.repeat(64),
+                resource,
+                context,
+                publicKeys: KEYS,
+              }),
+              false,
+            );
+            assert.equal(
+              (
+                await serveContainmentEvidence(
+                  pool,
+                  resource,
+                  new URLSearchParams({ challenge: 'invalid' }),
+                )
+              )?.status,
+              400,
+            );
             assert.equal((await serveContainmentEvidence(pool, '/containments/8'))?.status, 404);
             assert.equal(await serveContainmentEvidence(pool, '/coverage'), null);
           },

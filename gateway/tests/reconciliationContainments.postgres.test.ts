@@ -13,10 +13,11 @@ import {
   buildRunManifest,
   findingDigest,
   loadContainmentEvidenceBundle,
-  loadOpenContainmentEvidenceBundles,
+  loadContainmentEvidencePage,
   manifestBytes,
   parsePublicKeys,
   readRunEvidence,
+  readContainmentSnapshot,
 } from '@agroasys/shared-db/reconciliationEvidence';
 import { createApp } from '../src/app';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
@@ -29,6 +30,7 @@ import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator } from '../src/openapi/contract';
 import { createReconciliationContainmentRouter } from '../src/routes/reconciliationContainments';
 import { testPostgresPort } from './helpers/userActionEnginePostgres';
+import { ruleSetDigest } from '@agroasys/shared-db/containmentRecovery';
 import { freshStepUp } from './support/stepUp';
 import { baseTestGatewayConfig } from './support/testConfig';
 
@@ -162,23 +164,6 @@ describePostgres('reconciliation containments with verified evidence (Cotsel#951
         ],
       );
       await client.query(
-        `UPDATE reconcile_runs SET status = 'COMPLETED', completed_at = NOW() AT TIME ZONE 'UTC', coverage_complete = true WHERE run_key = 'daemon-1'`,
-      );
-      const manifest = buildRunManifest((await readRunEvidence(client, 'daemon-1'))!, {
-        keyId: 'gateway-test-key',
-        rulesVersion: 'cotsel.reconciliation-risk-rules.v1',
-        rulesDigest: 'test',
-      });
-      await client.query(
-        `INSERT INTO reconcile_run_manifests (run_key, schema_version, manifest, signature, key_id)
-         VALUES ('daemon-1', $1, $2::jsonb, $3, 'gateway-test-key')`,
-        [
-          manifest.schemaVersion,
-          JSON.stringify(manifest),
-          sign('sha256', manifestBytes(manifest), privateKey).toString('base64'),
-        ],
-      );
-      await client.query(
         `INSERT INTO reconcile_trade_containments (trade_id, incident_reference, state, opened_run_key, qualifying_codes, evidence)
          VALUES ('42', 'RECON-20261124-AAAA0001', 'CONTAINED', 'daemon-1', ARRAY['AMOUNT_MISMATCH'], $1::jsonb)`,
         [
@@ -194,6 +179,32 @@ describePostgres('reconciliation containments with verified evidence (Cotsel#951
           }),
         ],
       );
+      await client.query(`UPDATE reconcile_trade_containments SET cited_findings = $1::jsonb`, [
+        JSON.stringify([
+          { runKey: 'daemon-1', digest: findingDigest({ runKey: 'daemon-1', ...FINDING }) },
+        ]),
+      ]);
+      await client.query(
+        `UPDATE reconcile_runs SET status = 'COMPLETED', completed_at = NOW() AT TIME ZONE 'UTC', coverage_complete = true WHERE run_key = 'daemon-1'`,
+      );
+      const manifest = buildRunManifest((await readRunEvidence(client, 'daemon-1'))!, {
+        keyId: 'gateway-test-key',
+        rulesVersion: 'cotsel.reconciliation-risk-rules.v1',
+        rulesDigest: ruleSetDigest('cotsel.reconciliation-risk-rules.v1')!,
+        sealed: {
+          ...(await readContainmentSnapshot(client, 'daemon-1')),
+          context: { chainId: 31337, escrowAddress: '0x1111111111111111111111111111111111111111' },
+        },
+      });
+      await client.query(
+        `INSERT INTO reconcile_run_manifests (run_key, schema_version, manifest, signature, key_id)
+         VALUES ('daemon-1', $1, $2::jsonb, $3, 'gateway-test-key')`,
+        [
+          manifest.schemaVersion,
+          JSON.stringify(manifest),
+          sign('sha256', manifestBytes(manifest), privateKey).toString('base64'),
+        ],
+      );
       await client.query('COMMIT');
     } finally {
       client.release();
@@ -201,11 +212,17 @@ describePostgres('reconciliation containments with verified evidence (Cotsel#951
     // Stands in for reconciliation's internal service: the same loader serves
     // the same bundles (reconciliation/src/containmentEvidenceHttp.ts).
     reconciliation = createServer((req, res) => {
-      const match = /^\/containments(?:\/([0-9]+))?$/u.exec(req.url ?? '');
+      const url = new URL(req.url ?? '/', 'http://reconciliation.test');
+      const match = /^\/containments(?:\/([0-9]+))?$/u.exec(url.pathname);
       void (async () => {
         const body = match?.[1]
           ? await loadContainmentEvidenceBundle(owner, match[1])
-          : { items: await loadOpenContainmentEvidenceBundles(owner) };
+          : await loadContainmentEvidencePage(owner, {
+              limit: url.searchParams.has('limit')
+                ? Number(url.searchParams.get('limit'))
+                : undefined,
+              cursor: url.searchParams.get('cursor') ?? undefined,
+            });
         res.writeHead(body ? 200 : 404, { 'content-type': 'application/json' });
         res.end(JSON.stringify(body ? alterReply(body) : { error: 'containment_not_found' }));
       })();
@@ -217,6 +234,8 @@ describePostgres('reconciliation containments with verified evidence (Cotsel#951
       baseUrl: `http://127.0.0.1:${address.port}`,
       publicKeys: KEYS,
       timeoutMs: 5000,
+      maxAgeSeconds: 900,
+      context: { chainId: 31337, escrowAddress: '0x1111111111111111111111111111111111111111' },
     });
   });
 
@@ -259,9 +278,11 @@ describePostgres('reconciliation containments with verified evidence (Cotsel#951
   it('a reply altered in transit does not verify', async () => {
     alterReply = (body) => {
       const bundle = structuredClone(body) as {
-        opening: { evidence: { findings: Array<{ indexedValue: string }> } };
+        recovery: {
+          runs: Record<string, { evidence: { findings: Array<{ indexedValue: string }> } }>;
+        };
       };
-      bundle.opening.evidence.findings[0].indexedValue = '100';
+      bundle.recovery.runs['daemon-1'].evidence.findings[0].indexedValue = '100';
       return bundle;
     };
     try {
@@ -277,6 +298,8 @@ describePostgres('reconciliation containments with verified evidence (Cotsel#951
       baseUrl: 'http://127.0.0.1:9',
       publicKeys: KEYS,
       timeoutMs: 1000,
+      maxAgeSeconds: 900,
+      context: { chainId: 31337, escrowAddress: '0x1111111111111111111111111111111111111111' },
     });
     await expect(offline.requireVerified('42')).rejects.toMatchObject({ statusCode: 503 });
   });
@@ -294,6 +317,8 @@ describePostgres('reconciliation containments with verified evidence (Cotsel#951
         baseUrl: `http://127.0.0.1:${address.port}`,
         publicKeys: KEYS,
         timeoutMs: 1000,
+        maxAgeSeconds: 900,
+        context: { chainId: 31337, escrowAddress: '0x1111111111111111111111111111111111111111' },
       });
       await expect(old.requireVerified('42')).rejects.toMatchObject({
         statusCode: 503,
@@ -339,5 +364,29 @@ describePostgres('reconciliation containments with verified evidence (Cotsel#951
     } finally {
       unconfigured.server.close();
     }
+  });
+
+  it('pages through more than 200 containments without omissions or duplicates', async () => {
+    await owner.query(`INSERT INTO reconcile_trade_containments
+      (trade_id, incident_reference, state, opened_run_key, qualifying_codes, evidence)
+      SELECT i::text, 'RECON-PAGE-' || i::text, 'CONTAINED', 'daemon-1', ARRAY['AMOUNT_MISMATCH'], '{}'
+      FROM generate_series(1000, 1200) i`);
+    const seen = new Set<string>();
+    let cursor: string | null = null;
+    do {
+      const page = await loadContainmentEvidencePage(owner, {
+        limit: 50,
+        cursor: cursor ?? undefined,
+      });
+      expect(page.items.length).toBeLessThanOrEqual(50);
+      for (const item of page.items) {
+        expect(seen.has(item.containment.trade_id)).toBe(false);
+        seen.add(item.containment.trade_id);
+      }
+      cursor = page.nextCursor;
+    } while (cursor);
+    expect(seen.size).toBe(202);
+    expect(seen.has('1000')).toBe(true);
+    expect(seen.has('1200')).toBe(true);
   });
 });

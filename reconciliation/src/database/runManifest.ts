@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import {
   buildRunManifest,
   manifestBytes,
+  readContainmentSnapshot,
   readRunEvidence,
   type RunManifest,
 } from '@agroasys/shared-db/reconciliationEvidence';
@@ -13,6 +14,7 @@ import {
 } from '../core/findingSigner';
 import { RISK_RULES_V1_DIGEST, RISK_RULES_VERSION } from '../core/riskRules';
 import { Logger } from '../utils/logger';
+import { recordRunFreezeRequests } from './freezeRequests';
 
 let configuredSigner: FindingSigner | undefined;
 
@@ -41,10 +43,21 @@ export async function sealRunManifest(
   if (!evidence || evidence.status !== 'COMPLETED') {
     throw new FindingSigningError(`Run ${runKey} is not completed; refusing to seal it`);
   }
+  // The containment state this run leaves behind, and the incidents it cleared,
+  // are signed with it; so is the chain, so evidence cannot be replayed
+  // against another escrow (review R01/R02).
+  const snapshot = await readContainmentSnapshot(client, runKey);
   const manifest = buildRunManifest(evidence, {
     keyId: signer.keyId,
     rulesVersion: RISK_RULES_VERSION,
     rulesDigest: RISK_RULES_V1_DIGEST,
+    sealed: {
+      ...snapshot,
+      context: {
+        chainId: config.chainId ?? null,
+        escrowAddress: config.escrowAddress.toLowerCase(),
+      },
+    },
   });
   let signature: Buffer;
   try {
@@ -70,5 +83,6 @@ export async function sealRunManifest(
       signer.keyId,
     ],
   );
+  await recordRunFreezeRequests(client, manifest);
   return manifest;
 }

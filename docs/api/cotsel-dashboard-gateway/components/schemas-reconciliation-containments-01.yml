@@ -15,6 +15,15 @@ components:
         - findings
         - evidence
       properties:
+        freezeRequestId: { type: ['string', 'null'], pattern: '^[a-f0-9]{64}$' }
+        freezeReview:
+          anyOf:
+            - $ref: '#/components/schemas/ReconciliationFreezeStatus'
+            - { type: 'null' }
+        proof:
+          description: Untrusted signed evidence bundle for independent verification with configured trusted keys.
+          type: ['object', 'null']
+          additionalProperties: true
         tradeId: { type: string }
         incidentReference: { type: string }
         state:
@@ -67,6 +76,7 @@ components:
           additionalProperties: false
           required: [items]
           properties:
+            nextCursor: { type: ['string', 'null'] }
             items:
               type: array
               items:

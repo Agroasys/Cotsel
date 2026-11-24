@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import dotenv from 'dotenv';
+import { AUTHENTICATION_STRENGTHS, type AuthenticationStrength } from './types';
 import { strict as assert } from 'assert';
 import { deploymentProfile, parseAllowedOrigins } from '@agroasys/shared-edge';
 import { parsePostgresSslMode } from '@agroasys/shared-db';
@@ -70,6 +71,10 @@ export function loadConfig(): AuthConfig {
   const adminControlMaxSkewSeconds = envNumber('AUTH_ADMIN_CONTROL_MAX_SKEW_SECONDS', 300);
   const adminControlNonceTtlSeconds = envNumber('AUTH_ADMIN_CONTROL_NONCE_TTL_SECONDS', 600);
   const adminBreakGlassMaxTtlSeconds = envNumber('AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS', 3600);
+  const breakGlassStepUpMaxAgeSeconds = envNumber('AUTH_BREAK_GLASS_STEP_UP_MAX_AGE_SECONDS', 300);
+  const breakGlassStepUpAcceptedStrengths = process.env.AUTH_BREAK_GLASS_STEP_UP_ACCEPTED_STRENGTHS
+    ? csvEnv('AUTH_BREAK_GLASS_STEP_UP_ACCEPTED_STRENGTHS')
+    : ['hardware_webauthn'];
   const adminGrantMaxTtlSeconds = envNumber('AUTH_ADMIN_GRANT_MAX_TTL_SECONDS', 2592000);
   const environment = process.env.COTSEL_ENVIRONMENT?.trim()
     ? deploymentEnvironment
@@ -139,6 +144,19 @@ export function loadConfig(): AuthConfig {
     adminBreakGlassMaxTtlSeconds > 0 && adminBreakGlassMaxTtlSeconds <= 86400,
     'AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS must be between 1 and 86400',
   );
+  assert(
+    Number.isInteger(breakGlassStepUpMaxAgeSeconds) &&
+      breakGlassStepUpMaxAgeSeconds >= 60 &&
+      breakGlassStepUpMaxAgeSeconds <= 3600,
+    'AUTH_BREAK_GLASS_STEP_UP_MAX_AGE_SECONDS must be an integer between 60 and 3600',
+  );
+  assert(
+    breakGlassStepUpAcceptedStrengths.length > 0 &&
+      breakGlassStepUpAcceptedStrengths.every((strength) =>
+        (AUTHENTICATION_STRENGTHS as readonly string[]).includes(strength),
+      ),
+    `AUTH_BREAK_GLASS_STEP_UP_ACCEPTED_STRENGTHS must list one or more of ${AUTHENTICATION_STRENGTHS.join(', ')}`,
+  );
   return {
     nodeEnv,
     environment,
@@ -167,6 +185,9 @@ export function loadConfig(): AuthConfig {
     adminControlMaxSkewSeconds,
     adminControlNonceTtlSeconds,
     adminBreakGlassMaxTtlSeconds,
+    breakGlassStepUpMaxAgeSeconds,
+    breakGlassStepUpAcceptedStrengths:
+      breakGlassStepUpAcceptedStrengths as AuthenticationStrength[],
     adminGrantMaxTtlSeconds,
   };
 }

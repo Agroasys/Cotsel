@@ -83,12 +83,29 @@ export function registerGovernanceCorePrepareRoutes(
         );
       }
 
-      // A trade-scoped unpause releases a contained trade: approve it only on
-      // reconciliation evidence that verifies against its signed manifest.
-      if (proposal.scope === 'TRADE' && proposal.tradeId) {
-        await (options.containmentEvidence ?? UNCONFIGURED_CONTAINMENT_EVIDENCE).requireVerified(
-          proposal.tradeId,
-        );
+      // A trade-scoped unpause is decided from signed reconciliation evidence
+      // (review R02): either reconciliation positively has no containment for
+      // the trade (Q1), or the proposal's exact incident has a verified, signed
+      // clearance (Q2). Each approver's prepare re-checks; this is where the
+      // gateway can still refuse. Missing, stale or invalid evidence refuses.
+      let reconciliationEvidence: Record<string, unknown> | undefined;
+      if (proposal.scope === 'TRADE') {
+        if (!proposal.tradeId || !proposal.incidentRef) {
+          throw new GatewayError(
+            409,
+            'CONFLICT',
+            'The trade-scoped proposal names no trade or incident',
+          );
+        }
+        const recovery = await (
+          options.containmentEvidence ?? UNCONFIGURED_CONTAINMENT_EVIDENCE
+        ).requireRecovery({ tradeId: proposal.tradeId, incidentRef: proposal.incidentRef });
+        reconciliationEvidence = {
+          decision: recovery.decision,
+          tradeId: proposal.tradeId,
+          incidentRef: proposal.incidentRef,
+          ...recovery.evidence,
+        };
       }
 
       if (await options.governanceReader.hasApprovedUnpause(signerWallet)) {
@@ -103,6 +120,30 @@ export function registerGovernanceCorePrepareRoutes(
         category: 'unpause',
         contractMethod: 'approveUnpause',
         routePath: req.originalUrl || req.path,
+        reconciliationEvidence,
+        revalidateBeforeHandoff:
+          proposal.scope !== 'TRADE'
+            ? undefined
+            : async () => {
+                const current = await options.governanceReader.getUnpauseProposalState();
+                if (
+                  !current.hasActiveProposal ||
+                  current.scope !== 'TRADE' ||
+                  current.tradeId !== proposal.tradeId ||
+                  current.incidentRef !== proposal.incidentRef
+                )
+                  throw new GatewayError(
+                    409,
+                    'CONFLICT',
+                    'The unpause proposal changed before wallet handoff',
+                  );
+                await (
+                  options.containmentEvidence ?? UNCONFIGURED_CONTAINMENT_EVIDENCE
+                ).requireRecovery({
+                  tradeId: proposal.tradeId!,
+                  incidentRef: proposal.incidentRef!,
+                });
+              },
         audit,
         principal,
         signerWallet,

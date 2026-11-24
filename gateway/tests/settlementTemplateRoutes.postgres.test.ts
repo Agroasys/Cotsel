@@ -15,6 +15,7 @@ import {
 } from '../src/core/settlementTemplateStore';
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
+import { createPostgresTemplateActivationStore } from '../src/core/settlementTemplateActivationStore';
 import { createSettlementTemplateRouter } from '../src/routes/settlementTemplates';
 import { createUserActionEnginePostgres } from './helpers/userActionEnginePostgres';
 import { freshStepUp } from './support/stepUp';
@@ -79,6 +80,14 @@ describePostgres('settlement template routes (Cotsel#940)', () => {
     '#/components/schemas/SettlementTemplateActivationResponse',
   );
   const validateError = createSchemaValidator(spec, '#/components/schemas/ErrorResponse');
+  const validatePreparation = createSchemaValidator(
+    spec,
+    '#/components/schemas/SettlementTemplateActivationPreparationResponse',
+  );
+  const validatePreparationList = createSchemaValidator(
+    spec,
+    '#/components/schemas/SettlementTemplateActivationPreparationListResponse',
+  );
 
   let db: Awaited<ReturnType<typeof createUserActionEnginePostgres>>;
   let server: Server;
@@ -96,8 +105,9 @@ describePostgres('settlement template routes (Cotsel#940)', () => {
       createSettlementTemplateRouter({
         authSessionClient: sessionClient(),
         config,
+        templateStore: createPostgresSettlementTemplateStore(db.runtime),
         // v2 is allowed to activate; v4 below shows an unlisted version refused.
-        templateStore: createPostgresSettlementTemplateStore(db.runtime, {
+        activationStore: createPostgresTemplateActivationStore(db.runtime, {
           activationAllowlist: [...DEFAULT_TEMPLATE_ACTIVATION_ALLOWLIST, 'agroasys.launch:2'],
         }),
         idempotencyStore: createInMemoryIdempotencyStore(),
@@ -156,7 +166,17 @@ describePostgres('settlement template routes (Cotsel#940)', () => {
   it('documents every route in OpenAPI', () => {
     expect(hasOperation(spec, 'GET', '/settlement-templates')).toBe(true);
     expect(hasOperation(spec, 'POST', '/settlement-templates')).toBe(true);
-    for (const action of ['review', 'activate', 'retire']) {
+    expect(hasOperation(spec, 'GET', '/settlement-templates/activations')).toBe(true);
+    for (const action of ['approve', 'confirm']) {
+      expect(
+        hasOperation(spec, 'POST', `/settlement-templates/activations/{preparationId}/${action}`),
+      ).toBe(true);
+    }
+    // There is deliberately no direct activation operation.
+    expect(
+      hasOperation(spec, 'POST', '/settlement-templates/{templateId}/versions/{version}/activate'),
+    ).toBe(false);
+    for (const action of ['review', 'activations', 'retire']) {
       expect(
         hasOperation(
           spec,
@@ -237,7 +257,7 @@ describePostgres('settlement template routes (Cotsel#940)', () => {
     );
   });
 
-  it('runs draft -> review -> activate with two people and audits each step', async () => {
+  it('runs draft -> review -> prepare -> approve -> confirm with two people, audited', async () => {
     const created = await call('POST', '/settlement-templates', 'session-author', {
       body: { template: V2 },
       key: 'draft-v2',
@@ -261,13 +281,53 @@ describePostgres('settlement template routes (Cotsel#940)', () => {
     expect(reviewed.status).toBe(200);
     expect(validateVersion(await reviewed.json())).toBe(true);
 
-    expect((await call('POST', `${path}/activate`, 'session-author')).status).toBe(409);
-    const activated = await call('POST', `${path}/activate`, 'session-reviewer');
+    // There is no direct activation route.
+    expect((await call('POST', `${path}/activate`, 'session-reviewer')).status).toBe(404);
+
+    const prepared = await call('POST', `${path}/activations`, 'session-author');
+    expect(prepared.status).toBe(201);
+    const preparedBody = await prepared.json();
+    expect(validatePreparation(preparedBody)).toBe(true);
+    expect(preparedBody.data).toMatchObject({
+      state: 'prepared',
+      expectedActiveVersion: 1,
+      preparedBy: 'account:acct-author',
+    });
+    const prep = `/settlement-templates/activations/${preparedBody.data.preparationId}`;
+    // Confirming before approval, and approving one's own preparation, are refused.
+    expect((await call('POST', `${prep}/confirm`, 'session-reviewer')).status).toBe(409);
+    expect((await call('POST', `${prep}/approve`, 'session-author')).status).toBe(409);
+    const approved = await call('POST', `${prep}/approve`, 'session-reviewer');
+    expect(approved.status).toBe(200);
+    expect((await approved.json()).data).toMatchObject({
+      state: 'approved',
+      approvedBy: 'account:acct-reviewer',
+    });
+    // The template's author cannot be the one who activates it.
+    const byAuthor = await call('POST', `${prep}/confirm`, 'session-author');
+    expect(byAuthor.status).toBe(409);
+    expect((await byAuthor.json()).error.details.reason).toBe('independent_activation_required');
+
+    const activated = await call('POST', `${prep}/confirm`, 'session-reviewer');
     expect(activated.status).toBe(200);
     const activatedBody = await activated.json();
     expect(validateActivation(activatedBody)).toBe(true);
     expect(activatedBody.data.activated).toMatchObject({ version: 2, status: 'active' });
     expect(activatedBody.data.retired).toMatchObject({ version: 1, status: 'retired' });
+    expect(activatedBody.data.preparation).toMatchObject({
+      state: 'confirmed',
+      approvedBy: 'account:acct-reviewer',
+      expectedActiveVersion: 1,
+    });
+    // A second confirmation (new key) transitions nothing again.
+    const again = await call('POST', `${prep}/confirm`, 'session-reviewer');
+    expect(again.status).toBe(409);
+    expect((await again.json()).error.details.reason).toBe('activation_already_confirmed');
+
+    const list = await call('GET', '/settlement-templates/activations', 'session-reader');
+    const listBody = await list.json();
+    expect(validatePreparationList(listBody)).toBe(true);
+    expect(listBody.data.items[0]).toMatchObject({ state: 'confirmed' });
 
     const retireActive = await call('POST', `${path}/retire`, 'session-reviewer');
     expect(retireActive.status).toBe(409);
@@ -279,14 +339,24 @@ describePostgres('settlement template routes (Cotsel#940)', () => {
     expect(rows.map((row) => row.event_type)).toEqual([
       'gateway.settlement_template.created',
       'gateway.settlement_template.reviewed',
+      'gateway.settlement_template.activation_prepared',
+      'gateway.settlement_template.activation_approved',
       'gateway.settlement_template.activated',
     ]);
     expect(rows.map((row) => row.actor_id)).toEqual([
       'account:acct-author',
       'account:acct-reviewer',
+      'account:acct-author',
+      'account:acct-reviewer',
       'account:acct-reviewer',
     ]);
-    expect(rows[2].metadata).toMatchObject({ version: 2, replacedVersion: 1 });
+    expect(rows[4].metadata).toMatchObject({
+      version: 2,
+      retiredVersion: 1,
+      expectedActiveVersion: 1,
+      preparedBy: 'account:acct-author',
+      approvedBy: 'account:acct-reviewer',
+    });
     for (const row of rows) {
       expect(row.metadata.stepUp).toMatchObject({ strength: 'hardware_webauthn' });
     }
@@ -298,7 +368,7 @@ describePostgres('settlement template routes (Cotsel#940)', () => {
     });
     const path = '/settlement-templates/agroasys.launch/versions/4';
     expect((await call('POST', `${path}/review`, 'session-reviewer')).status).toBe(200);
-    const refused = await call('POST', `${path}/activate`, 'session-reviewer');
+    const refused = await call('POST', `${path}/activations`, 'session-author');
     expect(refused.status).toBe(409);
     expect((await refused.json()).error.details.reason).toBe('template_not_enforced_by_contract');
   });

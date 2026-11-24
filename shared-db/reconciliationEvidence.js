@@ -112,8 +112,63 @@ async function readRunEvidence(db, runKey) {
   };
 }
 
-function buildRunManifest(evidence, { keyId, rulesVersion, rulesDigest }) {
+/**
+ * The containment state a run asserts when it is sealed (review R01/R02/R03).
+ * Read inside the sealing transaction, after the run's own containment writes.
+ *
+ * - containments: every open incident with its trade, reference, episode,
+ *   state, opening and clearing run, and cited findings as (runKey, digest).
+ * - clearances: the incidents THIS run cleared. Reconciliation records a
+ *   clearance only for a trade it compared in this run and found clean, so a
+ *   clearance is an explicit signed assertion, never an absence of findings.
+ *
+ * Verifiers never recompute this from live rows (containments change after
+ * sealing); it is covered by the manifest signature alone.
+ */
+async function readContainmentSnapshot(db, runKey) {
+  const rows = await db.query(
+    `SELECT trade_id, incident_reference, episode, state, opened_run_key, cleared_run_key,
+            to_char(opened_at, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS opened_at,
+            qualifying_codes,
+            cited_findings
+     FROM reconcile_trade_containments
+     WHERE state IN ('CONTAINED', 'RECONCILED_PENDING_APPROVAL')
+     ORDER BY trade_id`,
+  );
+  const containments = rows.rows.map((row) => ({
+    tradeId: row.trade_id,
+    incidentReference: row.incident_reference,
+    episode: row.episode,
+    openedAt: `${row.opened_at}Z`,
+    qualifyingCodes: row.qualifying_codes,
+    state: row.state,
+    openedRunKey: row.opened_run_key,
+    clearedRunKey: row.cleared_run_key,
+    citedFindings: [...row.cited_findings]
+      .map((entry) => ({ runKey: entry.runKey, digest: entry.digest }))
+      .sort((a, b) => (a.runKey + a.digest).localeCompare(b.runKey + b.digest)),
+  }));
+  const clearances = containments
+    .filter(
+      (entry) => entry.state === 'RECONCILED_PENDING_APPROVAL' && entry.clearedRunKey === runKey,
+    )
+    .map(({ tradeId, incidentReference, episode }) => ({ tradeId, incidentReference, episode }));
+  return { containments, clearances };
+}
+
+/**
+ * The manifest a run is sealed with. `sealed` carries what only the sealer
+ * knows: the containment snapshot, its clearances and the chain context.
+ */
+function buildRunManifest(evidence, { keyId, rulesVersion, rulesDigest, sealed }) {
   return {
+    ...(sealed
+      ? {
+          containments: sealed.containments,
+          clearances: sealed.clearances,
+          context: sealed.context,
+        }
+      : {}),
     schemaVersion: MANIFEST_SCHEMA,
     runKey: evidence.runKey,
     status: evidence.status,
@@ -185,7 +240,11 @@ async function loadRunEvidenceBundle(db, runKey) {
 }
 
 /** Pure: verifies a run bundle against its signed manifest. */
-function verifyRunEvidenceBundle(bundle, publicKeys) {
+/**
+ * `signatureOnly` checks the seal and manifest identity but not the run's
+ * rows: for a manifest whose sealed fields alone are being relied on.
+ */
+function verifyRunEvidenceBundle(bundle, publicKeys, options = {}) {
   const seal = bundle?.seal;
   if (!seal) return { ok: false, reason: 'unsigned' };
   const manifest = seal.manifest;
@@ -211,6 +270,7 @@ function verifyRunEvidenceBundle(bundle, publicKeys) {
     signatureOk = false;
   }
   if (!signatureOk) return { ok: false, reason: 'bad_signature' };
+  if (options.signatureOnly) return { ok: true, manifest };
 
   const evidence = bundle.evidence;
   if (!evidence || evidence.runKey !== bundle.runKey) return { ok: false, reason: 'run_mismatch' };
@@ -303,8 +363,16 @@ const CONTAINMENT_COLUMNS = `trade_id, incident_reference, state, opened_run_key
   cleared_run_key, evidence`;
 
 async function containmentBundle(db, row) {
+  const { loadContainmentRecoveryBundle } = require('./containmentRecovery');
   return {
-    containment: row,
+    recovery: await loadContainmentRecoveryBundle(db, row.trade_id),
+    containment: {
+      ...row,
+      opened_at:
+        row.opened_at instanceof Date
+          ? row.opened_at.toISOString().replace('Z', '').padEnd(26, '0')
+          : row.opened_at,
+    },
     opening: await loadRunEvidenceBundle(db, row.opened_run_key),
     clearing: row.cleared_run_key ? await loadRunEvidenceBundle(db, row.cleared_run_key) : null,
   };
@@ -317,6 +385,54 @@ async function loadContainmentEvidenceBundle(db, tradeId) {
     [tradeId],
   );
   return rows.rows[0] ? containmentBundle(db, rows.rows[0]) : null;
+}
+
+function validateContainmentPageOptions({ limit = 50, cursor } = {}) {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200)
+    throw new RangeError('Invalid containment page limit');
+  let after = null;
+  if (cursor !== undefined) {
+    if (typeof cursor !== 'string' || cursor.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(cursor))
+      throw new RangeError('Invalid containment cursor');
+    try {
+      after = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+      if (
+        !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/.test(after.openedAt) ||
+        !Number.isFinite(Date.parse(after.openedAt)) ||
+        !/^[0-9]{1,78}$/.test(after.tradeId)
+      )
+        throw new Error('shape');
+    } catch {
+      throw new RangeError('Invalid containment cursor');
+    }
+  }
+  return { limit, after };
+}
+
+/** Stable keyset pages. Newly opened incidents appear on a list refresh. */
+async function loadContainmentEvidencePage(db, options = {}) {
+  const { limit, after } = validateContainmentPageOptions(options);
+  const rows = await db.query(
+    `SELECT ${CONTAINMENT_COLUMNS} FROM reconcile_trade_containments
+     WHERE state <> 'RELEASED'
+       AND ($1::timestamptz IS NULL OR (opened_at, trade_id) < ($1::timestamptz AT TIME ZONE 'UTC', $2::text))
+     ORDER BY opened_at DESC, trade_id DESC LIMIT $3`,
+    [after?.openedAt ?? null, after?.tradeId ?? null, limit + 1],
+  );
+  const selected = rows.rows.slice(0, limit);
+  const items = [];
+  for (const row of selected) items.push(await containmentBundle(db, row));
+  const last = selected[selected.length - 1];
+  const nextCursor =
+    rows.rows.length > limit
+      ? Buffer.from(
+          JSON.stringify({
+            openedAt: `${last.opened_at}Z`,
+            tradeId: last.trade_id,
+          }),
+        ).toString('base64url')
+      : null;
+  return { items, nextCursor };
 }
 
 /** Every containment not yet released, newest first, at most `limit`. */
@@ -338,42 +454,8 @@ async function loadOpenContainmentEvidenceBundles(db, limit = 200) {
  * containment cites no digests (it predates signing) or the opening run has
  * no manifest.
  */
-function verifyContainmentBundle(bundle, publicKeys) {
-  const row = bundle.containment;
-  const cited = (row.evidence?.findings ?? []).filter(
-    (finding) => typeof finding?.digest === 'string',
-  );
-  if (cited.length === 0) {
-    return {
-      findings: [],
-      evidence: { status: 'unsigned', reason: 'containment_predates_signed_findings' },
-    };
-  }
-  if (bundle.opening?.runKey !== row.opened_run_key) {
-    return { findings: [], evidence: { status: 'failed', reason: 'opening_run_mismatch' } };
-  }
-  const { run, findings } = classifyRunEvidenceBundle(bundle.opening, publicKeys);
-  const byDigest = new Map(findings.map((finding) => [finding.digest, finding]));
-  const citedFindings = cited.map((finding) => ({
-    digest: finding.digest,
-    mismatchCode: finding.mismatchCode ?? null,
-    comparedField: finding.comparedField ?? null,
-    status: byDigest.get(finding.digest)?.status ?? 'missing',
-  }));
-  let reason = null;
-  if (!run.ok) reason = `opening_run_${run.reason}`;
-  else if (citedFindings.some((finding) => finding.status !== 'verified')) {
-    reason = 'cited_finding_not_verified';
-  } else if (row.cleared_run_key) {
-    const cleared =
-      bundle.clearing?.runKey === row.cleared_run_key
-        ? verifyRunEvidenceBundle(bundle.clearing, publicKeys)
-        : { ok: false, reason: 'mismatch' };
-    if (!cleared.ok) reason = `clearing_run_${cleared.reason}`;
-  }
-  const status =
-    reason === null ? 'verified' : !run.ok && run.reason === 'unsigned' ? 'unsigned' : 'failed';
-  return { findings: citedFindings, evidence: { status, reason } };
+function verifyContainmentBundle(bundle, publicKeys, options = {}) {
+  return require('./containmentSnapshot').verifyContainmentSnapshot(bundle, publicKeys, options);
 }
 
 /** A containment row's evidence, loaded from the database and verified. */
@@ -382,7 +464,10 @@ async function verifyContainmentEvidence(db, row, publicKeys) {
 }
 
 module.exports = {
+  loadContainmentEvidencePage,
+  validateContainmentPageOptions,
   classifyRunEvidenceBundle,
+  readContainmentSnapshot,
   classifyRunFindings,
   loadContainmentEvidenceBundle,
   loadOpenContainmentEvidenceBundles,

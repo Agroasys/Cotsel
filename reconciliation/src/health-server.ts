@@ -90,9 +90,12 @@ export function startHealthServer(): http.Server {
       }
 
       const path = new URL(req.url ?? '/', 'http://reconciliation.internal');
-      if (path.pathname.startsWith('/containments')) {
+      if (
+        path.pathname.startsWith('/containments') ||
+        path.pathname.startsWith('/freeze-requests/')
+      ) {
         try {
-          const served = await serveContainmentEvidence(pool, path.pathname);
+          const served = await serveContainmentEvidence(pool, path.pathname, path.searchParams);
           json(res, served?.status ?? 404, served?.body ?? { error: 'not_found' });
         } catch {
           json(res, 503, { error: 'containment_evidence_unavailable' });

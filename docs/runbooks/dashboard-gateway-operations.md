@@ -85,6 +85,7 @@ Optional operations-health probe URLs:
 
 - `GATEWAY_ORACLE_BASE_URL`
 - `GATEWAY_RECONCILIATION_BASE_URL`
+- `GATEWAY_RECONCILIATION_EVIDENCE_MAX_AGE_SECONDS` (default `900`, range `60..86400`): signed snapshot age limit for recovery and freeze preparation. See `reconciliation-signed-findings.md`.
 - `GATEWAY_TREASURY_BASE_URL`
 - `GATEWAY_RICARDIAN_BASE_URL`
 - `GATEWAY_NOTIFICATIONS_BASE_URL`

@@ -3,9 +3,9 @@ import { KMSClient, SignCommand } from '@aws-sdk/client-kms';
 import type { FindingSignerConfig } from '../config';
 
 /**
- * Signs reconciliation run manifests (Cotsel#951) with ECDSA P-256 over
+ * Signs reconciliation run manifests and nonce-bound evidence replies (Cotsel#951) with ECDSA P-256 over
  * SHA-256, producing DER signatures that `crypto.verify('sha256', …)` checks.
- * The key is used for nothing else.
+ * Both formats use separate schema domains. The key never signs governance transactions.
  */
 export interface FindingSigner {
   readonly keyId: string;

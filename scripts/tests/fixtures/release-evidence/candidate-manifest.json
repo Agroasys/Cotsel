@@ -330,13 +330,13 @@
   "migrations": [
     {
       "component": "auth",
-      "headIdentity": "202610140005_admin_authority_changes",
-      "checksumSha256": "f80d5a158e2ab374bc6b110c291e523c2e7b627fa7b6c7059ae808374f2fb599"
+      "headIdentity": "202611230006_session_authentication_assurance",
+      "checksumSha256": "f6544887a54ee862c1632ed12349fa15d89d76f31a8a9b768dd798881520b48e"
     },
     {
       "component": "gateway",
-      "headIdentity": "202611230017_settlement_templates",
-      "checksumSha256": "e186786b16810ab2349f424617636547078949b6df4d968b8d03765e868b359e"
+      "headIdentity": "202611240020_reconciliation_freeze_reviews",
+      "checksumSha256": "11923eafd30aa793395e5dffa5d8af2326cc715843d7ed6061865f3d897114a4"
     },
     {
       "component": "indexer",
@@ -350,8 +350,8 @@
     },
     {
       "component": "reconciliation",
-      "headIdentity": "202611230002_run_manifests",
-      "checksumSha256": "73e1a41ab40d605394d1dcfce6a3e8c7457528d7020fd11f6a4ba69e01605037"
+      "headIdentity": "202611240004_governance_freeze_requests",
+      "checksumSha256": "9db8ac5484fb9fbfe83e00f5792ad54d641dd16792f205f8fef6a4c7aac7a2e6"
     },
     {
       "component": "ricardian",
