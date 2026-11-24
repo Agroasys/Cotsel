@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import type { BreakGlassStepUpEvidence } from './breakGlassStepUp';
 import { Pool } from 'pg';
 import { AdminActor, TrustedSessionIdentity, UserProfile, UserRole } from '../types';
 import type { ExchangeAuthority } from './exchangeAuthority';
@@ -53,6 +54,7 @@ export interface ProfileStore {
     actor: AdminActor;
     reason: string;
     ttlSeconds: number;
+    stepUp: BreakGlassStepUpEvidence;
   }): Promise<UserProfile>;
   revokeBreakGlass(
     accountId: string,
@@ -126,6 +128,7 @@ export function createPostgresProfileStore(pool: Pool, environment: string): Pro
         actor: input.actor,
         reason: input.reason,
         ttlSeconds: input.ttlSeconds,
+        stepUp: input.stepUp,
       });
     },
     revokeBreakGlass(accountId, actor, reason) {

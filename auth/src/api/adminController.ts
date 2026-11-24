@@ -268,7 +268,7 @@ export class AdminController {
     try {
       const body = requireObject(req.body, 'body') as BreakGlassBody;
       const accountId = requireString(body.accountId, 'accountId');
-      requireFreshBreakGlassStepUp(
+      const stepUp = requireFreshBreakGlassStepUp(
         body.operatorAuthentication,
         this.breakGlassStepUp.policy,
         (this.breakGlassStepUp.nowSeconds ?? (() => Math.floor(Date.now() / 1000)))(),
@@ -293,6 +293,7 @@ export class AdminController {
         reason: requireReason(body.reason),
         ttlSeconds: body.ttlSeconds!,
         baseRole: body.baseRole,
+        stepUp,
       });
 
       res.status(201).json(success(profilePayload(profile)));

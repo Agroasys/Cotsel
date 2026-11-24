@@ -11,7 +11,7 @@
  */
 import { HttpError } from '@agroasys/shared-http';
 import { parseAuthenticationAssurance } from '../api/sessionController';
-import type { AuthenticationAssurance, AuthenticationStrength } from '../types';
+import type { AuthenticationStrength } from '../types';
 import { Logger } from '../utils/logger';
 
 export interface BreakGlassStepUpPolicy {
@@ -33,6 +33,20 @@ function refuse(reason: string): never {
 }
 
 /**
+ * The verified step-up recorded on the grant's own audit entry (review R11):
+ * the operator's assurance and the policy it satisfied. No credential, bearer
+ * or signature is included.
+ */
+export interface BreakGlassStepUpEvidence {
+  authTime: number;
+  method: string | null;
+  strength: string;
+  ageSeconds: number;
+  maxAgeSeconds: number;
+  acceptedStrengths: readonly string[];
+}
+
+/**
  * Returns the operator's verified assurance, or throws 403 StepUpRequired. A
  * malformed claim is a 400 from the shared parser, never silently ignored.
  */
@@ -40,7 +54,7 @@ export function requireFreshBreakGlassStepUp(
   operatorAuthentication: unknown,
   policy: BreakGlassStepUpPolicy,
   nowSeconds: number,
-): AuthenticationAssurance {
+): BreakGlassStepUpEvidence {
   if (
     !operatorAuthentication ||
     typeof operatorAuthentication !== 'object' ||
@@ -56,5 +70,12 @@ export function requireFreshBreakGlassStepUp(
   if (nowSeconds - assurance.authTime > policy.maxAgeSeconds) {
     refuse(`step-up is older than ${policy.maxAgeSeconds} seconds`);
   }
-  return assurance;
+  return {
+    authTime: assurance.authTime,
+    method: assurance.method,
+    strength: assurance.strength,
+    ageSeconds: nowSeconds - assurance.authTime,
+    maxAgeSeconds: policy.maxAgeSeconds,
+    acceptedStrengths: [...policy.acceptedStrengths],
+  };
 }

@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import type { BreakGlassStepUpEvidence } from './breakGlassStepUp';
 import { CallerSafeError } from '@agroasys/shared-http';
 import {
   AdminActor,
@@ -43,6 +44,8 @@ interface GrantBreakGlassInput {
   reason: string;
   ttlSeconds: number;
   baseRole?: Exclude<UserRole, 'admin'>;
+  /** Verified operator step-up; recorded on the grant's audit entry. */
+  stepUp: BreakGlassStepUpEvidence;
 }
 
 interface AccountActionInput {

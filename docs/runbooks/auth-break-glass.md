@@ -79,6 +79,8 @@ itself:
 Otherwise the grant is refused with 403 `StepUpRequired`, logged as
 `auth.break_glass_step_up_required`, and nothing is granted. A malformed claim is a 400. Revocation and review do not require a step-up.
 
+**Audit:** a successful grant's own `break_glass_granted` entry in `auth_admin_audit_events` records the verified step-up under `metadata.stepUp`. It records `authTime`, `method`, `strength`, `ageSeconds` at grant time, and the `maxAgeSeconds` and `acceptedStrengths` it satisfied. The entry is written in the grant's transaction, so a grant never exists without it. No credential, bearer or signature is recorded.
+
 **Contract:** `docs/api/fixtures/cotsel-break-glass-grant.v1.json` is the exact grant body Agroasys sends. It is byte-identical to the agroasys-backend fixture (Agroasys/agroasys-backend#823). `auth/tests/breakGlassStepUp.test.ts` shows Cotsel accepts it while the step-up is fresh and refuses it once stale.
 
 **Rollout:** the grant ignores unknown body fields, so the Agroasys admin-control
