@@ -36,6 +36,14 @@ export interface GatewayConfig {
   enableMutations: boolean;
   writeAllowlist: string[];
   governancePreparationTtlSeconds?: number;
+  /**
+   * Privileged mutations require an upstream step-up at most this many seconds
+   * old (Cotsel#946). Defaults: 300 seconds, hardware WebAuthn, enforce.
+   */
+  stepUpMaxAgeSeconds?: number;
+  stepUpAcceptedStrengths?: string[];
+  /** `record` logs and audits a stale step-up but lets the request through (rollback only). */
+  stepUpEnforcement?: 'enforce' | 'record';
   /** @deprecated Compatibility alias for legacy in-process test fixtures only. */
   governanceQueueTtlSeconds?: number;
   settlementIngressEnabled: boolean;
@@ -106,6 +114,29 @@ export interface GatewayConfig {
   commitSha: string;
   buildTime: string;
   nodeEnv: string;
+}
+
+export interface StepUpPolicy {
+  maxAgeSeconds: number;
+  acceptedStrengths: string[];
+  enforcement: 'enforce' | 'record';
+}
+
+export const DEFAULT_STEP_UP_POLICY: StepUpPolicy = Object.freeze({
+  maxAgeSeconds: 300,
+  acceptedStrengths: ['hardware_webauthn'],
+  enforcement: 'enforce',
+});
+
+export function resolveStepUpPolicy(config: GatewayConfig): StepUpPolicy {
+  return {
+    maxAgeSeconds: config.stepUpMaxAgeSeconds ?? DEFAULT_STEP_UP_POLICY.maxAgeSeconds,
+    acceptedStrengths:
+      config.stepUpAcceptedStrengths && config.stepUpAcceptedStrengths.length > 0
+        ? [...config.stepUpAcceptedStrengths]
+        : [...DEFAULT_STEP_UP_POLICY.acceptedStrengths],
+    enforcement: config.stepUpEnforcement ?? DEFAULT_STEP_UP_POLICY.enforcement,
+  };
 }
 
 export function resolveGovernancePreparationTtlSeconds(config: GatewayConfig): number {

@@ -74,6 +74,7 @@ Minimum gateway env contract:
 - `GATEWAY_WRITE_ALLOWLIST`
 - `GATEWAY_OPERATOR_SIGNER_ENVIRONMENT`
 - `GATEWAY_GOVERNANCE_PREPARATION_TTL_SECONDS`
+- `GATEWAY_STEP_UP_MAX_AGE_SECONDS` (default `300`), `GATEWAY_STEP_UP_ACCEPTED_STRENGTHS` (default `hardware_webauthn`), `GATEWAY_STEP_UP_ENFORCEMENT` (`enforce` by default; `record` is rollback only)
 - `GATEWAY_COMMIT_SHA`
 - `GATEWAY_BUILD_TIME`
 - `GATEWAY_INDEXER_REQUEST_TIMEOUT_MS`
@@ -121,6 +122,7 @@ Safety rules:
 
 - If `GATEWAY_ENABLE_MUTATIONS=false`, all gateway mutation routes must reject writes.
 - If `GATEWAY_WRITE_ALLOWLIST` is empty, mutations must reject writes even when enabled.
+- Governance, treasury and compliance mutations are refused with `403 FORBIDDEN`, `details.reason = step_up_required`, unless the session's upstream step-up (`authentication.authTime`, `authentication.strength` from auth) is at most `GATEWAY_STEP_UP_MAX_AGE_SECONDS` old and of an accepted strength. The operator re-runs the Agroasys session exchange after a new step-up. Each privileged request writes an `audit_log` row (`gateway.step_up_verified`, `gateway.step_up_required` or `gateway.step_up_stale`) carrying the step-up evidence and the request ID.
 - The gateway process must never hold the human governance signer key.
 - No governance executor secret is part of the supported current runtime.
 - Approved write operators for later enablement are Aston and `czpyioe`, but `GATEWAY_WRITE_ALLOWLIST`

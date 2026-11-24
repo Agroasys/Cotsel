@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "cotsel.break-glass-grant.v1",
+  "description": "The break-glass grant body Agroasys sends to Cotsel auth (POST /api/auth/v1/admin/break-glass/grant), HMAC-signed by the admin-control client. operatorAuthentication is the granting operator's live session step-up; Cotsel refuses the grant unless it is a hardware WebAuthn step-up within 300 seconds (Agroasys/Cotsel#946). Agroasys/Cotsel keeps a byte-identical copy in its API fixtures directory.",
+  "operatorSession": {
+    "authTime": 1795000000,
+    "authMethod": "webauthn",
+    "authStrength": "hardware_webauthn"
+  },
+  "command": {
+    "command": "breakGlass.grant",
+    "reason": "INC-946 temporary admin to contain an affected governance workflow",
+    "payload": {
+      "accountId": "agroasys-user:123",
+      "ttlSeconds": 1800,
+      "baseRole": "buyer"
+    }
+  },
+  "body": {
+    "accountId": "agroasys-user:123",
+    "ttlSeconds": 1800,
+    "baseRole": "buyer",
+    "reason": "INC-946 temporary admin to contain an affected governance workflow",
+    "operatorAuthentication": {
+      "authTime": 1795000000,
+      "authMethod": "webauthn",
+      "authStrength": "hardware_webauthn"
+    }
+  }
+}

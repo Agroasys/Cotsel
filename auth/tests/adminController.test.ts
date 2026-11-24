@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { Request, Response } from 'express';
+import { freshOperatorAuthentication } from './helpers/operatorAuthentication';
 import { AdminController } from '../src/api/adminController';
 import type { AdminService } from '../src/core/adminService';
 import type { UserProfile } from '../src/types';
@@ -94,6 +95,7 @@ describe('AdminController break-glass review status payloads', () => {
       mockRequest({
         accountId: 'acct-admin',
         ttlSeconds: 300,
+        operatorAuthentication: freshOperatorAuthentication(),
         baseRole: 'buyer' as const,
         reason: 'INC-548 controlled grant',
       }),

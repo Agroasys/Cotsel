@@ -22,6 +22,8 @@ import {
 import { IdempotencyStore } from '../core/idempotencyStore';
 import { GatewayError } from '../errors';
 import { registerGovernanceDirectSignRoutes } from './governanceDirectSignMutations';
+import { requireRecentStepUp } from '../middleware/stepUp';
+import type { AuditLogStore } from '../core/auditLogStore';
 
 export interface GovernanceRouterOptions {
   authSessionClient: AuthSessionClient;
@@ -30,6 +32,8 @@ export interface GovernanceRouterOptions {
   governanceActionStore: GovernanceActionStore;
   governanceMutationService: GovernanceMutationService;
   idempotencyStore: IdempotencyStore;
+  /** Records the step-up evidence of each privileged mutation (Cotsel#946). */
+  auditLogStore?: AuditLogStore;
 }
 
 function optionalEnum<T extends string>(
@@ -122,6 +126,7 @@ export function createGovernanceRouter(options: GovernanceRouterOptions): Router
     authenticate,
     requireMutationWriteAccess(),
     requireOperatorActionCapability('governance:write'),
+    requireRecentStepUp(options.config, { auditLogStore: options.auditLogStore }),
   );
   registerGovernanceDirectSignRoutes(
     mutationRouter,
