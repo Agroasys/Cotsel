@@ -350,8 +350,8 @@
     },
     {
       "component": "reconciliation",
-      "headIdentity": "202611230002_run_manifests",
-      "checksumSha256": "73e1a41ab40d605394d1dcfce6a3e8c7457528d7020fd11f6a4ba69e01605037"
+      "headIdentity": "202611240003_containment_lineage",
+      "checksumSha256": "73ed22cf4d645d3b122c08933c47f64ffbc9a01914a86aa89d4d02ccd810632f"
     },
     {
       "component": "ricardian",

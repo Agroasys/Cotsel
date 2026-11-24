@@ -43,7 +43,39 @@ export interface RunManifest {
   scope: { count: number; digest: string };
   rules: { version: string; digest: string };
   keyId: string;
+  /** Signed at sealing only; absent from a manifest rebuilt from rows. */
+  containments?: SealedContainment[];
+  clearances?: SealedClearance[];
+  context?: SealedChainContext;
 }
+
+/** An open incident as the sealing run saw it (review R01/R03). */
+export interface SealedContainment {
+  tradeId: string;
+  incidentReference: string;
+  episode: number;
+  state: 'CONTAINED' | 'RECONCILED_PENDING_APPROVAL';
+  openedRunKey: string;
+  clearedRunKey: string | null;
+  citedFindings: Array<{ runKey: string; digest: string }>;
+}
+
+/** An incident this run cleared: the trade was in scope and reconciled clean. */
+export interface SealedClearance {
+  tradeId: string;
+  incidentReference: string;
+  episode: number;
+}
+
+export interface SealedChainContext {
+  chainId: number | null;
+  escrowAddress: string;
+}
+
+export function readContainmentSnapshot(
+  db: QueryExecutor,
+  runKey: string,
+): Promise<{ containments: SealedContainment[]; clearances: SealedClearance[] }>;
 
 export type RunVerification =
   | { ok: true; manifest: RunManifest }
@@ -65,7 +97,16 @@ export function scopeDigest(tradeIds: Iterable<string>): string;
 export function readRunEvidence(db: QueryExecutor, runKey: string): Promise<RunEvidence | null>;
 export function buildRunManifest(
   evidence: RunEvidence,
-  meta: { keyId: string; rulesVersion: string; rulesDigest: string },
+  meta: {
+    keyId: string;
+    rulesVersion: string;
+    rulesDigest: string;
+    sealed?: {
+      containments: SealedContainment[];
+      clearances: SealedClearance[];
+      context: SealedChainContext;
+    };
+  },
 ): RunManifest;
 export function manifestBytes(manifest: RunManifest): Buffer;
 export function parsePublicKeys(json: string): Map<string, KeyObject>;

@@ -17,14 +17,34 @@ export class ReplayedApprovalError extends Error {
 /** Either the pool or a client bound to an open transaction. */
 type Executor = Pool | PoolClient;
 
+/** One cited finding: its digest and the signed run it was found in. */
+export interface CitedFinding {
+  runKey: string;
+  digest: string;
+}
+
+function citedFindingsOf(runKey: string, evidence: Record<string, unknown>): CitedFinding[] {
+  const findings = Array.isArray(evidence.findings) ? evidence.findings : [];
+  return findings
+    .map((finding) => (finding as { digest?: unknown }).digest)
+    .filter((digest): digest is string => typeof digest === 'string')
+    .map((digest) => ({ runKey, digest }));
+}
+
 /**
  * Open a containment for a trade, or fold a repeat sighting into the standing
  * one.
  *
- * The incident reference and `opened_at` are never overwritten: an operator
- * quoting a reference must keep reaching the same incident. A trade that had
- * reconciled clean and is now diverging again regresses to `CONTAINED`, because
- * the evidence that justified releasing it no longer holds.
+ * While an incident is open, its reference, `opened_at` and opening run never
+ * change, and every sighting appends its findings to `cited_findings` with the
+ * run they came from (review R03). Nothing is replaced, so every cited digest
+ * stays verifiable against its own signed run. A trade that had reconciled
+ * clean and is now diverging again regresses to `CONTAINED`, because the
+ * evidence that justified releasing it no longer holds.
+ *
+ * A trade that was RELEASED and diverges again opens a *new* incident: a new
+ * reference, opening run, lineage and episode. Nothing approved for the
+ * earlier incident can match it.
  */
 export async function openContainment(
   input: {
@@ -36,32 +56,14 @@ export async function openContainment(
   },
   executor: Executor = pool,
 ): Promise<{ row: TradeContainmentRow; opened: boolean }> {
-  const result = await executor.query<TradeContainmentRow & { was_opened: boolean }>(
-    `INSERT INTO reconcile_trade_containments (
-        trade_id, incident_reference, state, opened_run_key,
-        qualifying_codes, evidence, observation_count,
-        last_observed_run_key, last_observed_at
-     ) VALUES ($1, $2, 'CONTAINED', $3, $4::text[], $5::jsonb, 1, $3, NOW())
-     ON CONFLICT (trade_id) DO UPDATE SET
-        state = 'CONTAINED',
-        qualifying_codes = (
-          SELECT ARRAY(
-            SELECT DISTINCT unnest(
-              reconcile_trade_containments.qualifying_codes || EXCLUDED.qualifying_codes
-            ) ORDER BY 1
-          )
-        ),
-        evidence = EXCLUDED.evidence,
-        observation_count = reconcile_trade_containments.observation_count + 1,
-        last_observed_run_key = EXCLUDED.last_observed_run_key,
-        last_observed_at = NOW(),
-        -- A fresh divergence invalidates any pending clearance.
-        cleared_run_key = NULL,
-        cleared_at = NULL,
-        -- It also invalidates the recovery evidence of the previous incident.
-        -- A governed unpause lifted the pause it was granted for; this trade is
-        -- diverging again, so it is neither paused nor approved any more, and
-        -- the receipt that released it cannot release it a second time.
+  const cited = JSON.stringify(citedFindingsOf(input.runKey, input.evidence));
+  // Lock the standing row (if any) so a concurrent writer cannot interleave.
+  const prior = await executor.query<{ state: string }>(
+    'SELECT state FROM reconcile_trade_containments WHERE trade_id = $1 FOR UPDATE',
+    [input.tradeId],
+  );
+  const priorState = prior.rows[0]?.state ?? null;
+  const reset = `
         pause_observed_at = NULL,
         pause_observed_block = NULL,
         approval_tx_hash = NULL,
@@ -76,19 +78,79 @@ export async function openContainment(
         approval_required = NULL,
         approved_at = NULL,
         released_at = NULL,
-        updated_at = NOW()
-     RETURNING *, (xmax = 0) AS was_opened`,
-    [
-      input.tradeId,
-      input.incidentReference,
-      input.runKey,
-      input.qualifyingCodes,
-      JSON.stringify(input.evidence),
-    ],
-  );
+        cleared_run_key = NULL,
+        cleared_at = NULL,
+        updated_at = NOW()`;
 
-  const row = result.rows[0];
-  return { row, opened: row.was_opened };
+  let result;
+  if (priorState === null) {
+    result = await executor.query<TradeContainmentRow>(
+      `INSERT INTO reconcile_trade_containments (
+          trade_id, incident_reference, state, opened_run_key,
+          qualifying_codes, evidence, observation_count,
+          last_observed_run_key, last_observed_at, cited_findings
+       ) VALUES ($1, $2, 'CONTAINED', $3, $4::text[], $5::jsonb, 1, $3, NOW(), $6::jsonb)
+       RETURNING *`,
+      [
+        input.tradeId,
+        input.incidentReference,
+        input.runKey,
+        input.qualifyingCodes,
+        JSON.stringify(input.evidence),
+        cited,
+      ],
+    );
+  } else if (priorState === 'RELEASED') {
+    // A new incident. The previous one's recovery evidence is spent with it.
+    result = await executor.query<TradeContainmentRow>(
+      `UPDATE reconcile_trade_containments SET
+          state = 'CONTAINED',
+          incident_reference = $2,
+          opened_run_key = $3,
+          opened_at = NOW(),
+          qualifying_codes = $4::text[],
+          evidence = $5::jsonb,
+          observation_count = 1,
+          last_observed_run_key = $3,
+          last_observed_at = NOW(),
+          cited_findings = $6::jsonb,
+          episode = episode + 1,
+          ${reset}
+       WHERE trade_id = $1
+       RETURNING *`,
+      [
+        input.tradeId,
+        input.incidentReference,
+        input.runKey,
+        input.qualifyingCodes,
+        JSON.stringify(input.evidence),
+        cited,
+      ],
+    );
+  } else {
+    // The standing incident sees it again: append, never replace.
+    result = await executor.query<TradeContainmentRow>(
+      `UPDATE reconcile_trade_containments SET
+          state = 'CONTAINED',
+          qualifying_codes = (
+            SELECT ARRAY(SELECT DISTINCT unnest(qualifying_codes || $3::text[]) ORDER BY 1)
+          ),
+          evidence = $4::jsonb,
+          observation_count = observation_count + 1,
+          last_observed_run_key = $2,
+          last_observed_at = NOW(),
+          cited_findings = cited_findings || (
+            SELECT COALESCE(jsonb_agg(entry), '[]'::jsonb)
+            FROM jsonb_array_elements($5::jsonb) AS entry
+            WHERE NOT cited_findings @> jsonb_build_array(entry)
+          ),
+          ${reset}
+       WHERE trade_id = $1
+       RETURNING *`,
+      [input.tradeId, input.runKey, input.qualifyingCodes, JSON.stringify(input.evidence), cited],
+    );
+  }
+  return { row: result.rows[0], opened: priorState === null || priorState === 'RELEASED' };
 }
 
 /**

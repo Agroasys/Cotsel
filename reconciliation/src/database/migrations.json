@@ -64,6 +64,13 @@
       "file": "009_run_manifests.sql",
       "sha256": "1a1c6d6bf0416d7f4804937e3eedbf8ade4ab158053d41533810f1b0e4151015",
       "schema_sha256": "873dcbcbd9c3fedf482abc8ecc85f5cba132e1789c0773fab094333e9047de08"
+    },
+    {
+      "version": "202611240003",
+      "name": "containment_lineage",
+      "file": "010_containment_lineage.sql",
+      "sha256": "6bc6b5c1fec8aab8209648c3eccb0b5a4f0735df7507be2bb25b1e95fa1b2c24",
+      "schema_sha256": "1735a466988c30ea545cae6b74cfe5509fdcc49efdbef44bb41a7e534b9c91e5"
     }
   ]
 }

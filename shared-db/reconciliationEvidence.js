@@ -112,8 +112,59 @@ async function readRunEvidence(db, runKey) {
   };
 }
 
-function buildRunManifest(evidence, { keyId, rulesVersion, rulesDigest }) {
+/**
+ * The containment state a run asserts when it is sealed (review R01/R02/R03).
+ * Read inside the sealing transaction, after the run's own containment writes.
+ *
+ * - containments: every open incident with its trade, reference, episode,
+ *   state, opening and clearing run, and cited findings as (runKey, digest).
+ * - clearances: the incidents THIS run cleared. Reconciliation records a
+ *   clearance only for a trade it compared in this run and found clean, so a
+ *   clearance is an explicit signed assertion, never an absence of findings.
+ *
+ * Verifiers never recompute this from live rows (containments change after
+ * sealing); it is covered by the manifest signature alone.
+ */
+async function readContainmentSnapshot(db, runKey) {
+  const rows = await db.query(
+    `SELECT trade_id, incident_reference, episode, state, opened_run_key, cleared_run_key,
+            cited_findings
+     FROM reconcile_trade_containments
+     WHERE state IN ('CONTAINED', 'RECONCILED_PENDING_APPROVAL')
+     ORDER BY trade_id`,
+  );
+  const containments = rows.rows.map((row) => ({
+    tradeId: row.trade_id,
+    incidentReference: row.incident_reference,
+    episode: row.episode,
+    state: row.state,
+    openedRunKey: row.opened_run_key,
+    clearedRunKey: row.cleared_run_key,
+    citedFindings: [...row.cited_findings]
+      .map((entry) => ({ runKey: entry.runKey, digest: entry.digest }))
+      .sort((a, b) => (a.runKey + a.digest).localeCompare(b.runKey + b.digest)),
+  }));
+  const clearances = containments
+    .filter(
+      (entry) => entry.state === 'RECONCILED_PENDING_APPROVAL' && entry.clearedRunKey === runKey,
+    )
+    .map(({ tradeId, incidentReference, episode }) => ({ tradeId, incidentReference, episode }));
+  return { containments, clearances };
+}
+
+/**
+ * The manifest a run is sealed with. `sealed` carries what only the sealer
+ * knows: the containment snapshot, its clearances and the chain context.
+ */
+function buildRunManifest(evidence, { keyId, rulesVersion, rulesDigest, sealed }) {
   return {
+    ...(sealed
+      ? {
+          containments: sealed.containments,
+          clearances: sealed.clearances,
+          context: sealed.context,
+        }
+      : {}),
     schemaVersion: MANIFEST_SCHEMA,
     runKey: evidence.runKey,
     status: evidence.status,
@@ -263,6 +314,7 @@ async function classifyRunFindings(db, runKey, publicKeys) {
 }
 
 module.exports = {
+  readContainmentSnapshot,
   classifyRunFindings,
   FINDING_SCHEMA,
   MANIFEST_SCHEMA,

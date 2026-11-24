@@ -64,6 +64,7 @@ test(
               ['202611010002', 'enumeration_cycles'],
               ['202611230001', 'notification_outbox_envelope'],
               ['202611230002', 'run_manifests'],
+              ['202611240003', 'containment_lineage'],
             ],
           );
         });
