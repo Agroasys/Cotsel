@@ -218,6 +218,10 @@ paths:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-templates-01.yml#/paths/~1settlement-templates~1{templateId}~1versions~1{version}~1activate
   /settlement-templates/{templateId}/versions/{version}/retire:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-templates-01.yml#/paths/~1settlement-templates~1{templateId}~1versions~1{version}~1retire
+  /reconciliation/containments:
+    $ref: ./cotsel-dashboard-gateway/paths/reconciliation-containments-01.yml#/paths/~1reconciliation~1containments
+  /reconciliation/containments/{tradeId}:
+    $ref: ./cotsel-dashboard-gateway/paths/reconciliation-containments-01.yml#/paths/~1reconciliation~1containments~1{tradeId}
 components:
   securitySchemes:
     sessionBearer: {$ref: ./cotsel-dashboard-gateway/components/shared.yml#/components/securitySchemes/sessionBearer}
@@ -366,6 +370,9 @@ components:
     ReconciliationListResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-01.yml#/components/schemas/ReconciliationListResponse}
     ReconciliationDetailPayload: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-01.yml#/components/schemas/ReconciliationDetailPayload}
     ReconciliationDetailResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-01.yml#/components/schemas/ReconciliationDetailResponse}
+    ReconciliationContainment: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-containments-01.yml#/components/schemas/ReconciliationContainment}
+    ReconciliationContainmentResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-containments-01.yml#/components/schemas/ReconciliationContainmentResponse}
+    ReconciliationContainmentListResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-containments-01.yml#/components/schemas/ReconciliationContainmentListResponse}
     RicardianFreshness: {$ref: ./cotsel-dashboard-gateway/components/schemas-ricardian-01.yml#/components/schemas/RicardianFreshness}
     RicardianDocument: {$ref: ./cotsel-dashboard-gateway/components/schemas-ricardian-01.yml#/components/schemas/RicardianDocument}
     RicardianVerification: {$ref: ./cotsel-dashboard-gateway/components/schemas-ricardian-01.yml#/components/schemas/RicardianVerification}

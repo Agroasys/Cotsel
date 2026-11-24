@@ -1,5 +1,11 @@
 import { createUserActionInventoryReader } from './core/userActionEngine/inventory';
 import { resolveUserActionRetirementDependency } from './config/userActionRetirement';
+import { loadReconciliationEvidenceConfig } from './config/reconciliationEvidenceConfig';
+import {
+  createContainmentEvidenceService,
+  UNCONFIGURED_CONTAINMENT_EVIDENCE,
+} from './core/containmentEvidence';
+import { createReconciliationContainmentRouter } from './routes/reconciliationContainments';
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -82,6 +88,11 @@ const complianceWriteStore = createPostgresComplianceWriteStore(pool, compliance
 const complianceService = new ComplianceService(complianceStore, complianceWriteStore);
 const evidenceBundleStore = createPostgresEvidenceBundleStore(pool);
 const governanceRuntime = createGovernanceRuntime(config, pool);
+// Cotsel#951: signed reconciliation evidence, verified by the gateway itself.
+const reconciliationEvidenceConfig = loadReconciliationEvidenceConfig(config.reconciliationBaseUrl);
+const containmentEvidence = reconciliationEvidenceConfig
+  ? createContainmentEvidenceService(reconciliationEvidenceConfig)
+  : UNCONFIGURED_CONTAINMENT_EVIDENCE;
 const { governanceStatusService } = governanceRuntime;
 const failedOperationStore = createPostgresFailedOperationStore(pool);
 const errorHandlerWorkflow = new GatewayErrorHandlerWorkflow(failedOperationStore, auditLogStore);
@@ -325,7 +336,12 @@ async function bootstrap(): Promise<void> {
       idempotencyStore,
     }),
   );
-  extraRouter.use(governanceRuntime.createRouter(authSessionClient, idempotencyStore));
+  extraRouter.use(
+    governanceRuntime.createRouter(authSessionClient, idempotencyStore, containmentEvidence),
+  );
+  extraRouter.use(
+    createReconciliationContainmentRouter({ authSessionClient, config, containmentEvidence }),
+  );
   extraRouter.use(
     createTreasuryRouter({
       authSessionClient,
@@ -419,6 +435,7 @@ async function bootstrap(): Promise<void> {
     Logger.info('Shutting down dashboard gateway', { signal });
     for (const runtime of backgroundRuntimes) runtime.stop();
     await requestRateLimiter.close();
+    await containmentEvidence.close();
     await closeConnection(pool);
     server.close(() => process.exit(0));
   };

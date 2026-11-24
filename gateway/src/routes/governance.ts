@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Router } from 'express';
+import type { ContainmentEvidenceService } from '../core/containmentEvidence';
 import { GatewayConfig } from '../config/env';
 import { AuthSessionClient } from '../core/authSessionClient';
 import {
@@ -34,6 +35,8 @@ export interface GovernanceRouterOptions {
   idempotencyStore: IdempotencyStore;
   /** Records the step-up evidence of each privileged mutation (Cotsel#946). */
   auditLogStore?: AuditLogStore;
+  /** Verifies contained trades' signed evidence before a trade unpause (Cotsel#951). */
+  containmentEvidence?: ContainmentEvidenceService;
 }
 
 function optionalEnum<T extends string>(
@@ -136,6 +139,7 @@ export function createGovernanceRouter(options: GovernanceRouterOptions): Router
       config: options.config,
       governanceReader: options.governanceStatusService,
       mutationService: options.governanceMutationService,
+      containmentEvidence: options.containmentEvidence,
     },
   );
   router.use(mutationRouter);

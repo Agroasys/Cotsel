@@ -166,39 +166,64 @@ function parsePublicKeys(json) {
 const sameJson = (left, right) => canonicalJson(left) === canonicalJson(right);
 
 /**
- * Verifies a run against its signed manifest. Returns `{ ok: true, manifest }`
- * or `{ ok: false, reason }`. `unsigned` means the run has no manifest at all
- * (it predates signing, or was never sealed); every other reason means the
- * evidence or its signature does not hold.
+ * Everything needed to verify one run, as plain JSON: the run's evidence rows
+ * and its seal. A bundle can be loaded here or received from reconciliation
+ * over HTTP; verification is pure, so the transport needs no trust. A forged
+ * bundle cannot carry a valid signature over rows it changed.
  */
-async function verifyRunEvidence(db, runKey, publicKeys) {
+async function loadRunEvidenceBundle(db, runKey) {
   const sealed = await db.query(
     'SELECT manifest, signature, key_id FROM reconcile_run_manifests WHERE run_key = $1',
     [runKey],
   );
   const seal = sealed.rows[0];
+  return {
+    runKey,
+    seal: seal ? { manifest: seal.manifest, signature: seal.signature, keyId: seal.key_id } : null,
+    evidence: await readRunEvidence(db, runKey),
+  };
+}
+
+/** Pure: verifies a run bundle against its signed manifest. */
+function verifyRunEvidenceBundle(bundle, publicKeys) {
+  const seal = bundle?.seal;
   if (!seal) return { ok: false, reason: 'unsigned' };
   const manifest = seal.manifest;
-  const key = publicKeys.get(seal.key_id);
+  const key = publicKeys.get(seal.keyId);
   if (!key) return { ok: false, reason: 'unknown_key' };
-  if (manifest?.schemaVersion !== MANIFEST_SCHEMA || manifest.keyId !== seal.key_id) {
+  if (
+    manifest?.schemaVersion !== MANIFEST_SCHEMA ||
+    manifest.keyId !== seal.keyId ||
+    manifest.runKey !== bundle.runKey ||
+    typeof seal.signature !== 'string'
+  ) {
     return { ok: false, reason: 'manifest_invalid' };
   }
-  const signatureOk = crypto.verify(
-    'sha256',
-    manifestBytes(manifest),
-    key,
-    Buffer.from(seal.signature, 'base64'),
-  );
+  let signatureOk;
+  try {
+    signatureOk = crypto.verify(
+      'sha256',
+      manifestBytes(manifest),
+      key,
+      Buffer.from(seal.signature, 'base64'),
+    );
+  } catch {
+    signatureOk = false;
+  }
   if (!signatureOk) return { ok: false, reason: 'bad_signature' };
 
-  const evidence = await readRunEvidence(db, runKey);
-  if (!evidence) return { ok: false, reason: 'run_mismatch' };
-  const expected = buildRunManifest(evidence, {
-    keyId: manifest.keyId,
-    rulesVersion: manifest.rules?.version,
-    rulesDigest: manifest.rules?.digest,
-  });
+  const evidence = bundle.evidence;
+  if (!evidence || evidence.runKey !== bundle.runKey) return { ok: false, reason: 'run_mismatch' };
+  let expected;
+  try {
+    expected = buildRunManifest(evidence, {
+      keyId: manifest.keyId,
+      rulesVersion: manifest.rules?.version,
+      rulesDigest: manifest.rules?.digest,
+    });
+  } catch {
+    return { ok: false, reason: 'run_mismatch' };
+  }
   if (
     manifest.runKey !== expected.runKey ||
     manifest.status !== expected.status ||
@@ -214,16 +239,25 @@ async function verifyRunEvidence(db, runKey, publicKeys) {
 }
 
 /**
- * Per-finding status for display (Cotsel#951). `verified`: the signature holds
- * and the row's digest is listed. `failed`: the row is not covered by a valid
+ * Verifies a run against its signed manifest. Returns `{ ok: true, manifest }`
+ * or `{ ok: false, reason }`. `unsigned` means the run has no manifest at all
+ * (it predates signing, or was never sealed); every other reason means the
+ * evidence or its signature does not hold.
+ */
+async function verifyRunEvidence(db, runKey, publicKeys) {
+  return verifyRunEvidenceBundle(await loadRunEvidenceBundle(db, runKey), publicKeys);
+}
+
+/**
+ * Pure: per-finding status (Cotsel#951). `verified`: the signature holds and
+ * the row's digest is listed. `failed`: the row is not covered by a valid
  * manifest (altered, injected, or the signature itself does not verify).
  * `missing`: the manifest lists a digest no row has, i.e. a deleted finding.
- * `unsigned`: the run has no manifest. Gates still decide on the whole run via
- * verifyRunEvidence; this only says which findings are affected.
+ * `unsigned`: the run has no manifest.
  */
-async function classifyRunFindings(db, runKey, publicKeys) {
-  const run = await verifyRunEvidence(db, runKey, publicKeys);
-  const evidence = await readRunEvidence(db, runKey);
+function classifyRunEvidenceBundle(bundle, publicKeys) {
+  const run = verifyRunEvidenceBundle(bundle, publicKeys);
+  const evidence = bundle?.evidence;
   if (!evidence) return { run, findings: [] };
   const rows = evidence.findings.map((finding) => ({
     tradeId: finding.tradeId,
@@ -234,10 +268,7 @@ async function classifyRunFindings(db, runKey, publicKeys) {
   if (run.ok === false && run.reason === 'unsigned') {
     return { run, findings: rows.map((row) => ({ ...row, status: 'unsigned' })) };
   }
-  const sealed = await db.query('SELECT manifest FROM reconcile_run_manifests WHERE run_key = $1', [
-    runKey,
-  ]);
-  const listed = sealed.rows[0]?.manifest?.findings?.digests;
+  const listed = bundle.seal?.manifest?.findings?.digests;
   const signatureTrusted =
     run.ok || !['unknown_key', 'manifest_invalid', 'bad_signature'].includes(run.reason);
   if (!signatureTrusted || !Array.isArray(listed)) {
@@ -262,8 +293,103 @@ async function classifyRunFindings(db, runKey, publicKeys) {
   };
 }
 
+/** Per-finding status for one run, loaded from the database. */
+async function classifyRunFindings(db, runKey, publicKeys) {
+  return classifyRunEvidenceBundle(await loadRunEvidenceBundle(db, runKey), publicKeys);
+}
+
+const CONTAINMENT_COLUMNS = `trade_id, incident_reference, state, opened_run_key,
+  to_char(opened_at, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS opened_at, qualifying_codes,
+  cleared_run_key, evidence`;
+
+async function containmentBundle(db, row) {
+  return {
+    containment: row,
+    opening: await loadRunEvidenceBundle(db, row.opened_run_key),
+    clearing: row.cleared_run_key ? await loadRunEvidenceBundle(db, row.cleared_run_key) : null,
+  };
+}
+
+/** A containment with the run bundles its evidence rests on, or null. */
+async function loadContainmentEvidenceBundle(db, tradeId) {
+  const rows = await db.query(
+    `SELECT ${CONTAINMENT_COLUMNS} FROM reconcile_trade_containments WHERE trade_id = $1`,
+    [tradeId],
+  );
+  return rows.rows[0] ? containmentBundle(db, rows.rows[0]) : null;
+}
+
+/** Every containment not yet released, newest first, at most `limit`. */
+async function loadOpenContainmentEvidenceBundles(db, limit = 200) {
+  const rows = await db.query(
+    `SELECT ${CONTAINMENT_COLUMNS} FROM reconcile_trade_containments
+     WHERE state <> 'RELEASED' ORDER BY opened_at DESC LIMIT $1`,
+    [limit],
+  );
+  const bundles = [];
+  for (const row of rows.rows) bundles.push(await containmentBundle(db, row));
+  return bundles;
+}
+
+/**
+ * Pure: a containment's evidence (Cotsel#951). `verified` only when the
+ * opening run verifies, every finding the incident cites is a verified finding
+ * of that run, and the clearing run (if any) verifies. `unsigned` when the
+ * containment cites no digests (it predates signing) or the opening run has
+ * no manifest.
+ */
+function verifyContainmentBundle(bundle, publicKeys) {
+  const row = bundle.containment;
+  const cited = (row.evidence?.findings ?? []).filter(
+    (finding) => typeof finding?.digest === 'string',
+  );
+  if (cited.length === 0) {
+    return {
+      findings: [],
+      evidence: { status: 'unsigned', reason: 'containment_predates_signed_findings' },
+    };
+  }
+  if (bundle.opening?.runKey !== row.opened_run_key) {
+    return { findings: [], evidence: { status: 'failed', reason: 'opening_run_mismatch' } };
+  }
+  const { run, findings } = classifyRunEvidenceBundle(bundle.opening, publicKeys);
+  const byDigest = new Map(findings.map((finding) => [finding.digest, finding]));
+  const citedFindings = cited.map((finding) => ({
+    digest: finding.digest,
+    mismatchCode: finding.mismatchCode ?? null,
+    comparedField: finding.comparedField ?? null,
+    status: byDigest.get(finding.digest)?.status ?? 'missing',
+  }));
+  let reason = null;
+  if (!run.ok) reason = `opening_run_${run.reason}`;
+  else if (citedFindings.some((finding) => finding.status !== 'verified')) {
+    reason = 'cited_finding_not_verified';
+  } else if (row.cleared_run_key) {
+    const cleared =
+      bundle.clearing?.runKey === row.cleared_run_key
+        ? verifyRunEvidenceBundle(bundle.clearing, publicKeys)
+        : { ok: false, reason: 'mismatch' };
+    if (!cleared.ok) reason = `clearing_run_${cleared.reason}`;
+  }
+  const status =
+    reason === null ? 'verified' : !run.ok && run.reason === 'unsigned' ? 'unsigned' : 'failed';
+  return { findings: citedFindings, evidence: { status, reason } };
+}
+
+/** A containment row's evidence, loaded from the database and verified. */
+async function verifyContainmentEvidence(db, row, publicKeys) {
+  return verifyContainmentBundle(await containmentBundle(db, row), publicKeys);
+}
+
 module.exports = {
+  classifyRunEvidenceBundle,
   classifyRunFindings,
+  loadContainmentEvidenceBundle,
+  loadOpenContainmentEvidenceBundles,
+  loadRunEvidenceBundle,
+  verifyContainmentBundle,
+  verifyContainmentEvidence,
+  verifyRunEvidenceBundle,
   FINDING_SCHEMA,
   MANIFEST_SCHEMA,
   buildRunManifest,

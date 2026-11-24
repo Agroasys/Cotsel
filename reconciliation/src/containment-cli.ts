@@ -1,5 +1,9 @@
-import { closeConnection } from './database/connection';
 import { EscrowGovernanceReader } from './blockchain/escrowGovernance';
+import {
+  parsePublicKeys,
+  verifyContainmentEvidence,
+} from '@agroasys/shared-db/reconciliationEvidence';
+import { closeConnection, pool } from './database/connection';
 import {
   ReplayedApprovalError,
   getContainment,
@@ -129,6 +133,22 @@ async function release(tradeId: string, approvalTxHash: string): Promise<TradeCo
       `Trade ${tradeId} has never been observed paused on chain, so there is no containment for a ` +
         'governed unpause to lift. Confirm the scoped pause was applied and let a reconciliation ' +
         'run record it before releasing.',
+    );
+  }
+
+  // Cotsel#951: a release rests on signed evidence. The findings that opened the
+  // incident, and the clean run that cleared it, must verify before any release.
+  const keys = process.env.RECONCILIATION_FINDING_PUBLIC_KEYS?.trim();
+  if (!keys) {
+    throw new Error(
+      'RECONCILIATION_FINDING_PUBLIC_KEYS is required to release: the containment evidence must verify.',
+    );
+  }
+  const signed = await verifyContainmentEvidence(pool, current, parsePublicKeys(keys));
+  if (signed.evidence.status !== 'verified') {
+    throw new Error(
+      `Trade ${tradeId}'s containment evidence does not verify (${signed.evidence.reason}); ` +
+        'it cannot be released. Treat this as tampering: preserve the database and open an incident.',
     );
   }
 

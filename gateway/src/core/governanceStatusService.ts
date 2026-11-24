@@ -28,7 +28,12 @@ export interface UnpauseProposalState {
   hasActiveProposal: boolean;
   approvalCount: number;
   executed: boolean;
+  /** The escrow's PauseScope and trade of the active proposal; null without one. */
+  scope: 'GLOBAL' | 'CLAIMS' | 'TRADE' | null;
+  tradeId: string | null;
 }
+
+const PAUSE_SCOPES = ['GLOBAL', 'CLAIMS', 'TRADE'] as const;
 
 export interface GovernanceProposalState {
   proposalId: number;
@@ -385,6 +390,8 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
           ? toSafeInteger(proposal.approvalCount, 'unpauseProposal.approvalCount')
           : 0,
         executed: proposal.executed,
+        scope: hasActiveProposal ? (PAUSE_SCOPES[Number(proposal.scope)] ?? null) : null,
+        tradeId: hasActiveProposal ? proposal.tradeId.toString() : null,
       };
     } catch (error) {
       throw chainReadFailure('Failed to read unpause proposal state', error);

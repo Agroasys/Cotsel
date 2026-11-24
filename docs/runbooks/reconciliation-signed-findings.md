@@ -43,16 +43,34 @@ Every reader verifies with the same shared code and the same reader of the datab
 
 Tests: `reconciliation/src/tests/signed-findings.postgres.test.ts` tampers past the database triggers, as a database owner could. `treasury/tests/reconciliationReader.postgres.test.ts` shows that an injected scope row blocks the trade.
 
-The gateway does not read findings today. Cotsel.dash#228 shows verification state, and #957 distributes findings with their manifest.
+## Governance acts only on verified evidence
+
+A containment is the freeze request for one trade. Its evidence is `verified` only when:
+
+- the run that opened it verifies against its signed manifest;
+- every finding the incident cites is a verified finding of that run;
+- the clean run that cleared it, if any, also verifies.
+
+An incident from before signing cites no digests, so it is `unsigned`.
+
+| Action                                                                                                       | Check                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Gateway `POST /governance/unpause/proposal/approve/prepare`, when the active escrow proposal is trade-scoped | Refuses with 409 `reconciliation_evidence_invalid` or `reconciliation_evidence_unsigned`, logged as `RECONCILIATION_EVIDENCE_INVALID`. Refuses with 503 when evidence is unavailable or not configured. Global and claims unpauses are not affected. Pausing is never blocked. |
+| `containment-cli release`                                                                                    | Refuses before any chain read unless the evidence verifies. Needs `RECONCILIATION_FINDING_PUBLIC_KEYS`.                                                                                                                                                                        |
+| Gateway `GET /reconciliation/containments` and `GET /reconciliation/containments/{tradeId}`                  | Returns each containment with `evidence.status` and per-finding status, for governance review and Cotsel.dash#228.                                                                                                                                                             |
+
+**How the gateway gets the evidence:** reconciliation serves the raw containment rows and the run seals on its internal port (`GET /containments` and `GET /containments/{tradeId}`, in `containmentEvidenceHttp.ts`). The gateway verifies the signatures and digests itself with `RECONCILIATION_FINDING_PUBLIC_KEYS`. It never connects to the reconciliation database, which keeps the failure domains isolated. A reply that was altered in transit, or that cannot be read, fails verification.
+
+**What the escrow does:** the escrow quorum can still act on chain directly. The gateway check applies to the approvals it prepares. #957 will distribute findings with their manifests.
 
 ## Configuration
 
-| Setting                                  | Service                                                       | Meaning                                                                                                                                                                                     |
-| ---------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `RECONCILIATION_FINDING_SIGNER`          | reconciliation                                                | `kms:<key ARN>` in staging and production; `local:<label>` only with `COTSEL_ENVIRONMENT=local`. The part after the first colon is the manifest key id. Unset: the daemon refuses to start. |
-| `RECONCILIATION_FINDING_SIGNING_KEY`     | reconciliation (local only)                                   | A base64 PKCS#8 P-256 private key.                                                                                                                                                          |
-| `RECONCILIATION_FINDING_SIGN_TIMEOUT_MS` | reconciliation                                                | Default `5000`. At most a quarter of the lease TTL, because signing runs under the run's lease.                                                                                             |
-| `RECONCILIATION_FINDING_PUBLIC_KEYS`     | treasury (required with `RECONCILIATION_DB_NAME`), report CLI | JSON of the form `{"<key id>": "<base64 SPKI DER>"}`. For staging, use the foundation outputs `reconciliation_finding_key_arn` and `reconciliation_finding_public_key`.                     |
+| Setting                                  | Service                                                                                                                                                      | Meaning                                                                                                                                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RECONCILIATION_FINDING_SIGNER`          | reconciliation                                                                                                                                               | `kms:<key ARN>` in staging and production; `local:<label>` only with `COTSEL_ENVIRONMENT=local`. The part after the first colon is the manifest key id. Unset: the daemon refuses to start. |
+| `RECONCILIATION_FINDING_SIGNING_KEY`     | reconciliation (local only)                                                                                                                                  | A base64 PKCS#8 P-256 private key.                                                                                                                                                          |
+| `RECONCILIATION_FINDING_SIGN_TIMEOUT_MS` | reconciliation                                                                                                                                               | Default `5000`. At most a quarter of the lease TTL, because signing runs under the run's lease.                                                                                             |
+| `RECONCILIATION_FINDING_PUBLIC_KEYS`     | treasury (required with `RECONCILIATION_DB_NAME`), gateway (trade-unpause guard and containment API), reconciliation (`containment-cli release`), report CLI | JSON of the form `{"<key id>": "<base64 SPKI DER>"}`. For staging, use the foundation outputs `reconciliation_finding_key_arn` and `reconciliation_finding_public_key`.                     |
 
 ## Deploy order and rollback
 

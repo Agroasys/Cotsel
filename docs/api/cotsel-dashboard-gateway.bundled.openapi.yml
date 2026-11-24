@@ -3154,6 +3154,65 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '409':
           $ref: '#/components/responses/ConflictError'
+  /reconciliation/containments:
+    get:
+      tags:
+        - Reconciliation
+      summary: List open trade containments with verified evidence
+      description: |
+        Contained trades that are not yet released (Cotsel#951). The gateway verifies each containment's
+        signed reconciliation evidence itself: `evidence.status` is `verified` only when the opening run
+        verifies against its signed manifest, every cited finding is a verified finding of that run, and
+        the clearing run (if any) verifies too. A trade-scoped unpause approval is refused otherwise.
+      operationId: listReconciliationContainments
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Open containments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationContainmentListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /reconciliation/containments/{tradeId}:
+    get:
+      tags:
+        - Reconciliation
+      summary: Get one trade's containment with verified evidence
+      operationId: getReconciliationContainment
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: tradeId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[0-9]{1,78}$
+      responses:
+        '200':
+          description: The containment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationContainmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
 components:
   securitySchemes:
     sessionBearer:
@@ -6963,6 +7022,132 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/ReconciliationDetailPayload'
+        timestamp:
+          type: string
+          format: date-time
+    ReconciliationContainment:
+      type: object
+      additionalProperties: false
+      required:
+        - tradeId
+        - incidentReference
+        - state
+        - openedRunKey
+        - openedAt
+        - qualifyingCodes
+        - clearedRunKey
+        - rulesVersion
+        - findings
+        - evidence
+      properties:
+        tradeId:
+          type: string
+        incidentReference:
+          type: string
+        state:
+          type: string
+          enum:
+            - CONTAINED
+            - RECONCILED_PENDING_APPROVAL
+            - RELEASED
+        openedRunKey:
+          type: string
+        openedAt:
+          type: string
+          format: date-time
+        qualifyingCodes:
+          type: array
+          items:
+            type: string
+        clearedRunKey:
+          type:
+            - string
+            - 'null'
+        rulesVersion:
+          type:
+            - string
+            - 'null'
+        findings:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - digest
+              - mismatchCode
+              - comparedField
+              - status
+            properties:
+              digest:
+                type: string
+                pattern: ^[0-9a-f]{64}$
+              mismatchCode:
+                type:
+                  - string
+                  - 'null'
+              comparedField:
+                type:
+                  - string
+                  - 'null'
+              status:
+                type: string
+                enum:
+                  - verified
+                  - failed
+                  - missing
+                  - unsigned
+        evidence:
+          type: object
+          additionalProperties: false
+          required:
+            - status
+            - reason
+          properties:
+            status:
+              type: string
+              enum:
+                - verified
+                - failed
+                - unsigned
+            reason:
+              type:
+                - string
+                - 'null'
+    ReconciliationContainmentResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/ReconciliationContainment'
+        timestamp:
+          type: string
+          format: date-time
+    ReconciliationContainmentListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconciliationContainment'
         timestamp:
           type: string
           format: date-time

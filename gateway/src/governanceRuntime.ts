@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { Pool } from 'pg';
+import type { ContainmentEvidenceService } from './core/containmentEvidence';
 import type { GatewayConfig } from './config/env';
 import type { AuthSessionClient } from './core/authSessionClient';
 import { GovernanceDirectSignMonitor } from './core/governanceDirectSignMonitor';
@@ -33,7 +34,11 @@ export function createGovernanceRuntime(config: GatewayConfig, pool: Pool) {
 
   return {
     governanceStatusService,
-    createRouter: (authSessionClient: AuthSessionClient, idempotencyStore: IdempotencyStore) =>
+    createRouter: (
+      authSessionClient: AuthSessionClient,
+      idempotencyStore: IdempotencyStore,
+      containmentEvidence?: ContainmentEvidenceService,
+    ) =>
       createGovernanceRouter({
         authSessionClient,
         config,
@@ -42,6 +47,7 @@ export function createGovernanceRuntime(config: GatewayConfig, pool: Pool) {
         governanceMutationService,
         idempotencyStore,
         auditLogStore,
+        containmentEvidence,
       }),
     start: () => monitor.start(),
     stop: () => monitor.stop(),

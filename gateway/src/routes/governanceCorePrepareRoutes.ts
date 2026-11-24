@@ -3,6 +3,7 @@
  */
 import { RequestHandler, Router } from 'express';
 import { validateGovernanceAuditInput } from '../core/governanceMutationValidation';
+import { UNCONFIGURED_CONTAINMENT_EVIDENCE } from '../core/containmentEvidence';
 import { GatewayError } from '../errors';
 import { getMutationContext, prepareAndRespond } from './governanceMutationRouteSupport';
 import type { GovernanceDirectSignRouterOptions } from './governanceDirectSignRouteTypes';
@@ -79,6 +80,14 @@ export function registerGovernanceCorePrepareRoutes(
           409,
           'CONFLICT',
           'No active unpause proposal is available to approve',
+        );
+      }
+
+      // A trade-scoped unpause releases a contained trade: approve it only on
+      // reconciliation evidence that verifies against its signed manifest.
+      if (proposal.scope === 'TRADE' && proposal.tradeId) {
+        await (options.containmentEvidence ?? UNCONFIGURED_CONTAINMENT_EVIDENCE).requireVerified(
+          proposal.tradeId,
         );
       }
 

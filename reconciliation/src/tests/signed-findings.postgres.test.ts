@@ -8,8 +8,11 @@ import type { Pool } from 'pg';
 import {
   findingDigest,
   parsePublicKeys,
+  verifyContainmentBundle,
+  verifyContainmentEvidence,
   verifyRunEvidence,
 } from '@agroasys/shared-db/reconciliationEvidence';
+import { serveContainmentEvidence } from '../containmentEvidenceHttp';
 import { finalizeRun, upsertDrift, upsertRunTradeScope } from '../database/queries';
 import {
   createLocalFindingSigner,
@@ -252,6 +255,85 @@ test(
             else process.env.RECONCILIATION_FINDING_PUBLIC_KEYS = previous;
           }
         });
+
+        await scenario('a containment verifies only on signed, intact evidence', async (pool) => {
+          await completeSignedRun(pool);
+          const cited = FINDINGS.slice(0, 1).map((finding) => ({
+            digest: findingDigest({ runKey: 'daemon-1', ...finding }),
+            mismatchCode: finding.mismatchCode,
+            comparedField: finding.comparedField,
+          }));
+          const containment = {
+            opened_run_key: 'daemon-1',
+            cleared_run_key: null,
+            evidence: { findings: cited },
+          };
+          assert.deepEqual((await verifyContainmentEvidence(pool, containment, KEYS)).evidence, {
+            status: 'verified',
+            reason: null,
+          });
+          // An incident from before signing cites no digests.
+          assert.deepEqual(
+            (
+              await verifyContainmentEvidence(
+                pool,
+                { ...containment, evidence: { findings: [{ mismatchCode: 'AMOUNT_MISMATCH' }] } },
+                KEYS,
+              )
+            ).evidence,
+            { status: 'unsigned', reason: 'containment_predates_signed_findings' },
+          );
+          // A clearing run that was never sealed cannot justify a release.
+          await pool.query(
+            `INSERT INTO reconcile_runs (run_key, mode, status) VALUES ('daemon-clean', 'DAEMON', 'RUNNING')`,
+          );
+          assert.equal(
+            (
+              await verifyContainmentEvidence(
+                pool,
+                { ...containment, cleared_run_key: 'daemon-clean' },
+                KEYS,
+              )
+            ).evidence.reason,
+            'clearing_run_unsigned',
+          );
+          // Tampering with the cited finding past the triggers fails it.
+          await tamper(
+            pool,
+            `UPDATE reconcile_drifts SET indexed_value = '100' WHERE trade_id = '7'`,
+          );
+          const tampered = await verifyContainmentEvidence(pool, containment, KEYS);
+          assert.equal(tampered.evidence.status, 'failed');
+          assert.equal(tampered.findings[0].status, 'missing');
+        });
+
+        await scenario(
+          'the internal endpoint serves bundles the gateway can verify',
+          async (pool) => {
+            await completeSignedRun(pool);
+            await pool.query(
+              `INSERT INTO reconcile_trade_containments (trade_id, incident_reference, state, opened_run_key, qualifying_codes, evidence)
+             VALUES ('7', 'RECON-20261124-BBBB0001', 'CONTAINED', 'daemon-1', ARRAY['AMOUNT_MISMATCH'], $1::jsonb)`,
+              [
+                JSON.stringify({
+                  findings: [{ digest: findingDigest({ runKey: 'daemon-1', ...FINDINGS[0] }) }],
+                }),
+              ],
+            );
+            const one = await serveContainmentEvidence(pool, '/containments/7');
+            assert.equal(one?.status, 200);
+            // Over the wire and back, exactly as the gateway receives it.
+            const bundle = JSON.parse(JSON.stringify(one?.body));
+            assert.deepEqual(verifyContainmentBundle(bundle, KEYS).evidence, {
+              status: 'verified',
+              reason: null,
+            });
+            const list = await serveContainmentEvidence(pool, '/containments');
+            assert.equal((list?.body as { items: unknown[] }).items.length, 1);
+            assert.equal((await serveContainmentEvidence(pool, '/containments/8'))?.status, 404);
+            assert.equal(await serveContainmentEvidence(pool, '/coverage'), null);
+          },
+        );
 
         await scenario('a key the verifier does not hold is refused', async (pool) => {
           await completeSignedRun(pool);
