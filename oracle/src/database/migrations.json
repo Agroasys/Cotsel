@@ -36,6 +36,13 @@
       "file": "schema/005_notification_outbox.sql",
       "sha256": "a2d1887f460d983b401c6bbdef57c1e5a3d5ff00a9e769fea65d3d0d84c383df",
       "schema_sha256": "948c58f6ab38a64e86a22acff19220b61f14dce298a44b0cb83c3ce944e49fec"
+    },
+    {
+      "version": "202611230001",
+      "name": "notification_outbox_envelope",
+      "file": "schema/006_notification_outbox_envelope.sql",
+      "sha256": "2b937d5e1bb23a168add2b70b836a189650c8c93c33367bed20be9186dcc233b",
+      "schema_sha256": "a1355f84383e9e72bed8e01c1993100555e0ac6844c1c88557b93ac003545c7a"
     }
   ]
 }
