@@ -166,6 +166,48 @@ CREATE TRIGGER settlement_templates_governed_activation
     BEFORE UPDATE OF status ON settlement_templates
     FOR EACH ROW EXECUTE FUNCTION require_governed_template_activation();
 
+-- Check the completed transaction, after confirmation, retirement and activation.
+-- A confirmed row alone cannot authorize leaving the registry without active terms.
+CREATE FUNCTION check_template_activation_atomicity() RETURNS trigger AS $$
+BEGIN
+    IF TG_TABLE_NAME = 'settlement_template_activations' THEN
+        IF NEW.state <> 'confirmed' OR OLD.state = 'confirmed' THEN RETURN NEW; END IF;
+        IF NOT EXISTS (
+            SELECT 1 FROM settlement_templates t
+            WHERE t.template_id = NEW.template_id AND t.version = NEW.version
+              AND t.template_hash = NEW.template_hash AND t.status = 'active'
+              AND t.activated_by = NEW.confirmed_by
+        ) OR (NEW.expected_active_version IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM settlement_templates t
+            WHERE t.template_id = NEW.template_id AND t.version = NEW.expected_active_version
+              AND t.template_hash = NEW.expected_active_hash AND t.status = 'retired'
+              AND t.retired_by = NEW.confirmed_by
+        )) THEN
+            RAISE EXCEPTION 'template activation must confirm and replace its predecessor atomically'
+                USING ERRCODE = 'check_violation';
+        END IF;
+    ELSIF OLD.status = 'active' AND NEW.status = 'retired' AND NOT EXISTS (
+        SELECT 1 FROM settlement_template_activations a
+        JOIN settlement_templates t ON t.template_id = a.template_id AND t.version = a.version
+        WHERE a.template_id = OLD.template_id AND a.expected_active_version = OLD.version
+          AND a.expected_active_hash = OLD.template_hash AND a.state = 'confirmed'
+          AND a.confirmed_by = NEW.retired_by AND t.status = 'active'
+          AND t.template_hash = a.template_hash AND t.activated_by = a.confirmed_by
+    ) THEN
+        RAISE EXCEPTION 'active template retirement requires its activated replacement'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER template_activation_atomic_confirmation
+    AFTER UPDATE ON settlement_template_activations DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION check_template_activation_atomicity();
+CREATE CONSTRAINT TRIGGER template_activation_atomic_retirement
+    AFTER UPDATE ON settlement_templates DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION check_template_activation_atomicity();
+
 DO $$
 DECLARE
     runtime_user TEXT := NULLIF(current_setting('app.runtime_db_user', true), '');

@@ -281,8 +281,8 @@ export function createPostgresTemplateActivationStore(
       });
     },
 
-    approve({ preparationId, actor, requestId, audit }) {
-      return inTransaction(async (client) => {
+    async approve({ preparationId, actor, requestId, audit }) {
+      const outcome = await inTransaction(async (client) => {
         const prep = await lockPreparation(client, preparationId);
         if (prep.state !== 'prepared') {
           throw conflict('Only a prepared activation can be approved', {
@@ -307,11 +307,13 @@ export function createPostgresTemplateActivationStore(
         const stale = staleReason(prep, versions);
         if (stale) {
           await supersede(client, prep, stale, audit);
-          throw conflict('The activation preparation is stale; prepare it again', {
-            preparationId,
-            reason: 'activation_preparation_stale',
-            detail: stale,
-          });
+          return {
+            refusal: conflict('The activation preparation is stale; prepare it again', {
+              preparationId,
+              reason: 'activation_preparation_stale',
+              detail: stale,
+            }),
+          };
         }
         const result = await client.query<ActivationRow>(
           `UPDATE settlement_template_activations
@@ -321,8 +323,10 @@ export function createPostgresTemplateActivationStore(
         );
         const preparation = mapActivation(result.rows[0]);
         await audit?.(client, { action: 'activation_approved', preparation });
-        return preparation;
+        return { preparation };
       });
+      if ('refusal' in outcome) throw outcome.refusal;
+      return outcome.preparation;
     },
 
     async confirm({ preparationId, actor, requestId, audit }) {
@@ -356,7 +360,16 @@ export function createPostgresTemplateActivationStore(
         }
         const versions = await lockTemplate(client, prep.templateId);
         const target = versions.find((row) => row.version === prep.version)!;
-        if (target.createdBy === actor) {
+        if (!allowlist.has(`${prep.templateId}:${prep.version}`)) {
+          return {
+            refusal: conflict('The escrow contract does not enforce this template version', {
+              templateId: prep.templateId,
+              version: prep.version,
+              reason: 'template_not_enforced_by_contract',
+            }),
+          };
+        }
+        if (target?.createdBy === actor) {
           return {
             refusal: conflict('A template must be activated by someone other than its author', {
               preparationId,

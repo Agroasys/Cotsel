@@ -173,6 +173,18 @@ describePostgres('governed settlement template activation (review R05)', () => {
     ).rejects.toMatchObject({
       details: expect.objectContaining({ detail: 'target_terms_changed' }),
     });
+    expect(await activations.get(forged)).toMatchObject({ state: 'superseded' });
+  });
+
+  it('rechecks the current contract allowlist at confirmation', async () => {
+    const prepared = await approvedPreparation(6);
+    const stricter = createPostgresTemplateActivationStore(db.runtime);
+    await expect(
+      stricter.confirm({ preparationId: prepared.preparationId, ...change('approver') }),
+    ).rejects.toMatchObject({
+      details: expect.objectContaining({ reason: 'template_not_enforced_by_contract' }),
+    });
+    expect((await templates.get('agroasys.launch', 6))?.status).toBe('reviewed');
   });
 
   it('lets exactly one of two concurrent confirmations win', async () => {
@@ -238,5 +250,26 @@ describePostgres('governed settlement template activation (review R05)', () => {
         confirmed!.preparationId,
       ]),
     ).rejects.toMatchObject({ code: '42501' });
+  });
+
+  it('cannot commit retirement without activating the confirmed replacement', async () => {
+    const prepared = await approvedPreparation(9);
+    const client = await db.runtime.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE settlement_template_activations
+        SET state = 'confirmed', confirmed_by = 'approver', confirmed_at = NOW(), confirm_request_id = 'bypass'
+        WHERE preparation_id = $1`,
+        [prepared.preparationId],
+      );
+      await client.query(`UPDATE settlement_templates
+        SET status = 'retired', retired_by = 'approver', retired_at = NOW()
+        WHERE template_id = 'agroasys.launch' AND status = 'active'`);
+      await expect(client.query('COMMIT')).rejects.toMatchObject({ code: '23514' });
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
   });
 });
