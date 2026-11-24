@@ -127,6 +127,8 @@ patchedDependencies:
   # Backport GHSA-3g3m-2fjr-6pw4 to the locked glob majors.
   glob@10.5.0: patches/glob@10.5.0.patch
   glob@13.0.6: patches/glob@13.0.6.patch
+  # Backport upstream642137b for GHSA-6jcc-5g8w-32mx without changing the SDK's supported i18next major.
+  i18next@25.8.12: patches/i18next@25.8.12.patch
   # Backport GHSA-g3hv-75wg-m249 to minimatch versions with preprocessing.
   minimatch@9.0.9: patches/minimatch@9.0.9.patch
   minimatch@10.2.5: patches/minimatch@10.2.5.patch
