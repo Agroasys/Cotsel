@@ -43,8 +43,14 @@ pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out 
 
 Notes:
 
-- Report command reads the reconciliation DB (`DB_NAME`) and, when `TREASURY_DB_NAME` is set, the treasury DB, using the same Postgres host/user/password env set.
-- The report's `evidence.status` says whether the run's signed manifest verifies (`verified`, `failed`, `unsigned`, or `unverifiable` without `RECONCILIATION_FINDING_PUBLIC_KEYS`); see `reconciliation-signed-findings.md`.
+- The report command reads the reconciliation database specified by `DB_NAME`.
+  If `TREASURY_DB_NAME` is set, the command also reads the treasury database.
+  Unless the treasury settings override them, the command uses the same
+  Postgres host, port, user, and password for both databases.
+- The report records the verification result in `evidence.status`. The possible
+  values are `verified`, `failed`, `unsigned`, and `unverifiable`.
+  If `RECONCILIATION_FINDING_PUBLIC_KEYS` is unset, the status is `unverifiable`.
+  See the [signed reconciliation findings runbook](reconciliation-signed-findings.md).
 - Output schema is stable and ordered by `tradeId`, then `txHash`; missing fields are emitted as explicit `null`.
 - Treasury-linked rows now also surface `rampReference`, `fiatDepositState`, `fiatDepositFailureReason`, and `fiatDepositObservedAt` when deposit evidence exists.
 - Treasury-linked rows also surface `bankReference`, `bankPayoutState`, `bankFailureCode`, `bankConfirmedAt`, and `bankPayoutDivergenceReason` when bank-finality evidence exists.
@@ -99,10 +105,7 @@ Current runtime truth:
 
 Operator rule:
 
-- When reconciliation output is used for incident or treasury follow-up, attach
-  missing `correlationId`, actor context, `intent`, and `outcome` from the
-  nearest authoritative request ledger, gateway action, or operator evidence
-  packet.
+- For incident or treasury follow-up, attach any missing `correlationId`, actor context, `intent` and `outcome`. Use the nearest authoritative request ledger, gateway action or operator evidence packet.
 - Do not infer a terminal result from free-form text alone; record an explicit
   `outcome` in the incident or operator evidence artifact.
 

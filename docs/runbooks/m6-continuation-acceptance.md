@@ -1,107 +1,160 @@
 # M6 continuation acceptance
 
-Audience: maintainers, release owners and security reviewers. This record separates source implementation, local validation, release evidence and deployed acceptance for the four-issue continuation. It does not close the full M6 programme.
+Use this record to assess the four-issue continuation. It is for maintainers, release owners and security reviewers. Full M6 programme acceptance remains open.
 
 ## Accepted decisions
 
-| Decision | Required behavior                                                                                                                                                                                                                         |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Q1       | Normal quorum-controlled unpause remains available for a non-reconciliation pause only with fresh authenticated evidence of no reconciliation containment. Errors fail closed.                                                            |
-| Q2       | Reconciliation recovery requires verified clean clearance for the exact trade and incident episode, newer than its divergence evidence.                                                                                                   |
-| Q3       | Template activation uses durable preparation, independent approval and confirmation of the exact hash and predecessor. The off-chain adapter needs reviewer acceptance; direct two-person status changes do not replace this requirement. |
-| Q4       | Dash independently verifies signed finding evidence against configured trusted public keys.                                                                                                                                               |
-| Q5       | A freeze request has durable signed references and a recorded human decision and execution lifecycle. Reconciliation never signs governance transactions.                                                                                 |
+Use these decisions to assess the candidate:
 
-## Implemented boundaries
+| Decision | Required behavior                                                                                                                                                                                                                          |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Q1       | Normal quorum-controlled unpause applies to a non-reconciliation pause only when fresh authenticated evidence confirms no open reconciliation containment. Errors refuse the action.                                                       |
+| Q2       | Reconciliation recovery requires verified clean clearance for the exact trade and incident episode. The clearance must be newer than its divergence evidence.                                                                              |
+| Q3       | Template activation requires durable preparation, independent approval and confirmation of the exact hash and predecessor. A reviewer must accept the off-chain adapter. A direct two-person status change does not meet that requirement. |
+| Q4       | Dash independently verifies signed finding evidence with configured trusted public keys.                                                                                                                                                   |
+| Q5       | A freeze request has durable signed references, a recorded human decision and a recorded execution lifecycle. Reconciliation never signs governance transactions.                                                                          |
 
-| Review item | Implementation and local proof                                                                                                                                                                                                                                                                                                      |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R01–R03     | Signed chain/escrow context, incident snapshot, episode and per-run finding lineage. Shared recovery tests, real PostgreSQL lineage tests and gateway unpause route tests cover borrowed evidence, repeated divergence, stale/invalid proof and exact-trade clearance.                                                              |
-| R04         | Dash snapshots replayable JSON and the idempotency key, coalesces recovery, checks operator/session revision, refuses identity switches and invalidates locally before logout awaits the network. API-level logout/retry regressions cover the race.                                                                                |
-| R05–R06     | Template approval is bound to target hash and predecessor. The server rechecks the current activation allowlist at confirmation. Stale approval commits supersession before returning its refusal. Deferred SQL constraints require replacement and confirmation in one transaction; approval actors and timestamps stay immutable. |
-| R07         | Signed opening runs atomically record immutable freeze requests. Gateway migration 020 stores human decisions with their audit rows; hardware-signing preparation binds the exact request and trade. Chain observations remain separate from approval.                                                                              |
-| R08         | Node and WebCrypto verify the same public signed fixture. Connected adapter and real Chromium tests reject tampered evidence even when the server calls it verified. No private signing key ships in browser code or fixtures.                                                                                                      |
-| R09–R10     | Migration 019 records a callback envelope while preserving callback HTTP bytes. Registered notification envelopes keep their event identity on deduplication. Invalid events are refused without a direct-delivery bypass.                                                                                                          |
-| R11         | Break-glass audit records retain the operator's authentication assurance. Refresh preserves its original authentication time.                                                                                                                                                                                                       |
-| R12–R13     | Containment and handoff sections load independently. Keyset pagination exposes a continuation cursor; Dash shows incomplete-list failures and keeps prior pages visible.                                                                                                                                                            |
-| D1          | Old-image startup refusal is explicit. Database tests exercise current manifests and old-manifest refusal without changing the ledger. A reviewed, digest-bound compatibility-image or forward-repair deployment rehearsal remains a release prerequisite.                                                                          |
-| D2 / R14    | Original issue criteria remain authoritative. Local green suites do not establish hosted CI, deployment, hardware signing, or programme completion.                                                                                                                                                                                 |
+## Source implementation and local proof
+
+The review items below record the implementation and the scope of local proof:
+
+### R01–R03: Reconciliation recovery
+
+Each run signs the chain and escrow context, incident snapshot, episode and finding lineage. Shared recovery tests, PostgreSQL lineage tests and gateway unpause route tests cover borrowed evidence and repeated divergence. They also cover stale proof, invalid proof and exact-trade clearance.
+
+### R04: Session recovery
+
+Dash saves the replayable JSON request and idempotency key. JSON means JavaScript Object Notation. Dash combines concurrent recovery requests and checks the operator and session revision. It refuses identity switches and invalidates the local session before logout waits for the network. Application programming interface (API) tests cover the logout and retry race.
+
+### R05–R06: Settlement template activation
+
+Template approval binds the exact target hash and predecessor. The server rechecks the current activation allowlist at confirmation. If the approval is stale, the server commits supersession before it refuses the request. Deferred Structured Query Language (SQL) constraints require replacement and confirmation in one transaction. The approval actors and timestamps stay immutable.
+
+### R07: Freeze requests
+
+The same transaction records the signed opening run and its immutable freeze request. Gateway migration 020 records human decisions and their audit rows together. Hardware-signing preparation binds the exact request and trade. Chain observations stay separate from approval.
+
+### R08: Browser verification
+
+Node and WebCrypto verify the same public signed fixture. Connected adapter and real Chromium tests reject tampered evidence even when the server reports it as verified. Browser code and fixtures contain no private signing keys.
+
+### R09–R10: Notification callbacks
+
+Migration 019 records a callback envelope. It preserves the original Hypertext Transfer Protocol (HTTP) callback bytes. Registered notification envelopes keep their event identity during deduplication. The service refuses invalid events. Direct delivery cannot bypass that refusal.
+
+### R11: Break-glass assurance
+
+Break-glass audit records retain the operator's authentication assurance. Refresh preserves the original authentication time.
+
+### R12–R13: Containment and handoff display
+
+Containment and handoff sections load independently. Keyset pagination exposes a continuation cursor. If a later page fails, Dash reports the incomplete list and keeps prior pages visible.
+
+### D1: Image and migration recovery
+
+An older image refuses startup if its manifest lacks an applied migration. Local database tests exercise current manifests and old-manifest refusal while preserving the ledger. Release requires a reviewed rehearsal of a compatibility-image or forward-repair deployment with exact image digests.
+
+### D2 and R14: Acceptance scope
+
+The original issue criteria remain authoritative. Passing local suites cannot establish hosted continuous integration (CI), deployment, hardware signing or programme completion.
 
 ## Schema and migration rules
 
-The candidate adds gateway 017–020, authentication assurance, notification outbox migrations, reconciliation signed manifests, incident lineage (010) and durable freeze requests (011). Inspect the exact version/checksum pairs in each service's `migrations.json`; filenames alone are not migration identities. The candidate-manifest and evidence-index fixtures must be rebound after every stack rebase.
+The candidate adds gateway migrations 017–020, authentication assurance and notification outbox migrations. It also adds signed reconciliation manifests, incident lineage (010) and durable freeze requests (011).
 
-The local source work amends migrations 017/018 only under the recorded premise that no persistent environment has applied them. Before release, inspect the actual environment ledger. If any checksum is already applied there, preserve it and express the repair as a new migration. Do not rewrite an applied ledger to match this candidate.
+For each service, inspect the exact version and checksum pairs in `migrations.json`. Use both values to identify a migration. After each stack rebase, rebind the candidate-manifest and evidence-index fixtures.
 
-`shared-db/m6-forward-recovery.postgres.test.js` verifies the database startup contract on real PostgreSQL for auth, gateway and reconciliation: current migration/checksum validation passes twice, an older manifest fails, and the ledger remains intact. It does not establish full application-image compatibility, rollback timing or staging behavior.
+The local source work amends migrations 017 and 018 on the recorded premise that no persistent environment has applied them. Before release, inspect the environment ledger. If the ledger records an applied checksum, preserve it. If the applied migration needs a repair, add a new migration. Keep the applied ledger intact.
+
+`shared-db/m6-forward-recovery.postgres.test.js` tests the startup contract for auth, gateway and reconciliation on real PostgreSQL. It verifies current migration versions and checksums twice. It confirms that an older manifest fails and that the ledger stays intact. Full application-image compatibility, rollback timing and staging behavior require deployment evidence.
 
 ## Release sequence and stop conditions
 
 ### Source acceptance
 
-1. Review the exact backend and Dash candidate commits.
-2. Split delivery into dependency-ordered PRs.
-3. After each rebase, rebind the release-evidence fixtures.
-4. Run each changed candidate's required checks.
+Use this sequence to prepare the source changes for acceptance:
 
-Do not modify an approved remote PR without the agreed follow-up process.
+1. Review the exact backend and Dash candidate commits.
+2. Split delivery into dependency-ordered pull requests (PRs).
+3. After each rebase, rebind the release-evidence fixtures.
+4. Run the required checks for each changed candidate.
+
+Before changing an approved remote PR, follow the agreed process for post-approval changes.
 
 ### Infrastructure and backend deployment
 
-1. Review the KMS policy and Terraform plan.
-2. Apply the approved foundation plan.
-3. Apply the approved platform plan.
-4. Deploy Agroasys break-glass assurance.
-5. Deploy Cotsel auth assurance.
-6. Verify the real signed session exchange.
-7. Verify the real break-glass grant exchange.
-8. Deploy gateway step-up enforcement.
-9. Migrate reconciliation with the approved migration task.
-10. Deploy reconciliation with signing, lineage and freeze-request support.
-11. Wait for a signed completed run.
-12. Check internal evidence endpoint access restrictions.
-13. Deploy treasury with the trusted public-key ring.
-14. Test unsigned and invalid evidence refusal.
-15. Migrate the gateway with the approved migration task.
-16. Deploy the consuming gateway with writes controlled.
-17. Verify the seeded template.
-18. Verify historical handoff backfill under the actual migrator's RLS identity.
-19. Exercise the human freeze review and hardware-signing workflow.
-20. Check each recorded transaction's chain-monitor status.
+Among runtime task roles, only reconciliation has permission to sign findings and action-evidence replies. Terraform apply requires owner authorization. During rotation, keep the public keys that verify historical evidence.
 
-Only reconciliation may sign findings and action-evidence replies. Terraform apply requires owner authorization. Keep historical verification keys during rotation.
+Keep evidence endpoints off the Application Load Balancer (ALB). Limit ingress to the existing gateway security-group rule.
 
-Keep evidence endpoints off the ALB. Permit ingress through the existing gateway security-group rule only.
+If assurance is missing or stale, the gateway must refuse privileged actions. The `record` mode temporarily relaxes only step-up enforcement. Evidence verification remains mandatory.
 
-Missing or stale assurance must refuse privileged actions. `record` temporarily relaxes step-up enforcement only. It does not bypass evidence verification.
+The release owner must approve a cutover plan that holds writes and drains each old runtime before its migration. Runtime images check the ledger; they do not apply migrations. These steps describe the dependency order for the complete forward release. They do not establish deployed acceptance.
+
+Deploy infrastructure and backend services in this order:
+
+1. Review the AWS Key Management Service (KMS) policy.
+2. Review the Terraform plan.
+3. With owner authorization, apply the approved foundation plan.
+4. With owner authorization, apply the approved platform plan.
+5. Deploy Agroasys break-glass assurance.
+6. Migrate auth with the approved migration task.
+7. Deploy Cotsel auth assurance.
+8. Verify the real signed session exchange.
+9. Verify the real break-glass grant exchange.
+10. Migrate reconciliation with the approved migration task.
+11. Deploy reconciliation with signing, lineage and freeze-request support.
+12. Wait for a signed completed run.
+13. Check the access restrictions on the internal evidence endpoint.
+14. Deploy treasury with the trusted public keys.
+15. Test refusal of unsigned evidence.
+16. Test refusal of invalid evidence.
+17. Migrate the gateway with the approved migration task.
+18. With writes controlled, deploy the complete gateway image that requires those migrations.
+19. Verify gateway step-up enforcement in the approved test window.
+20. Verify the seeded template.
+21. Under the actual migrator's row-level security (RLS) identity, verify the historical handoff backfill.
+22. Exercise human review of a freeze request.
+23. Exercise the hardware-signing workflow.
+24. Check the chain-monitor status for each recorded transaction.
+
+The gateway image also requires the signed-evidence producer. Do not start the complete image before its migrations and that producer are ready. Use [Staging service database migrations](staging-service-migrations.md) for the dedicated migration tasks.
 
 ### Browser and recovery acceptance
 
+For deployed acceptance, run browser checks against the deployed API. Approval, hardware broadcast and confirmed execution are separate states.
+
+An older image cannot ignore an unknown migration. During forward recovery, preserve signed evidence, approvals and immutable terms. Keep treasury verification active.
+
+Use this sequence to verify browser behavior and recovery:
+
 1. Build Dash with the trusted public keys and deployed chain context.
 2. Exercise stale-session recovery against the deployed API.
-3. Exercise logout and account-switch failures.
-4. Exercise the template approval lifecycle.
-5. Exercise browser verification of containment evidence.
-6. Repeat these browser checks at desktop and mobile widths.
-7. Rehearse recovery with the exact image digests and schema head.
-8. Review the recovery checks before reopening writes.
-9. Record candidate-bound release evidence for each original criterion.
-10. Close only criteria supported by the accepted evidence.
+3. Exercise logout failures.
+4. Exercise account-switch failures.
+5. Exercise the template approval lifecycle.
+6. Exercise browser verification of containment evidence.
+7. Repeat these browser checks at desktop width.
+8. Repeat these browser checks at mobile width.
+9. Rehearse recovery with the exact image digests and schema head.
+10. Before reopening writes, review the recovery checks.
+11. Record release evidence for each original criterion against the exact candidate.
+12. Close only the criteria with accepted evidence.
 
-Mocked browser checks do not satisfy deployed acceptance. Approval, hardware broadcast and confirmed execution are distinct states.
+If signatures, KMS, evidence transport or migrations fail, hold the affected operations. If the dependency is unavailable, restore it. If the candidate needs a correction, repair forward. Never publish unsigned findings. A network error cannot establish clean evidence.
 
-Older images cannot ignore unknown migrations. Preserve signed evidence, approvals and immutable terms during forward recovery. Keep treasury verification active.
+## Work that requires further acceptance
 
-If signatures, KMS, evidence transport or migrations fail, hold affected operations. Restore the dependency or repair forward. Do not publish unsigned findings or infer clean evidence from a network error.
+The continuation leaves these items open beyond local validation:
 
-## What remains outside local acceptance
-
-- Owner-reviewed Terraform plan/apply and KMS-mode execution under the deployed task role.
-- Hosted checks and review on the final delivered PR heads; merge order and post-merge checks.
-- Staging and deployed-API browser evidence, real hardware login/signing, and digest-bound recovery rehearsal.
-- Mandate-dependent Dash #227 criteria, provider-related #228/#944 criteria, and unrelated M6 #939 requirements. Preserve these as open scope; do not change issue wording to claim completion.
-- Agroasys #797 closeout only after the accepted Cotsel auth change is delivered with its fixture proof. A local continuation branch is not that delivery.
+- Owner review and authorization for the Terraform plan and apply. KMS-mode execution under the deployed task role.
+- Hosted checks and review on the final PR heads. Merge order and post-merge checks.
+- Staging and browser evidence from the deployed API. Real hardware login and signing. A recovery rehearsal with exact image digests.
+- Mandate-dependent Dash #227 criteria, provider-related #228 and #944 criteria, and unrelated M6 #939 requirements. Keep these criteria open with their original wording.
+- Closeout of Agroasys #797 after delivery of the accepted Cotsel auth change with its fixture proof. A local continuation branch does not establish delivery.
 
 ## Dependency backport
 
-The candidate retains i18next 25 compatibility and backports the upstream own-property check for GHSA-6jcc-5g8w-32mx to each distributed JavaScript entry point. The exact patch and advisory metadata stay under the existing strict dependency gate. Seven public API regressions cover those builds. Replace the backport when a compatible upstream fixed release is adopted; do not broaden advisory exclusions or lower severity thresholds. Upstream fix: <https://github.com/i18next/i18next/commit/642137b>.
+The candidate retains i18next 25 compatibility. It backports the upstream own-property check for GHSA-6jcc-5g8w-32mx to each distributed JavaScript entry point. The existing strict dependency gate covers the exact patch and advisory metadata. Seven public API regressions cover the distributed builds.
+
+When you adopt a compatible upstream release with the fix, replace the backport. Keep the advisory exclusions and severity thresholds intact. See the [upstream i18next fix](https://github.com/i18next/i18next/commit/642137b).
