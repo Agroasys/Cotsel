@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 const { createServiceNotifications } = require('@agroasys/notifications');
 const { WebhookIndexerAlerts } = require('../lib/alerts');
 const NotificationOutboxMigration = require('../db/migrations/1785700000000-NotificationOutbox.js');
+const NotificationOutboxEnvelopeMigration = require('../db/migrations/1785800000000-NotificationOutboxEnvelope.js');
 const {
   createAdminPool,
   dockerAvailable,
@@ -52,6 +53,7 @@ test(
 
       try {
         await new NotificationOutboxMigration().up(db);
+        await new NotificationOutboxEnvelopeMigration().up(db);
 
         global.fetch = async () => ({ ok: false, status: 503, statusText: 'Service Unavailable' });
         const crashed = notificationsFor(pool);
@@ -60,7 +62,22 @@ test(
 
         const pending = await runSql(
           pool,
-          `SELECT state, attempts, event FROM notification_outbox`,
+          `SELECT state, attempts, event, envelope FROM notification_outbox`,
+        );
+        // Cotsel#949: the row carries the registered envelope around the same event.
+        assert.equal(pending.rows[0].envelope.type, 'cotsel.notification');
+        assert.equal(pending.rows[0].envelope.schemaVersion, 'v1');
+        assert.equal(pending.rows[0].envelope.producer, 'indexer');
+        assert.equal(pending.rows[0].envelope.orderingKey, 'indexer:poison:0xtxhash:2');
+        assert.match(pending.rows[0].envelope.eventId, /^[0-9a-f-]{36}$/u);
+        assert.deepEqual(pending.rows[0].envelope.payload, pending.rows[0].event);
+        await assert.rejects(
+          () =>
+            runSql(
+              pool,
+              `UPDATE notification_outbox SET envelope = jsonb_set(envelope, '{eventId}', '"x"')`,
+            ),
+          /envelope is immutable/,
         );
         assert.equal(pending.rows.length, 1);
         assert.equal(pending.rows[0].state, 'PENDING');
@@ -93,6 +110,7 @@ test(
         const settled = await runSql(pool, `SELECT state FROM notification_outbox`);
         assert.equal(settled.rows[0].state, 'DELIVERED');
 
+        await new NotificationOutboxEnvelopeMigration().down(db);
         await new NotificationOutboxMigration().down(db);
         const table = await runSql(pool, `SELECT to_regclass('public.notification_outbox') AS t`);
         assert.equal(table.rows[0].t, null);

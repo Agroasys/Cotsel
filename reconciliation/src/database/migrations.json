@@ -50,6 +50,13 @@
       "file": "007_enumeration_cycles.sql",
       "sha256": "22254eaa77851b56e4eae91174aa07bc2e4dbc5eb3814393a499552ac5631864",
       "schema_sha256": "9e5b848c4e9bb2b88f84f109a2617e859053fd23048171c1a33c4aead1128ca0"
+    },
+    {
+      "version": "202611230001",
+      "name": "notification_outbox_envelope",
+      "file": "008_notification_outbox_envelope.sql",
+      "sha256": "2b937d5e1bb23a168add2b70b836a189650c8c93c33367bed20be9186dcc233b",
+      "schema_sha256": "345285d919e43a97d394f593c097fdc6f71b93911858173ded89449b11691f24"
     }
   ]
 }

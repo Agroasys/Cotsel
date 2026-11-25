@@ -1,3 +1,4 @@
+import { buildNotificationEnvelope } from './envelope';
 import type { NotificationEvent, NotificationSeverity } from './index';
 
 /**
@@ -112,6 +113,10 @@ export class NotificationOutbox {
    *
    * Pass the executor of an open transaction to make the notification commit
    * or roll back with the state it describes.
+   *
+   * The row also stores the registered event envelope (Cotsel#949). A merged
+   * repeat keeps the original envelope, so consumers see one stable eventId per
+   * incident while `occurrences` counts the repeats.
    */
   async enqueue(
     event: NotificationEvent,
@@ -120,8 +125,8 @@ export class NotificationOutbox {
   ): Promise<EnqueueResult> {
     assertEvent(event);
     const result = await executor.query(
-      `INSERT INTO notification_outbox (source, event_type, severity, dedup_key, event)
-       SELECT $1, $2, $3, $4, $5::jsonb
+      `INSERT INTO notification_outbox (source, event_type, severity, dedup_key, event, envelope)
+       SELECT $1, $2, $3, $4, $5::jsonb, $7::jsonb
        WHERE NOT EXISTS (
          SELECT 1 FROM notification_outbox
          WHERE dedup_key = $4
@@ -141,6 +146,8 @@ export class NotificationOutbox {
         event.dedupKey,
         JSON.stringify(event),
         Math.max(0, Math.trunc(cooldownMs)),
+        // A merged repeat keeps the first envelope, so its eventId stays stable.
+        JSON.stringify(buildNotificationEnvelope(event)),
       ],
     );
 
