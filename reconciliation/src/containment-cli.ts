@@ -167,9 +167,13 @@ async function release(tradeId: string, approvalTxHash: string): Promise<TradeCo
     incidentIsReconciliation: true,
   });
   if (signed.decision !== 'reconciliation_recovery_verified') {
+    const reason =
+      signed.decision === 'refused'
+        ? [signed.reason, signed.detail].filter(Boolean).join('/')
+        : signed.decision;
     throw new Error(
-      `Trade ${tradeId}'s containment recovery does not verify (${signed.decision === 'refused' ? signed.reason : signed.decision}); ` +
-        'it cannot be released. Treat this as tampering: preserve the database and open an incident.',
+      `Release refused for trade ${tradeId} (${reason}). ` +
+        'Review the incident evidence and migration history before retrying.',
     );
   }
 

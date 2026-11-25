@@ -4,7 +4,15 @@ import './helpers/reconciliationEnv';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Pool } from 'pg';
-import { findingDigest, type RunManifest } from '@agroasys/shared-db/reconciliationEvidence';
+import {
+  findingDigest,
+  parsePublicKeys,
+  type RunManifest,
+} from '@agroasys/shared-db/reconciliationEvidence';
+import {
+  loadContainmentRecoveryBundle,
+  verifyContainmentRecovery,
+} from '@agroasys/shared-db/containmentRecovery';
 import {
   openContainment,
   getContainment,
@@ -13,7 +21,7 @@ import {
   releaseContainment,
 } from '../database/containments';
 import { finalizeRun, upsertDrift, upsertRunTradeScope } from '../database/queries';
-import { createLocalFindingSigner } from '../core/findingSigner';
+import { createLocalFindingSigner, localPublicKeyDerBase64 } from '../core/findingSigner';
 import type { DriftFinding } from '../types';
 import { BASE_TEST_ENV } from './helpers/reconciliationEnv';
 import {
@@ -76,7 +84,7 @@ async function divergingRun(pool: Pool, runKey: string, finding: DriftFinding) {
 }
 
 /** One run in which trade 7 is in scope and reconciles clean. */
-async function cleanRun(pool: Pool, runKey: string) {
+async function cleanRun(pool: Pool, runKey: string, retainedFinding?: DriftFinding) {
   const run = await claimOrThrow(pool, `worker-${runKey}`, runKey);
   await finalizeRun(
     {
@@ -85,6 +93,8 @@ async function cleanRun(pool: Pool, runKey: string) {
       publish: async (client) => {
         await upsertRunTradeScope(run.row.id, runKey, '7', client);
         await recordCleanReconciliation({ tradeId: '7', runKey }, client);
+        // Reproduce the old publication order: copied evidence followed clearance.
+        if (retainedFinding) await upsertDrift(run.row.id, runKey, retainedFinding, client);
       },
       cursor: { advance: false, tailFirstSeenAt: null },
     },
@@ -225,6 +235,48 @@ test(
           assert.deepEqual(again.clearances, []);
           assert.equal(again.containments?.[0]?.citedFindings.length, 2);
         });
+
+        await scenario(
+          'a signed contradictory clearance can be replaced without rewriting history',
+          async (pool) => {
+            const finding = drift('101');
+            await divergingRun(pool, 'run-a', finding);
+            await cleanRun(pool, 'old-clearing-run', finding);
+            const original = await manifestOf(pool, 'old-clearing-run');
+            assert.equal(original.containments?.[0]?.clearedRunKey, 'old-clearing-run');
+
+            const publicKeys = parsePublicKeys(
+              JSON.stringify({
+                [SIGNER.keyId]: localPublicKeyDerBase64(
+                  BASE_TEST_ENV.RECONCILIATION_FINDING_SIGNING_KEY,
+                ),
+              }),
+            );
+            const decision = async () =>
+              verifyContainmentRecovery(await loadContainmentRecoveryBundle(pool, '7'), {
+                publicKeys,
+                context: {
+                  chainId: Number(BASE_TEST_ENV.CHAIN_ID),
+                  escrowAddress: BASE_TEST_ENV.ESCROW_ADDRESS,
+                },
+                maxAgeSeconds: 900,
+                matchesIncident: (reference) => reference === 'RECON-20261124-RUNA',
+              });
+            assert.deepEqual(await decision(), {
+              decision: 'refused',
+              reason: 'clearance_invalid',
+              detail: 'clearing_run_has_qualifying_finding',
+            });
+
+            await cleanRun(pool, 'replacement');
+            await cleanRun(pool, 'further-clean-run');
+            const recovered = await decision();
+            assert.equal(recovered.decision, 'reconciliation_recovery_verified');
+            assert.equal(recovered.evidence.clearedRunKey, 'replacement');
+            assert.equal(recovered.evidence.citedFindings, 1);
+            assert.deepEqual(await manifestOf(pool, 'old-clearing-run'), original);
+          },
+        );
 
         await scenario('a released trade that diverges again is a new incident', async (pool) => {
           await divergingRun(pool, 'run-a', drift('101'));

@@ -8,6 +8,7 @@ import test from 'node:test';
 import { Pool } from 'pg';
 import { runVersionedMigrations } from '@agroasys/shared-db/migrate';
 import { TradeStatus } from '@agroasys/sdk';
+import { assertContainmentRecoversAfterCycleRetry } from './helpers/enumerationContainmentRecovery';
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { dockerAvailable, withPostgresContainer } =
   require('../../../shared-db/postgres-test-support') as {
@@ -83,6 +84,7 @@ test(
           createdAt: new Date('2026-09-01T00:00:00Z'),
         }));
         let barrier: (() => Promise<void>) | undefined;
+        let missingTradeId: string | undefined;
         const fetched: string[] = [];
         t.mock.method(globalThis, 'fetch', async (_url: unknown, init: RequestInit) => {
           const request = JSON.parse(String(init.body));
@@ -107,7 +109,10 @@ test(
           } else if (query.includes('ReconciliationTradesByIds'))
             data = {
               trades: vars.tradeIds
-                .filter((id: string) => records.some((row) => row.tradeId === id))
+                .filter(
+                  (id: string) =>
+                    missingTradeId !== id && records.some((row) => row.tradeId === id),
+                )
                 .map((tradeId: string) => ({
                   tradeId,
                   buyer,
@@ -434,6 +439,20 @@ test(
               )
             ).rows[0];
             assert.deepEqual(cycle, { walked: '0', exhausted: true, upper_id: null });
+          },
+        );
+        await t.test(
+          'a fresh clean cycle recovers a trade whose same-cycle retry retained the divergence',
+          async () => {
+            height++;
+            chainCounter = 2;
+            records = [
+              { id: 'i0', tradeId: '0' },
+              { id: 'i1', tradeId: '1' },
+            ];
+            await assertContainmentRecoversAfterCycleRetry(db!, once, (missing) => {
+              missingTradeId = missing ? '0' : undefined;
+            });
           },
         );
       } finally {

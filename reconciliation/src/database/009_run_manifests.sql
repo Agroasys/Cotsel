@@ -3,6 +3,26 @@
 -- fields), its ECDSA P-256 signature and the signing key id. Verification is in
 -- @agroasys/shared-db/reconciliationEvidence. A manifest is written only while
 -- its run is being completed, in the same transaction, and never changes.
+
+-- Check before the first signing migration can change the schema or ledger.
+-- Existing open incidents predate the signing boundary. Only the legacy
+-- governed process can close them. The cutover requires drained writers.
+SET LOCAL lock_timeout = '5s';
+SELECT set_config('app.service_name', 'reconciliation', true);
+LOCK TABLE public.reconcile_trade_containments IN SHARE ROW EXCLUSIVE MODE;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM public.reconcile_trade_containments
+        WHERE state IN ('CONTAINED', 'RECONCILED_PENDING_APPROVAL')
+    ) THEN
+        RAISE EXCEPTION 'reconciliation_signed_cutover_open_legacy_containment'
+            USING ERRCODE = 'check_violation',
+                  HINT = 'Resolve open incidents through the legacy governed procedure before signed-evidence cutover.';
+    END IF;
+END;
+$$;
+
 CREATE TABLE reconcile_run_manifests (
     run_key VARCHAR(255) PRIMARY KEY REFERENCES reconcile_runs(run_key) ON DELETE RESTRICT,
     schema_version TEXT NOT NULL CHECK (schema_version = 'cotsel.reconciliation-run-manifest.v1'),

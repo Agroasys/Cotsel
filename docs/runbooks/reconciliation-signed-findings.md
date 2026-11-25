@@ -73,6 +73,8 @@ The test `reconciliation/src/tests/signed-findings.postgres.test.ts` changes evi
 
 Each completed run signs its chain and escrow context, containment snapshot, incident episode, finding lineage and exact-trade clean clearances. Finding lineage identifies the runs that produced the cited findings. The verifier resolves each cited digest against the signature of its own run. Repeated divergence keeps the incident open and adds the new run's findings. A later clean run must cover the same trade and episode.
 
+A finishing enumeration cycle retains its earlier findings. If it retains a qualifying finding for the trade, that run cannot clear the incident. A subsequent clean comparison can clear the same episode when its signed evidence has no qualifying finding for that trade. The earlier signed findings stay in the incident history.
+
 Before it prepares a trade-scoped unpause, the gateway checks a fresh signed snapshot against its own chain and escrow. These conditions control the decision:
 
 - A reconciliation incident must be `RECONCILED_PENDING_APPROVAL`. The clearing run must be newer than every cited divergence. It must cover the exact trade and cite the same incident and episode. It must contain no qualifying discrepancy for that trade.
@@ -165,6 +167,24 @@ Treasury requires `RECONCILIATION_FINDING_PUBLIC_KEYS` with `RECONCILIATION_DB_N
 ## Deploy signed evidence
 
 The foundation stack creates the signing key and grant. The platform stack reads the foundation output `reconciliation_finding_key_arn`. The release owner must approve the exact artifacts and cutover plan before deployment. Drain an old runtime before applying migrations that its manifest does not contain. Runtime images verify migration history; they do not apply schema changes.
+
+### Check legacy containments
+
+Migration `202611230002` refuses legacy containments in `CONTAINED` or `RECONCILED_PENDING_APPROVAL`. It checks before it creates the signed run table. On refusal, the prior application schema and migration versions remain valid. Resolved legacy incidents keep their original unsigned evidence.
+
+Before you start the signing cutover, use these steps:
+
+1. Check the target database ledger and schema through the approved verifier.
+2. If version `202611230002` or table `reconcile_run_manifests` already exists, stop for a reviewed forward migration plan.
+3. Run `reconcile:containment list` with the pre-cutover reconciliation image.
+4. If the list contains open incidents, resolve them through the existing governed recovery procedure.
+5. Before you run the migration task, stop all pre-cutover reconciliation writers.
+6. If the task reports `reconciliation_signed_cutover_open_legacy_containment`, stop the cutover.
+7. After refusal, verify that the pre-cutover migration history still matches the old image.
+
+If an incident is still open, keep its containment in force. Follow [the scoped containment procedure](reconciliation-run-leases.md#part-2--scoped-containment-pres-11) with the pre-cutover runtime. Retry cutover only after governed recovery. Preserve the legacy records and receipt history.
+
+### Apply and verify
 
 Use [Staging service database migrations](staging-service-migrations.md) for the dedicated migration tasks. Deploy in this order:
 

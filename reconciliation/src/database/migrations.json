@@ -62,7 +62,7 @@
       "version": "202611230002",
       "name": "run_manifests",
       "file": "009_run_manifests.sql",
-      "sha256": "1a1c6d6bf0416d7f4804937e3eedbf8ade4ab158053d41533810f1b0e4151015",
+      "sha256": "e66ddd42e18abf00c6daac5f6bb70b21f45b16dcf6f1f3726025cc5050a30377",
       "schema_sha256": "873dcbcbd9c3fedf482abc8ecc85f5cba132e1789c0773fab094333e9047de08"
     },
     {

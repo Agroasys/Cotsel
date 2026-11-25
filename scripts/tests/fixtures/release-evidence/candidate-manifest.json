@@ -351,7 +351,7 @@
     {
       "component": "reconciliation",
       "headIdentity": "202611240004_governance_freeze_requests",
-      "checksumSha256": "9db8ac5484fb9fbfe83e00f5792ad54d641dd16792f205f8fef6a4c7aac7a2e6"
+      "checksumSha256": "9fefcb2b66c6c7cf1b69a87b68d2cb9d3da0e4a8a4299b131c35f6c4f7d39506"
     },
     {
       "component": "ricardian",

@@ -4,6 +4,7 @@ import { Logger } from '../utils/logger';
 import { upsertDrift, upsertRunTradeScope } from '../database/queries';
 import { markAbandonedRuns } from '../database/leases';
 import { enqueueRunAlert } from '../database/alertOutbox';
+import { aggregateCycleEvidence } from '../database/enumerationCycles';
 import {
   listBlockingContainments,
   openContainment,
@@ -365,6 +366,7 @@ export async function publishRunOutcome(
     sla: CoverageSlaVerdict;
     scopedTradeIds: string[];
     findings: DriftFinding[];
+    finishedCycleId: string | null;
     qualified: QualifiedDiscrepancy[];
     cleanTradeIds: ReadonlySet<string>;
     pauseObservations: ReadonlyMap<string, TradePauseObservation>;
@@ -378,6 +380,19 @@ export async function publishRunOutcome(
   for (const finding of input.findings) {
     await publishFinding(
       { runId: input.runId, runKey: input.runKey, finding, stats: input.stats },
+      client,
+    );
+  }
+
+  // Clearance must agree with the complete evidence this run will sign.
+  if (input.finishedCycleId) {
+    await aggregateCycleEvidence(
+      {
+        cycleId: input.finishedCycleId,
+        runId: input.runId,
+        runKey: input.runKey,
+        stats: input.stats,
+      },
       client,
     );
   }

@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { pool } from './connection';
 import type { GovernedUnpauseEvidence, TradeContainmentRow, TradePauseObservation } from '../types';
+import { QUALIFYING_DISCREPANCY_CODES } from '../core/containment';
 
 /** Postgres unique-violation, raised when an approval receipt is replayed. */
 const UNIQUE_VIOLATION = '23505';
@@ -171,9 +172,10 @@ export async function openContainment(
  *
  * This moves the incident to `RECONCILED_PENDING_APPROVAL` — evidence that the
  * divergence is gone, which is necessary but not sufficient: the trade stays
- * blocked until a governed approval is recorded. The `opened_run_key` guard
- * makes "fresh" literal, so the run that opened an incident can never be the
- * run that clears it.
+ * blocked until a governed approval is recorded. The caller supplies a direct
+ * clean comparison after it persists all findings the run will sign. A copied
+ * qualifying finding still prevents clearance. A later eligible run can replace
+ * a previously contradicted clearance while its signed evidence stays intact.
  */
 export async function recordCleanReconciliation(
   input: {
@@ -183,18 +185,30 @@ export async function recordCleanReconciliation(
   executor: Executor = pool,
 ): Promise<TradeContainmentRow | null> {
   const result = await executor.query<TradeContainmentRow>(
-    `UPDATE reconcile_trade_containments
+    `UPDATE reconcile_trade_containments AS c
      SET state = 'RECONCILED_PENDING_APPROVAL',
          cleared_run_key = $2,
          cleared_at = (NOW() AT TIME ZONE 'UTC'),
          last_observed_run_key = $2,
          last_observed_at = (NOW() AT TIME ZONE 'UTC'),
          updated_at = (NOW() AT TIME ZONE 'UTC')
-     WHERE trade_id = $1
-       AND state = 'CONTAINED'
-       AND opened_run_key <> $2
+     WHERE c.trade_id = $1
+       AND c.opened_run_key <> $2
+       AND c.last_observed_run_key IS DISTINCT FROM $2
+       AND NOT EXISTS (
+         SELECT 1 FROM reconcile_drifts d
+         WHERE d.run_key = $2 AND d.trade_id = c.trade_id AND d.mismatch_code = ANY($3::text[])
+       )
+       AND (
+         c.state = 'CONTAINED'
+         OR (c.state = 'RECONCILED_PENDING_APPROVAL' AND EXISTS (
+           SELECT 1 FROM reconcile_drifts d
+           WHERE d.run_key = c.cleared_run_key AND d.trade_id = c.trade_id
+             AND d.mismatch_code = ANY($3::text[])
+         ))
+       )
      RETURNING *, ${CONTAINMENT_DATES}`,
-    [input.tradeId, input.runKey],
+    [input.tradeId, input.runKey, [...QUALIFYING_DISCREPANCY_CODES]],
   );
 
   return result.rows[0] ?? null;
