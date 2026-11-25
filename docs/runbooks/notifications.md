@@ -2,9 +2,13 @@
 
 ## Purpose
 
-Operate durable alert delivery: every alert is committed to a Postgres outbox before delivery, retried with bounded backoff, dead-lettered when its attempts are spent, and escalated to the duty owner when a critical alert cannot be delivered (SOW H-26).
+Use this runbook to operate durable alert delivery (SOW H-26). For durable
+delivery, producers write alerts to a Postgres outbox before sending them. The
+dispatcher retries delivery with bounded backoff. When an alert reaches its
+attempt limit, the dispatcher moves it to dead letter. If a critical alert
+cannot be delivered, the dispatcher escalates it to the duty owner.
 
-## Source Of Truth
+## Source of truth
 
 - Notification library: `notifications/src/index.ts`
   - Durable outbox queries: `notifications/src/outbox.ts`
@@ -41,7 +45,8 @@ Severity route policy:
 - `warning` -> `operations`
 - `critical` -> `pager`
 
-Registered producer event types:
+For all registered producer types, see the [event schema registry](../api/events/registry.json).
+These are common notification and escalation types.
 
 | `type`                                   | Source         | Severity | Meaning                                                                                                                                  |
 | ---------------------------------------- | -------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -54,37 +59,46 @@ Registered producer event types:
 | `RECONCILIATION_COVERAGE_BACKLOG`        | reconciliation | critical | The uncovered trade tail breached its age SLA.                                                                                           |
 | `NOTIFICATION_ESCALATION`                | any            | critical | Sent to the escalation route: a critical alert dead-lettered or stayed undelivered past the escalation deadline.                         |
 
-## Delivery Lifecycle
+## Delivery lifecycle
 
-1. A producer calls `notify` (or `enqueue`). The alert is written to `notification_outbox` as `PENDING` before any webhook is tried. `enqueue` can join the caller's transaction so an alert commits or rolls back with the state it describes.
-2. The dispatcher leases one due row at a time (`FOR UPDATE SKIP LOCKED`, critical first), immediately before sending it, so several replicas never send the same row at once and a slow backlog cannot outlive its leases. The lease is at least 60 s and at least four times the webhook timeout. A pass attempts each row at most once. The attempt is counted at claim time, so a worker that dies mid-delivery still spends an attempt.
-3. Success marks the row `DELIVERED`. Failure records `last_error` and backs off exponentially (5 s base, 5 min cap).
-4. After 8 attempts the row becomes `DEAD_LETTER`. A row whose final attempt never reported back is dead-lettered once its lease expires.
-5. A critical row escalates to the escalation route when it dead-letters, or when it is still undelivered 10 minutes after it was first raised. Primary delivery keeps retrying while an overdue row is escalated.
+The service delivers alerts in this sequence:
 
-Delivery is at-least-once: a crash after the webhook accepted an alert, but before the row was settled, sends it again. A duplicate page is the safe failure.
+1. A producer calls `notify` or `enqueue`. It writes a `PENDING` row before it attempts a webhook delivery. `enqueue` can use the caller's transaction. The alert then commits or rolls back with the state it describes.
+2. Immediately before delivery, the dispatcher leases one due row with `FOR UPDATE SKIP LOCKED`. Critical rows have priority. Replicas cannot send the same leased row at the same time. A queued backlog cannot outlive a lease acquired only at delivery time. A lease lasts at least 60 seconds and four times the webhook timeout. A pass attempts each row at most once. The service counts the attempt when it claims the row. A worker failure during delivery therefore consumes an attempt.
+3. Successful delivery sets `DELIVERED`. Failure records `last_error`. Retries use exponential backoff with a five-second base and a five-minute maximum.
+4. After eight attempts, the row becomes `DEAD_LETTER`. If the final attempt reports no result, the dispatcher waits until its lease expires before recording that state.
+5. A critical row escalates when it becomes a dead letter. It also escalates if it remains undelivered ten minutes after it was first raised. Primary delivery continues its remaining retries while the overdue row escalates.
 
-Dispatch runs on a 15 s timer in each long-running process and is also kicked straight after every `notify`, so a new alert does not wait for the timer. Reconciliation `once` runs dispatch at the end of the run.
+Delivery is at least once. If a worker fails after webhook acceptance but before recording completion, the service sends the alert again. A duplicate page is the safe failure.
 
-Dedup and cooldown:
+Each long-running process dispatches every 15 seconds. It also dispatches after each `notify` call, so a new alert need not wait for the timer. Reconciliation `once` dispatches at the end of the run.
 
-- A repeat of an alert whose `dedupKey` is still `PENDING` is merged into that row (`occurrences` + 1) instead of queueing a second page.
-- A repeat within `cooldownMs` of a `DELIVERED` row with the same `dedupKey` is suppressed. The cooldown is read from the database, so it survives restarts.
+Deduplication and cooldown use these rules:
 
-Failure modes:
+- If an alert's `dedupKey` is still `PENDING`, a repeat increments `occurrences` on that row. It creates no second page.
+- Within `cooldownMs`, a repeat of a `DELIVERED` row's `dedupKey` is suppressed. The database stores the cooldown, which survives restarts.
 
-- **Webhook outage or process restart:** the row stays `PENDING` and is delivered when the route recovers, by whichever process drains next.
-- **Outbox write fails (database unavailable):** `notify` logs an error and falls back to one direct best-effort webhook send. Reconciliation run-outbox alerts use `enqueue` instead, which throws, so the `reconcile_alert_outbox` row stays pending and is retried on the next run.
-- **Notifications disabled (`*_NOTIFICATIONS_ENABLED=false`):** nothing new is queued and the dispatcher sends nothing, including existing backlog and escalations. Queued rows keep their attempt counts and are delivered once notifications are re-enabled. The first pass logs `Notifications are disabled; queued notifications are retained unsent` with the counts.
-- **No escalation route configured:** undeliverable critical alerts are still kept, and every dispatch pass logs `Critical notifications need escalation but no escalation route is configured` at error level with the count.
+These conditions affect delivery:
 
-## Escalation Route
+- **Webhook outage or process restart:** the row stays `PENDING`. The next dispatcher delivers it after the route recovers.
+- **Outbox write failure:** if `notify` cannot store a registered alert, it logs the error and attempts direct webhook delivery. Reconciliation run-outbox alerts use `enqueue`, which throws if the write fails. The `reconcile_alert_outbox` row stays pending for the next run.
+- **Notifications disabled:** with `*_NOTIFICATIONS_ENABLED=false`, the service queues no new alerts and sends no backlog or escalation. Queued rows retain their attempt counts. Delivery resumes when notifications are enabled. The first pass logs `Notifications are disabled; queued notifications are retained unsent` with the counts.
+- **Escalation route missing:** the service retains undeliverable critical alerts. Each dispatch pass logs `Critical notifications need escalation but no escalation route is configured` at error level with the count.
 
-Each service reads `NOTIFICATIONS_ESCALATION_WEBHOOK_URL` (runtime profile: `ORACLE_`, `RECONCILIATION_`, `INDEXER_NOTIFICATIONS_ESCALATION_WEBHOOK_URL`). Point it at the duty owner's paging integration, on a different provider or integration from `NOTIFICATIONS_WEBHOOK_URL`, so an outage of the primary route cannot also take out escalation. Treat it as a secret.
+## Escalation route
 
-The escalation page (`NOTIFICATION_ESCALATION`) renders the original type, message, correlation, `dedupKey`, attempt count, occurrence count, sanitized last error, the outbox id and first-raised time into the webhook body. Only this allowlist is rendered: other metadata, including the original alert's, never reaches the webhook. Stored and forwarded errors never contain URLs.
+Each service reads `NOTIFICATIONS_ESCALATION_WEBHOOK_URL` (runtime profile: `ORACLE_`, `RECONCILIATION_`, `INDEXER_NOTIFICATIONS_ESCALATION_WEBHOOK_URL`). Use the duty owner's paging integration. Use a different provider or integration from `NOTIFICATIONS_WEBHOOK_URL`. An outage of the primary route must not disable escalation. Treat it as a secret.
 
-## Inspecting The Outbox
+The escalation page (`NOTIFICATION_ESCALATION`) renders only the following fields in the webhook body:
+
+- original type and message
+- correlation and `dedupKey`
+- attempt and occurrence counts
+- sanitized last error
+- outbox ID and first-raised time
+  Only this allowlist is rendered: other metadata, including the original alert's, never reaches the webhook. Stored and forwarded errors never contain URLs.
+
+## Inspect the outbox
 
 Readiness reports `notificationOutbox` counts on reconciliation `/ready`. For any service, connect as the service's runtime role:
 
@@ -101,9 +115,9 @@ WHERE state = 'DEAD_LETTER' OR (severity = 'critical' AND escalated_at IS NULL A
 ORDER BY id;
 ```
 
-## Dead-Letter Redrive
+## Redrive a dead letter
 
-`DELIVERED` and `DEAD_LETTER` rows are immutable evidence: a trigger rejects any change to their state, payload or attempt count. No row of any state can be deleted or truncated: triggers reject it for every role, including the owner, and the runtime role has no `DELETE` grant (the indexer migration revokes the one its default privileges hand out). To redrive a dead letter after the route is fixed, insert a new row that names it:
+`DELIVERED` and `DEAD_LETTER` rows are immutable evidence: a trigger rejects any change to their state, payload or attempt count. Triggers reject deletion or truncation of every row, regardless of state or role, including the owner. The runtime role has no `DELETE` grant. The indexer migration revokes the grant assigned by its default privileges. To redrive a dead letter after the route is fixed, insert a new row that names it:
 
 ```sql
 INSERT INTO notification_outbox (source, event_type, severity, dedup_key, event, redriven_from)
@@ -114,14 +128,18 @@ WHERE id = :dead_letter_id AND state = 'DEAD_LETTER';
 
 Record the redrive in the incident timeline. Never redrive a row you have not confirmed is still unanswered.
 
-## Suppression Procedure
+## Suppression procedure
 
-1. Confirm duplicate events share the same `dedupKey`.
-2. Verify cooldown window (`cooldownMs`) is appropriate for the event type.
-3. If noise persists, adjust event producer key strategy (do not disable critical notifications globally).
-4. Re-run smoke notification and confirm suppression in logs.
+Use this procedure to check whether the producer suppresses duplicate
+notifications. Do not disable critical notifications globally.
 
-## Escalation Procedure
+1. Confirm that duplicate events share the same `dedupKey`.
+2. Verify that the cooldown window (`cooldownMs`) is appropriate for the event type.
+3. If duplicate notifications persist, adjust how the producer sets `dedupKey`.
+4. Run the smoke notification again.
+5. Confirm suppression in the logs.
+
+## Escalation procedure
 
 Automatic escalation is described under [Escalation Route](#escalation-route). Human escalation by severity route:
 
@@ -135,16 +153,27 @@ Capture evidence when escalating:
 - attempt count, `last_error`, and escalation state from `notification_outbox`
 - correlation fields (`tradeId`, `actionKey`, `requestId`, `txHash`, `runKey`)
 
-## Rollback Procedure
+## Rollback procedure
 
-1. Stop the affected producer if it cannot publish valid events. Keep its outbox and delivery evidence. An older service image can fail the immutable migration check after an outbox migration, even when its schema change is additive. Use a forward fix that retains all applied migrations. A package-only revert needs a reviewed compatibility build and delivery rehearsal; do not edit the migration ledger.
-2. Restore prior template version mapping in `NOTIFICATION_TEMPLATE_VERSIONS`.
-3. Re-run notifications tests and the deterministic gate probe:
-   - `pnpm --filter ./notifications run build`
-   - `scripts/notifications-gate.sh runtime`
-4. Confirm no secrets are logged and retry bounds are still enforced.
+After an outbox migration, an older service image can fail the immutable
+migration check even if the schema change is additive. A package-only revert
+requires both a reviewed compatibility build and a delivery rehearsal.
 
-## Runtime Health + Release Evidence
+Do not edit the migration ledger.
+
+Use this procedure to recover the producer and verify delivery.
+
+1. If the affected producer cannot publish valid events, stop it.
+2. Preserve the producer's outbox and delivery evidence.
+3. Use a forward fix that retains all applied migrations.
+4. Restore the previous template version mapping in `NOTIFICATION_TEMPLATE_VERSIONS`.
+5. Run the notifications tests with `pnpm --filter ./notifications run test --if-present`.
+6. Build the notifications package with `pnpm --filter ./notifications run build`.
+7. Run the deterministic gate probe with `scripts/notifications-gate.sh runtime`.
+8. Confirm that logs contain no secrets.
+9. Confirm that the dispatcher still enforces retry limits.
+
+## Runtime health and release evidence
 
 - Profile-level wiring health checks:
   - `scripts/cotsel.sh health`
@@ -158,14 +187,14 @@ Capture evidence when escalating:
     - `ORACLE_TRIGGER_EXHAUSTED_NEEDS_REDRIVE`
     - `RECONCILIATION_CRITICAL_DRIFT`
 
-## Safety Requirements
+## Safety requirements
 
 - Do not log webhook secrets, tokens, or full credentialed URLs.
 - Keep retry attempts bounded.
 - Keep dedup key stable and deterministic per event identity.
 - Do not delete or rewrite settled `notification_outbox` rows; redrive dead letters as new rows.
 
-## Verification Commands
+## Verification commands
 
 ```bash
 pnpm --filter ./notifications run test --if-present
@@ -176,9 +205,23 @@ scripts/notifications-gate.sh runtime
 
 ## Refused event types
 
-A producer refuses an unregistered or invalid notification before durable enqueue. It does not fall back to direct delivery. This preserves the registry and outbox contract, but it can leave an operator notification unsent.
+If the notification type is unregistered, the producer refuses the
+notification before durable enqueue. The direct-delivery fallback is
+unavailable for this refusal. An operator notification can remain unsent.
 
-1. Preserve the producer error, event type, dedup key and correlation identifiers. Do not log secrets or raw credentials.
-2. Check the event against `docs/api/events/registry.json` and its frozen schema. Correct the producer, or review a compatible registry addition and producer change together.
-3. Run `pnpm run events:registry:check` and the producer's outbox tests.
-4. Deploy the reviewed forward fix, then repeat or redrive the source operation through its supported idempotent path. Confirm the outbox row and delivery state. Do not bypass the outbox or invent a replacement event type to suppress the error.
+Do not log secrets or raw credentials. Do not bypass the outbox. Do not invent a
+replacement event type to suppress the error.
+
+Use this procedure to recover a refused notification.
+
+1. Preserve the producer error, event type, dedup key, and correlation identifiers.
+2. Check the event against the [event schema registry](../api/events/registry.json)
+   and its frozen schema.
+3. Prepare the producer correction.
+4. Run `pnpm run events:registry:check`.
+5. Run the producer's outbox tests.
+6. Submit the producer correction for review with any compatible registry addition.
+7. Deploy the reviewed forward fix.
+8. Repeat or redrive the source operation through its supported idempotent path.
+9. Verify the outbox row.
+10. Verify the delivery state.
