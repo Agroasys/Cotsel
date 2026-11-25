@@ -24,11 +24,11 @@ Before granting break-glass:
 
 1. Open or identify an incident ticket.
 2. Confirm the target `accountId`.
-3. Confirm the target durable base role is not `admin` by reading
-   `user_profiles.role` for the target account through the approved production
+3. Read the target account's `user_profiles.role` through the approved production
    database access path.
-4. Set a TTL no longer than `AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS`.
-5. Record the reason with the incident ID and planned expiry.
+4. Confirm the target's durable base role is not `admin`.
+5. Set a time to live (TTL) no longer than `AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS`.
+6. Record the reason with the incident ID and planned expiry.
 
 Minimum state check:
 
@@ -38,7 +38,7 @@ FROM user_profiles
 WHERE account_id = '<target account id>';
 ```
 
-## Grant Temporary Admin
+## Grant temporary admin
 
 Endpoint:
 
@@ -65,27 +65,57 @@ Body:
 }
 ```
 
-**Break-glass always requires a fresh step-up (Cotsel#946).** `operatorAuthentication`
-is the granting operator's upstream step-up, inside the HMAC-signed body, so the
-admin-control caller attests it as it attests a session exchange. Cotsel checks it
-itself:
+### Step-up requirements
 
-- it is required;
-- `authStrength` must be in `AUTH_BREAK_GLASS_STEP_UP_ACCEPTED_STRENGTHS` (default
-  `hardware_webauthn`);
-- `authTime` must be at most `AUTH_BREAK_GLASS_STEP_UP_MAX_AGE_SECONDS` old (default
-  `300`, range 60–3600).
+Break-glass grants always require recent additional authentication (step-up)
+from the granting operator (Cotsel#946). The admin-control caller attests the
+operator's step-up in `operatorAuthentication`, as it does for a session
+exchange. A hash-based message authentication code (HMAC) covers the request
+body.
 
-Otherwise the grant is refused with 403 `StepUpRequired`, logged as
-`auth.break_glass_step_up_required`, and nothing is granted. A malformed claim is a 400. Revocation and review do not require a step-up.
+Cotsel verifies these requirements before it grants access.
 
-**Audit:** a successful grant's own `break_glass_granted` entry in `auth_admin_audit_events` records the verified step-up under `metadata.stepUp`. It records `authTime`, `method`, `strength`, `ageSeconds` at grant time, and the `maxAgeSeconds` and `acceptedStrengths` it satisfied. The entry is written in the grant's transaction, so a grant never exists without it. No credential, bearer or signature is recorded.
+- The request must contain `operatorAuthentication`.
+- `authStrength` must match a value in
+  `AUTH_BREAK_GLASS_STEP_UP_ACCEPTED_STRENGTHS`. The default is `hardware_webauthn`.
+- The age of `authTime` must not exceed
+  `AUTH_BREAK_GLASS_STEP_UP_MAX_AGE_SECONDS`. The default is `300` seconds.
+  The permitted range is 60 to 3600 seconds.
 
-**Contract:** `docs/api/fixtures/cotsel-break-glass-grant.v1.json` is the exact grant body Agroasys sends. It is byte-identical to the agroasys-backend fixture (Agroasys/agroasys-backend#823). `auth/tests/breakGlassStepUp.test.ts` shows Cotsel accepts it while the step-up is fresh and refuses it once stale.
+If the step-up is missing, stale, or too weak, Cotsel returns 403
+`StepUpRequired` and logs `auth.break_glass_step_up_required`.
+If an authentication claim is malformed, Cotsel returns 400.
+In both cases, Cotsel refuses the grant. Revocation and review do not require a
+step-up.
 
-**Rollout:** the grant ignores unknown body fields, so the Agroasys admin-control
-client can start sending `operatorAuthentication` before this Cotsel release. Deploy
-it in that order, or emergency grants are refused until Agroasys sends the claims.
+### Grant audit evidence
+
+For a successful grant, Cotsel writes the verified step-up to
+`metadata.stepUp` in the grant's `break_glass_granted` entry in
+`auth_admin_audit_events`. The evidence includes `authTime`, `method`,
+`strength`, and `ageSeconds` at grant time. It also includes the
+`maxAgeSeconds` and `acceptedStrengths` that the step-up satisfied.
+
+Cotsel writes the audit entry in the same database transaction as the grant.
+Every grant therefore has an audit entry. The entry contains no credential,
+bearer token, or signature.
+
+### Grant request contract
+
+The [break-glass grant fixture](../api/fixtures/cotsel-break-glass-grant.v1.json)
+contains the exact request body Agroasys sends. It matches the agroasys-backend
+fixture byte for byte (Agroasys/agroasys-backend#823).
+The [break-glass step-up tests](../../auth/tests/breakGlassStepUp.test.ts)
+verify acceptance while the step-up is fresh and refusal after it becomes stale.
+
+### Deployment order
+
+Deploy the Agroasys admin-control client that sends `operatorAuthentication`
+before this Cotsel release. The previous Cotsel grant endpoint ignores unknown
+body fields. If Cotsel deploys first, it refuses emergency grants until Agroasys
+sends the claims.
+
+### Grant effects
 
 The auth service stores durable `role` separately from temporary
 `break_glass_role`. During the TTL, the effective role is `admin`. After expiry
@@ -116,11 +146,16 @@ operator routes:
 
 Rejected signer attempts return `SIGNER_POLICY_RESTRICTED` with the action
 class, signer environment, and break-glass evidence fields. Successful
-privileged audit records include `breakGlassActive`, `breakGlassReason`,
-`breakGlassExpiresAt`, `breakGlassReviewedAt`, `breakGlassReviewedBy`, and
-`breakGlassReviewStatus` so reviewers can separate normal signer use from
-incident authority and see whether emergency access still needs post-incident
-closure.
+privileged audit records include these fields:
+
+- `breakGlassActive`
+- `breakGlassReason`
+- `breakGlassExpiresAt`
+- `breakGlassReviewedAt`
+- `breakGlassReviewedBy`
+- `breakGlassReviewStatus`
+
+Reviewers can distinguish normal signer use from incident authority. They can also determine whether emergency access still needs post-incident closure.
 
 Gateway session validation treats the break-glass review status as required
 evidence. If auth omits `breakGlass.reviewStatus` or emits an unknown value, the
@@ -133,7 +168,7 @@ effective for session resolution. If an old session was issued while
 break-glass was active, auth resolution revokes it when the effective authority
 no longer matches the issued authority.
 
-## Manual Revocation
+## Manual revocation
 
 Revoke as soon as the emergency action is complete.
 
@@ -187,12 +222,13 @@ The reviewer must confirm:
 - the profile/session break-glass context has `reviewStatus: reviewed` after
   review is complete
 
-## Required Alerts
+## Required alerts
 
-Operators should alert on:
+Configure alerts for these events and conditions.
 
 - `auth.break_glass_granted`
-- `auth.break_glass_step_up_required` (a grant refused for a stale or missing step-up)
+- `auth.break_glass_step_up_required` (a grant refused because the step-up is
+  missing, stale, or too weak)
 - `auth.break_glass_revoked`
 - `auth.break_glass_expired`
 - `auth.nonce_replay_attempted`
