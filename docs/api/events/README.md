@@ -15,7 +15,7 @@ Audience: engineers who add or change an event that Cotsel publishes. Scope: `do
 1. **Published versions are frozen.** Each entry records the SHA-256 of its schema; for the callback contract, the SHA-256 of the YAML text of the schema and every schema it references. Any edit to a published schema fails the check.
 2. **Change a schema by adding the next version.** Add `<name>.v<n+1>.schema.json` and a registry entry with the same `type`. The guarantee is compatibility with existing consumers: every value the new producer may emit must be accepted by the previous schema. The check rejects added enum values or types, removed required fields, new properties on closed objects, and removed constraints. Requiring a previously optional field, narrowing an enum or type, and closing additional properties are compatible. Changed existing bounds are rejected conservatively, even if they might narrow output. A breaking change needs a new event type and a consumer migration plan. This guarantee does not establish that new consumers can replay historical events; consumers that need replay must accept the retained versions explicitly.
 3. **While a version is being drafted,** mark its entry `"status": "draft"`. Its digest is not enforced yet, but compatibility still is. Remove `draft` and record the digest when you publish it.
-4. **Every emitted notification type must be registered.** The check reads the `type:` values at every `notify(...)` and `raise(...)` call site in the listed producers. Emitted types outside the latest registered schema fail the check. Published schemas may retain types no longer emitted, so a producer can retire a type without rewriting history. Adding an enum value breaks existing strict consumers; use a new event type and migrate those consumers before emitting it.
+4. **Every emitted notification type must be registered.** The check reads the `type:` values at `notify(...)`, `raise(...)`, and `enqueue(...)` call sites in the listed producers. Emitted types outside the latest registered schema fail the check. Published schemas may retain types no longer emitted, so a producer can retire a type without rewriting history. Adding an enum value breaks existing strict consumers; use a new event type and migrate those consumers before emitting it.
 
 Run the check with:
 
@@ -25,21 +25,49 @@ pnpm run events:registry:check
 
 The release gate runs the same command.
 
-## Where the envelope is written
+## Notification envelopes
 
-`@agroasys/notifications` (`NotificationOutbox.enqueue`) stores the envelope in `notification_outbox.envelope` for every notification that oracle, reconciliation and indexer raise. It is built by `buildNotificationEnvelope` in `notifications/src/envelope.ts`:
+`NotificationOutbox.enqueue` in `@agroasys/notifications` stores the envelope in
+`notification_outbox.envelope` for notifications from oracle, reconciliation,
+and indexer. The [notification envelope builder](../../../notifications/src/envelope.ts)
+(`buildNotificationEnvelope`) sets these fields.
 
-- **Field values:** `eventId` is a fresh UUID; `producer` is the event `source`; `settlementId` is `correlation.tradeId`, or `null`; `orderingKey` is the dedup key; and `payload` is the notification.
-- **Repeats:** a merged repeat of the same incident keeps the first envelope, so `eventId` is stable while `occurrences` counts the repeats. The `event` column holds the latest occurrence.
-- **Integrity:** the column is constrained to the envelope shape, and a trigger makes a written envelope immutable. Rows written before the migration have a `NULL` envelope.
-- **Migrations:** oracle `202611230001`, reconciliation `202611230001`, indexer `1785800000000`.
-- **Type list:** `notifications/src/envelope.ts` keeps its own `REGISTERED_NOTIFICATION_TYPES`, and the check fails if it differs from the registry. `buildNotificationEnvelope` throws `UnregisteredNotificationTypeError` for any other type, and the registry check scans every `notify`, `raise` and `enqueue` call site, so an unregistered type fails in CI before it can reach a producer.
+| Field          | Value                                      |
+| -------------- | ------------------------------------------ |
+| `eventId`      | A new universally unique identifier (UUID) |
+| `producer`     | The event's `source`                       |
+| `settlementId` | `correlation.tradeId`, or `null`           |
+| `orderingKey`  | The event's deduplication key              |
+| `payload`      | The notification                           |
 
-Relays and consumers (#957, #958) read `envelope`, deduplicate on `eventId`, and order by `orderingKey`.
+When the outbox merges a repeat of an incident into an existing row, it keeps
+the first envelope and its `eventId`. The outbox increments `occurrences` and
+stores the latest occurrence in `event`.
 
-The gateway stores callback envelopes in `settlement_callback_deliveries.envelope` through migration `202611240019`.
-The registered type is `cotsel.settlement-callback`, version `v1`, with producer `gateway`.
-Its event identifier is the callback event identifier, and its ordering key is the trade identifier.
-The payload remains the frozen `cotsel.settlement-callback.v1` contract. HTTP delivery and signatures use the existing request body.
-Retries preserve the stored envelope. A database trigger rejects changes after publication.
-Historical rows and older images can leave the additive column null.
+A database constraint checks the envelope shape. A trigger rejects changes to
+a stored envelope. Rows written before the migration have a `NULL` envelope.
+The migration IDs are `202611230001` for oracle, `202611230001` for
+reconciliation, and `1785800000000` for indexer.
+
+`buildNotificationEnvelope` throws `UnregisteredNotificationTypeError` when a
+type is absent from `REGISTERED_NOTIFICATION_TYPES`. In continuous integration
+(CI), the registry check compares that list with the registry. It also checks
+`notify`, `raise`, and `enqueue` call sites in the listed producers for
+unregistered types.
+
+The planned relays and consumers (#957, #958) must read `envelope`, deduplicate
+on `eventId`, and order by `orderingKey`. This producer change does not implement
+those consumers.
+
+## Settlement callback envelopes
+
+The gateway stores callback envelopes in
+`settlement_callback_deliveries.envelope` through migration `202611240019`.
+The registered type is `cotsel.settlement-callback`, version `v1`, with producer
+`gateway`. The envelope uses the callback event identifier as `eventId` and the
+trade identifier as `orderingKey`.
+
+The payload follows the frozen `cotsel.settlement-callback.v1` contract. HTTP
+delivery and signatures use the existing request body. Retries preserve the
+stored envelope. A database trigger rejects changes after publication.
+Historical rows and writers that omit the additive column can leave it `NULL`.
