@@ -52,6 +52,7 @@ Operator rule:
 - do not replay a failed operation until the underlying dependency failure is understood and contained
 - dashboard/API replay requires an admin session with mutation write access and the explicit `operations:replay`
   operator capability
+- dashboard/API replay requires a step-up check before idempotency. In enforce mode, missing or stale assurance returns `403 FORBIDDEN` with `details.reason=step_up_required` without replay.
 - dashboard/API replay is accepted only while the failed-operation record is still `open` and `replayEligible=true`
 - preserve the original intent identity: replay keeps the same `requestId`, `correlationId`, and `idempotencyKey`
 - treat replay as a controlled reattempt of the same logical action, not a new operator request

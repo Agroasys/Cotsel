@@ -16,6 +16,7 @@ import type { AuditLogStore } from '../core/auditLogStore';
 import type { SessionAuthentication } from '../core/authSessionClient';
 import { GatewayError } from '../errors';
 import { Logger } from '../logging/logger';
+import { resolveGatewayActorKey } from './auth';
 
 export type StepUpRefusal = 'no_assurance' | 'stale' | 'insufficient_strength';
 
@@ -78,6 +79,13 @@ export function requireRecentStepUp(
       ageSeconds: evaluation.ageSeconds,
       maxAgeSeconds: policy.maxAgeSeconds,
       enforcement: policy.enforcement,
+      authorization: {
+        actorId: resolveGatewayActorKey(principal.session),
+        actorUserId: principal.session.userId,
+        sessionReference: principal.sessionReference,
+        requestId: req.requestContext?.requestId ?? 'unknown',
+        correlationId: req.requestContext?.correlationId ?? null,
+      },
     };
     const refusedButRecorded = !evaluation.fresh && policy.enforcement === 'record';
     const eventType = evaluation.fresh

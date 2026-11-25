@@ -21,6 +21,7 @@ import {
   type IdempotencyStore,
 } from '../src/core/idempotencyStore';
 import type { OperatorCapability } from '../src/core/authSessionClient';
+import { freshStepUp } from './support/stepUp';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -189,6 +190,7 @@ async function startServer(
         role,
         capabilities,
         signerAuthorizations: [],
+        authentication: freshStepUp(),
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
       };

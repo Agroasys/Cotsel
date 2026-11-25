@@ -134,6 +134,12 @@ The gateway checks upstream additional authentication (step-up) for governance,
 treasury, and compliance mutations. The auth service supplies
 `authentication.authTime` and `authentication.strength` in the session.
 
+Dashboard/API failed-operation replay also requires this check, including compliance decisions, oracle progression controls and settlement callback redelivery.
+The freshness check runs before replay idempotency.
+A replayed compliance action's audit row retains the authorizing assurance.
+`metadata.stepUp.authorization` identifies the current authorizer, hashed session reference and replay request.
+The action retains its original intent actor and request ID.
+
 A step-up is valid when its age does not exceed `GATEWAY_STEP_UP_MAX_AGE_SECONDS`
 and its strength is in `GATEWAY_STEP_UP_ACCEPTED_STRENGTHS`. In `enforce` mode,
 if the step-up is invalid, the gateway returns `403 FORBIDDEN` with
