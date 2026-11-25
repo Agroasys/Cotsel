@@ -1,0 +1,37 @@
+{
+  "$comment": "Agroasys -> Cotsel trusted session exchange, contract v1 with authentication assurance (agroasys-backend#797, consumed by Cotsel#946). The secret is a test value. Verify: sha256(rawBody) == bodySha256; HMAC-SHA256(secret, canonical) == headers[\"X-Signature\"]; canonical = [method, path, query, bodySha256, X-Timestamp, X-Nonce] joined by \\n.",
+  "version": 1,
+  "request": {
+    "method": "POST",
+    "path": "/api/auth/v1/session/exchange/agroasys",
+    "query": "",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Api-Key": "agroasys-session-exchange",
+      "X-Timestamp": "1769996410",
+      "X-Nonce": "00112233445566778899aabbccddeeff",
+      "X-Signature": "91789c0925e0bfd450df7007708e58102ccf91da27ed114493d18de3548a80e5"
+    },
+    "rawBody": "{\"accountId\":\"agroasys-user:42\",\"role\":\"admin\",\"email\":\"ops@agroasys.test\",\"walletAddress\":\"0x00000000000000000000000000000000000000a1\",\"authTime\":1769996400,\"authMethod\":\"webauthn\",\"authStrength\":\"hardware_webauthn\"}"
+  },
+  "verification": {
+    "secret": "contract-fixture-secret-not-for-production",
+    "bodySha256": "159529b4c244da329e26d6de6b216ddf802ad421ffe4de27646031cb7fe44133",
+    "canonical": "POST\n/api/auth/v1/session/exchange/agroasys\n\n159529b4c244da329e26d6de6b216ddf802ad421ffe4de27646031cb7fe44133\n1769996410\n00112233445566778899aabbccddeeff"
+  },
+  "claims": {
+    "authTime": {
+      "type": "integer",
+      "unit": "unix_seconds",
+      "source": "access token auth_time of the current Agroasys session; refreshed only by a new step-up"
+    },
+    "authMethod": {
+      "type": "string",
+      "examples": ["webauthn", "password", "auth0"]
+    },
+    "authStrength": {
+      "type": "string",
+      "examples": ["hardware_webauthn", "password", "unverified"]
+    }
+  }
+}

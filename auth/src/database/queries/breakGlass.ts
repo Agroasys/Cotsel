@@ -4,6 +4,7 @@
 import { CallerSafeError } from '@agroasys/shared-http';
 import { Pool } from 'pg';
 import { AdminActor, UserProfile, UserRole } from '../../types';
+import type { BreakGlassStepUpEvidence } from '../../core/breakGlassStepUp';
 import { recordAdminAuditEvent } from './adminAudit';
 import {
   insertTrustedProfileRow,
@@ -22,6 +23,7 @@ export async function grantBreakGlassAdmin(
     actor: AdminActor;
     reason: string;
     ttlSeconds: number;
+    stepUp: BreakGlassStepUpEvidence;
   },
 ): Promise<UserProfile> {
   const client = await pool.connect();
@@ -88,6 +90,7 @@ export async function grantBreakGlassAdmin(
       metadata: {
         baseRole: profile.baseRole,
         revokedSessions,
+        stepUp: input.stepUp,
       },
     });
 

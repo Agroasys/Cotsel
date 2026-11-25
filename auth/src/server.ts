@@ -180,6 +180,12 @@ async function bootstrap(): Promise<void> {
           store: createPostgresAdminAuthorityStore(pool, config.environment),
           maxGrantTtlSeconds: config.adminGrantMaxTtlSeconds,
         }),
+        {
+          policy: {
+            maxAgeSeconds: config.breakGlassStepUpMaxAgeSeconds,
+            acceptedStrengths: config.breakGlassStepUpAcceptedStrengths,
+          },
+        },
       )
     : undefined;
   const router = createRouter(sessionController, sessionService, {
