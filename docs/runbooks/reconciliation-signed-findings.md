@@ -172,17 +172,37 @@ The foundation stack creates the signing key and grant. The platform stack reads
 
 Migration `202611230002` refuses legacy containments in `CONTAINED` or `RECONCILED_PENDING_APPROVAL`. It checks before it creates the signed run table. On refusal, the prior application schema and migration versions remain valid. Resolved legacy incidents keep their original unsigned evidence.
 
+For row checks, the verifier must use `app.service_name=reconciliation` so forced row-level security exposes the service's incidents.
+
 Before you start the signing cutover, use these steps:
 
 1. Check the target database ledger and schema through the approved verifier.
 2. If version `202611230002` or table `reconcile_run_manifests` already exists, stop for a reviewed forward migration plan.
-3. Run `reconcile:containment list` with the pre-cutover reconciliation image.
-4. If the list contains open incidents, resolve them through the existing governed recovery procedure.
+3. Through the approved verifier, check for legacy incidents in either unresolved state.
+4. If the verifier finds open incidents, follow [legacy incident recovery](#recover-a-legacy-incident).
 5. Before you run the migration task, stop all pre-cutover reconciliation writers.
 6. If the task reports `reconciliation_signed_cutover_open_legacy_containment`, stop the cutover.
 7. After refusal, verify that the pre-cutover migration history still matches the old image.
 
-If an incident is still open, keep its containment in force. Follow [the scoped containment procedure](reconciliation-run-leases.md#part-2--scoped-containment-pres-11) with the pre-cutover runtime. Retry cutover only after governed recovery. Preserve the legacy records and receipt history.
+If an incident is still open, keep its containment in force. Preserve the legacy records and receipt history.
+
+### Recover a legacy incident
+
+Use [the scoped containment procedure](reconciliation-run-leases.md#part-2--scoped-containment-pres-11) with the compatible pre-cutover runtime. Its release command verifies the governed receipt for the exact trade and incident.
+
+The staging service disables ECS Exec. These commands require an approved private operator-task invocation with the pre-cutover image and runtime database role. If no approved invocation exists, stop legacy recovery. Do not enable ECS Exec or use migration credentials for this procedure.
+
+Use these steps for incidents found during preflight or after a migration refusal:
+
+1. Verify that the database schema and migration ledger match the pre-cutover image.
+2. If compatibility verification fails, stop for a reviewed forward migration plan.
+3. If writers are stopped and fresh reconciliation is needed, resume the compatible runtime through the approved deployment procedure.
+4. Wait for the trade to reach `RECONCILED_PENDING_APPROVAL`.
+5. Obtain the governed unpause approval for the exact trade and incident.
+6. From `/app` in the approved operator task, run `node reconciliation/dist/containment-cli.js release --trade-id=<id> --approval-tx=<executed-unpause-hash>`.
+7. Verify that the incident no longer appears in `node reconciliation/dist/containment-cli.js list`.
+8. Before retrying the migration, stop all pre-cutover reconciliation writers.
+9. After governed recovery and writer shutdown, proceed with the cutover.
 
 ### Apply and verify
 
