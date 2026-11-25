@@ -127,8 +127,7 @@ Safety rules:
 - If `GATEWAY_WRITE_ALLOWLIST` is empty, mutations must reject writes even when enabled.
 - The gateway process must never hold the human governance signer key.
 - No governance executor secret is part of the supported current runtime.
-- Approved write operators for later enablement are Aston and `czpyioe`, but `GATEWAY_WRITE_ALLOWLIST`
-  must contain the exact local auth principal IDs used by the auth service. Do not guess identifiers.
+- Approved write operators for later enablement are Aston and `czpyioe`. Set `GATEWAY_WRITE_ALLOWLIST` to the exact local principal IDs from the auth service. Do not guess identifiers.
 
 ### Step-up for privileged mutations
 
@@ -167,9 +166,7 @@ and broadcasts that authorization. Incoming USDC receipts do not call this route
 sponsored gas.
 
 Agroasys records the sponsorship source as `pooled_settlement_support_fees`. This is pooled treasury
-funding, not a promise that one order's USD 4 support fee is reserved for one transfer. Operators must
-reconcile the returned request ID, transaction hash, gas used, effective gas price, native cost, and
-executor address against the Agroasys transfer record. A successful HTTP response without complete
+funding, not a promise that one order's USD 4 support fee is reserved for one transfer. Reconcile the returned request ID, transaction hash, gas used and effective gas price with the Agroasys transfer record. Reconcile the returned native cost and executor address with the same record. A successful HTTP response without complete
 receipt evidence is invalid.
 
 Operational controls:
@@ -177,8 +174,7 @@ Operational controls:
 - monitor `GET /api/dashboard-gateway/v1/operations/gasless-relayer/readiness` before enabling sends;
 - use the dedicated relayer KMS signer in staging and production;
 - refill or pause using the thresholds in `gateway-governance-signer-custody.md`;
-- on an ambiguous timeout, retry with the same platform transfer ID and idempotency key; the USDC
-  authorization nonce prevents a second token spend;
+- On an ambiguous timeout, retry with the same platform transfer ID and idempotency key. The USDC authorization nonce prevents a second token spend;
 - If broadcast might have succeeded but receipt evidence is unavailable, hold the Agroasys ledger reserve.
   Reconcile on-chain before releasing the reserve or retrying with a new authorization.
 
@@ -323,9 +319,7 @@ Operational rules:
   - last-known reference metadata
   - last successful verification time
   - current degraded or unavailable state
-- During outage, operators must capture issuer ID, subject reference, provider
-  reference, evidence reference, expiry, and affected `tradeId`/`correlationId`
-  values in the incident or audit evidence packet.
+- During an outage, record issuer ID, subject reference, provider reference, evidence reference and expiry in the incident or audit packet. Record the affected `tradeId` and `correlationId` values in that packet.
 
 Escalation:
 
@@ -357,7 +351,7 @@ Use this sequence after preparation:
 
 The gateway records `broadcast` or `broadcast_pending_verification` and starts backend monitoring. Block depth alone never finalizes an action. See [Transaction finality model](../architecture/transaction-finality-model.md).
 
-The gateway never signs or broadcasts governance transactions. Do not substitute an old checkout, manual contract call, direct database write, executor, queue, replay worker, KMS key or CLI command.
+The gateway never signs or broadcasts governance transactions. Do not substitute an old checkout, manual contract call or direct database write. Do not substitute an executor, queue, replay worker, KMS key or CLI command.
 
 ## Recover from a gateway regression
 
