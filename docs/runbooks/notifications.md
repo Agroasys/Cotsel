@@ -1,4 +1,4 @@
-# Notifications Runbook
+# Notifications runbook
 
 ## Purpose
 
@@ -9,6 +9,8 @@ attempt limit, the dispatcher moves it to dead letter. If a critical alert
 cannot be delivered, the dispatcher escalates it to the duty owner.
 
 ## Source of truth
+
+Use these source files and tables:
 
 - Notification library: `notifications/src/index.ts`
   - Durable outbox queries: `notifications/src/outbox.ts`
@@ -27,7 +29,7 @@ cannot be delivered, the dispatcher escalates it to the duty owner.
   - `scripts/notifications-gate.sh`
   - `scripts/notifications-gate-validate.mjs`
 
-## Template And Severity Versioning
+## Template and severity versioning
 
 - Routing version constant: `NOTIFICATION_ROUTING_VERSION`
 - Template version registry: `NOTIFICATION_TEMPLATE_VERSIONS`
@@ -61,13 +63,13 @@ These are common notification and escalation types.
 
 ## Delivery lifecycle
 
-The service delivers alerts in this sequence:
+The delivery lifecycle has these phases:
 
-1. A producer calls `notify` or `enqueue`. It writes a `PENDING` row before it attempts a webhook delivery. `enqueue` can use the caller's transaction. The alert then commits or rolls back with the state it describes.
-2. Immediately before delivery, the dispatcher leases one due row with `FOR UPDATE SKIP LOCKED`. Critical rows have priority. Replicas cannot send the same leased row at the same time. A queued backlog cannot outlive a lease acquired only at delivery time. A lease lasts at least 60 seconds and four times the webhook timeout. A pass attempts each row at most once. The service counts the attempt when it claims the row. A worker failure during delivery therefore consumes an attempt.
-3. Successful delivery sets `DELIVERED`. Failure records `last_error`. Retries use exponential backoff with a five-second base and a five-minute maximum.
-4. After eight attempts, the row becomes `DEAD_LETTER`. If the final attempt reports no result, the dispatcher waits until its lease expires before recording that state.
-5. A critical row escalates when it becomes a dead letter. It also escalates if it remains undelivered ten minutes after it was first raised. Primary delivery continues its remaining retries while the overdue row escalates.
+- **Enqueue:** A producer calls `notify` or `enqueue`. It writes a `PENDING` row before it attempts a webhook delivery. `enqueue` can use the caller's transaction. The alert then commits or rolls back with the state it describes.
+- **Lease:** Immediately before delivery, the dispatcher leases one due row with `FOR UPDATE SKIP LOCKED`. Critical rows have priority. Replicas cannot send the same leased row at the same time. A queued backlog cannot outlive a lease acquired only at delivery time. A lease lasts at least 60 seconds and four times the webhook timeout. A pass attempts each row at most once. The service counts the attempt when it claims the row. A worker failure during delivery therefore consumes an attempt.
+- **Delivery result:** Successful delivery sets `DELIVERED`. Failure records `last_error`. Retries use exponential backoff with a five-second base and a five-minute maximum.
+- **Attempt limit:** After eight attempts, the row becomes `DEAD_LETTER`. If the final attempt reports no result, the dispatcher waits until its lease expires before recording that state.
+- **Escalation:** A critical row escalates when it becomes a dead letter. It also escalates if it remains undelivered ten minutes after it was first raised. Primary delivery continues its remaining retries while the overdue row escalates.
 
 Delivery is at least once. If a worker fails after webhook acceptance but before recording completion, the service sends the alert again. A duplicate page is the safe failure.
 
@@ -96,7 +98,8 @@ The escalation page (`NOTIFICATION_ESCALATION`) renders only the following field
 - attempt and occurrence counts
 - sanitized last error
 - outbox ID and first-raised time
-  Only this allowlist is rendered: other metadata, including the original alert's, never reaches the webhook. Stored and forwarded errors never contain URLs.
+
+Only this allowlist is rendered. Other metadata, including the original alert's, never reaches the webhook. Stored and forwarded errors never contain URLs.
 
 ## Inspect the outbox
 
@@ -141,7 +144,7 @@ notifications. Do not disable critical notifications globally.
 
 ## Escalation procedure
 
-Automatic escalation is described under [Escalation Route](#escalation-route). Human escalation by severity route:
+Automatic escalation is described under [Escalation route](#escalation-route). Human escalation by severity route:
 
 - `informational`: ticket or async backlog follow-up.
 - `operations`: on-call operations channel with 30-minute response target.
@@ -176,7 +179,6 @@ Use this procedure to recover the producer and verify delivery.
 ## Runtime health and release evidence
 
 - Profile-level wiring health checks:
-  - `scripts/cotsel.sh health`
   - `scripts/cotsel.sh health`
 - Deterministic critical-path probe:
   - `scripts/notifications-gate.sh runtime`
