@@ -43,6 +43,7 @@ locals {
     { name = "GATEWAY_SETTLEMENT_SERVICE_AUTH_NONCE_TTL_SECONDS", value = "600" },
     { name = "GATEWAY_STEP_UP_ACCEPTED_STRENGTHS", value = "hardware_webauthn" },
     { name = "GATEWAY_STEP_UP_ENFORCEMENT", value = "enforce" },
+    { name = "GATEWAY_TEMPLATE_ACTIVATION_ALLOWLIST", value = "agroasys.launch:1" },
     { name = "GATEWAY_STEP_UP_MAX_AGE_SECONDS", value = "300" },
     { name = "GATEWAY_TREASURY_BASE_URL", value = "http://treasury.cotsel-staging.internal:3200" },
     { name = "GATEWAY_USDC_ADDRESS", value = var.base_sepolia_usdc_address },

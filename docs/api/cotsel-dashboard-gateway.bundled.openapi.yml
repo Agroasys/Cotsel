@@ -42,6 +42,7 @@ tags:
   - name: Governance
   - name: Treasury
   - name: Compliance
+  - name: Settlement Templates
 security:
   - sessionBearer: []
 paths:
@@ -2964,6 +2965,298 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '409':
           $ref: '#/components/responses/ConflictError'
+  /settlement-templates:
+    get:
+      tags:
+        - Settlement Templates
+      summary: List settlement template versions
+      description: |
+        Every version of every settlement template (Cotsel#940), ordered by template and version.
+        See `docs/runbooks/settlement-templates.md` for the lifecycle and what enforces each rule.
+      operationId: listSettlementTemplates
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: templateId
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/SettlementTemplateId'
+      responses:
+        '200':
+          description: Template versions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      tags:
+        - Settlement Templates
+      summary: Create a settlement template draft
+      description: |
+        Records a new template version as a draft. Its terms and SHA-256 hash never change
+        afterwards. Requires `governance:write`, a recent upstream step-up (403 with
+        `details.reason = step_up_required` otherwise) and an `Idempotency-Key`. The audit row
+        commits in the same transaction as the draft.
+      operationId: createSettlementTemplateDraft
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementTemplateCreateRequest'
+      responses:
+        '201':
+          description: Draft recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateVersionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement-templates/{templateId}/versions/{version}:
+    get:
+      tags:
+        - Settlement Templates
+      summary: Get one settlement template version
+      operationId: getSettlementTemplateVersion
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/SettlementTemplateIdPath'
+        - $ref: '#/components/parameters/SettlementTemplateVersionPath'
+      responses:
+        '200':
+          description: Template version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateVersionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /settlement-templates/{templateId}/versions/{version}/review:
+    post:
+      tags:
+        - Settlement Templates
+      summary: Review a settlement template draft
+      description: Moves a draft to reviewed. The reviewer must not be the author.
+      operationId: reviewSettlementTemplate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/SettlementTemplateIdPath'
+        - $ref: '#/components/parameters/SettlementTemplateVersionPath'
+      responses:
+        '200':
+          description: Version reviewed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateVersionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement-templates/activations:
+    get:
+      tags:
+        - Settlement Templates
+      summary: List template activation preparations
+      description: |
+        Every governed activation preparation (review R05), newest first, with its exact target,
+        the version it expects to replace, who prepared, approved and confirmed it, and why a
+        superseded one was invalidated.
+      operationId: listSettlementTemplateActivations
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: templateId
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/SettlementTemplateId'
+      responses:
+        '200':
+          description: Activation preparations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateActivationPreparationListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /settlement-templates/{templateId}/versions/{version}/activations:
+    post:
+      tags:
+        - Settlement Templates
+      summary: Prepare the activation of a reviewed settlement template version
+      description: |
+        Records a durable preparation that binds the exact target (template id, version and terms
+        hash) to the exact version it will replace, or none. Nothing is activated yet. The version
+        must be `reviewed` and listed in `GATEWAY_TEMPLATE_ACTIVATION_ALLOWLIST` (409 with
+        `details.reason = template_not_enforced_by_contract` otherwise), because the escrow
+        enforces only those terms until #955. A preparation expires after 24 hours.
+      operationId: prepareSettlementTemplateActivation
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/SettlementTemplateIdPath'
+        - $ref: '#/components/parameters/SettlementTemplateVersionPath'
+      responses:
+        '201':
+          description: Activation prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateActivationPreparationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement-templates/activations/{preparationId}/approve:
+    post:
+      tags:
+        - Settlement Templates
+      summary: Approve a prepared template activation
+      description: |
+        Independent approval of that exact preparation. The approver must be neither its
+        preparer nor the template's author (409 `independent_approval_required`). A preparation
+        whose target or expected predecessor changed is marked superseded and refused (409
+        `activation_preparation_stale`); an expired one is refused (409
+        `activation_preparation_expired`).
+      operationId: approveSettlementTemplateActivation
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/SettlementTemplateActivationPreparationIdPath'
+      responses:
+        '200':
+          description: Activation approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateActivationPreparationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement-templates/activations/{preparationId}/confirm:
+    post:
+      tags:
+        - Settlement Templates
+      summary: Confirm an approved template activation
+      description: |
+        Under lock, re-checks that the target is still the reviewed terms that were approved and
+        that the active version is still the one the preparation expected. Then, in one
+        transaction, it retires that predecessor, activates the target and records the audit
+        entry. A changed target or predecessor supersedes the preparation (409
+        `activation_preparation_stale`). The template's author cannot confirm (409
+        `independent_activation_required`). A confirmed preparation is never confirmed again
+        (409 `activation_already_confirmed`). There is no other way to activate a version.
+      operationId: confirmSettlementTemplateActivation
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/SettlementTemplateActivationPreparationIdPath'
+      responses:
+        '200':
+          description: |
+            Version active. `retired` is the version it replaced (the expected predecessor), if
+            any, and `preparation` is the confirmed preparation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateActivationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement-templates/{templateId}/versions/{version}/retire:
+    post:
+      tags:
+        - Settlement Templates
+      summary: Retire a draft or reviewed settlement template version
+      description: |
+        The active version cannot be retired on its own (409 with
+        `details.reason = active_template_requires_replacement`), because settlements would then
+        have no terms. It is replaced by activating another version.
+      operationId: retireSettlementTemplate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/SettlementTemplateIdPath'
+        - $ref: '#/components/parameters/SettlementTemplateVersionPath'
+      responses:
+        '200':
+          description: Version retired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementTemplateVersionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
 components:
   securitySchemes:
     sessionBearer:
@@ -3012,6 +3305,26 @@ components:
       required: true
       schema:
         type: string
+    SettlementTemplateIdPath:
+      name: templateId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/SettlementTemplateId'
+    SettlementTemplateActivationPreparationIdPath:
+      name: preparationId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+    SettlementTemplateVersionPath:
+      name: version
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
     SettlementHandoffId:
       name: handoffId
       in: path
@@ -6327,6 +6640,386 @@ components:
                   calldataHash:
                     type: string
                     pattern: ^0x[0-9a-fA-F]{64}$
+    SettlementTemplateId:
+      type: string
+      pattern: ^[a-z][a-z0-9.-]{1,62}$
+    SettlementTemplate:
+      description: |
+        Canonical settlement terms (`@agroasys/sdk` `SettlementTemplate`). The hash covers every
+        key, so no other keys are accepted.
+      type: object
+      additionalProperties: false
+      required:
+        - schemaVersion
+        - templateId
+        - version
+        - asset
+        - milestones
+        - fees
+        - windows
+      properties:
+        schemaVersion:
+          type: string
+          const: cotsel.settlement-template.v1
+        templateId:
+          $ref: '#/components/schemas/SettlementTemplateId'
+        version:
+          type: integer
+          minimum: 1
+        asset:
+          type: object
+          additionalProperties: false
+          required:
+            - symbol
+            - decimals
+            - quantumBaseUnits
+          properties:
+            symbol:
+              type: string
+            decimals:
+              type: integer
+              minimum: 0
+            quantumBaseUnits:
+              type: string
+              pattern: ^[1-9][0-9]*$
+        milestones:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - releaseBps
+              - deductsSupplierFee
+            properties:
+              id:
+                type: string
+              releaseBps:
+                type: integer
+                minimum: 1
+                maximum: 10000
+              deductsSupplierFee:
+                type: boolean
+        fees:
+          type: object
+          additionalProperties: false
+          required:
+            - buyerBps
+            - supplierBps
+            - fixedSupportFeeBaseUnits
+            - rounding
+          properties:
+            buyerBps:
+              type: integer
+              minimum: 0
+              maximum: 10000
+            supplierBps:
+              type: integer
+              minimum: 0
+              maximum: 9999
+            fixedSupportFeeBaseUnits:
+              type: string
+              pattern: ^(0|[1-9][0-9]*)$
+            rounding:
+              type: string
+              const: half-up-per-quantum
+        windows:
+          type: object
+          additionalProperties: false
+          required:
+            - standardInspectionSeconds
+            - packagedLocalInspectionSeconds
+            - lockTimeoutSeconds
+            - inTransitTimeoutSeconds
+            - disputeProposalTtlSeconds
+          properties:
+            standardInspectionSeconds:
+              type: integer
+              minimum: 1
+            packagedLocalInspectionSeconds:
+              type: integer
+              minimum: 1
+            lockTimeoutSeconds:
+              type: integer
+              minimum: 1
+            inTransitTimeoutSeconds:
+              type: integer
+              minimum: 1
+            disputeProposalTtlSeconds:
+              type: integer
+              minimum: 1
+    SettlementTemplateVersion:
+      type: object
+      additionalProperties: false
+      required:
+        - templateId
+        - version
+        - schemaVersion
+        - template
+        - templateHash
+        - status
+        - createdBy
+        - createdAt
+        - reviewedBy
+        - reviewedAt
+        - activatedBy
+        - activatedAt
+        - retiredBy
+        - retiredAt
+        - requestId
+      properties:
+        templateId:
+          $ref: '#/components/schemas/SettlementTemplateId'
+        version:
+          type: integer
+          minimum: 1
+        schemaVersion:
+          type: string
+        template:
+          $ref: '#/components/schemas/SettlementTemplate'
+        templateHash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        status:
+          type: string
+          enum:
+            - draft
+            - reviewed
+            - active
+            - retired
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        reviewedBy:
+          type:
+            - string
+            - 'null'
+        reviewedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        activatedBy:
+          type:
+            - string
+            - 'null'
+        activatedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        retiredBy:
+          type:
+            - string
+            - 'null'
+        retiredAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        requestId:
+          type: string
+    SettlementTemplateCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - template
+      properties:
+        template:
+          $ref: '#/components/schemas/SettlementTemplate'
+    SettlementTemplateVersionResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/SettlementTemplateVersion'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementTemplateListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/SettlementTemplateVersion'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementTemplateActivationPreparation:
+      type: object
+      additionalProperties: false
+      required:
+        - preparationId
+        - templateId
+        - version
+        - templateHash
+        - expectedActiveVersion
+        - expectedActiveHash
+        - state
+        - preparedBy
+        - preparedAt
+        - expiresAt
+        - approvedBy
+        - approvedAt
+        - confirmedBy
+        - confirmedAt
+        - supersededAt
+        - supersededReason
+      properties:
+        preparationId:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+        templateId:
+          $ref: '#/components/schemas/SettlementTemplateId'
+        version:
+          type: integer
+          minimum: 1
+        templateHash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        expectedActiveVersion:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        expectedActiveHash:
+          type:
+            - string
+            - 'null'
+          pattern: ^0x[0-9a-f]{64}$
+        state:
+          type: string
+          enum:
+            - prepared
+            - approved
+            - confirmed
+            - superseded
+        preparedBy:
+          type: string
+        preparedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        approvedBy:
+          type:
+            - string
+            - 'null'
+        approvedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        confirmedBy:
+          type:
+            - string
+            - 'null'
+        confirmedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        supersededAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        supersededReason:
+          type:
+            - string
+            - 'null'
+    SettlementTemplateActivationPreparationResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementTemplateActivationPreparationListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementTemplateActivationResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - preparation
+            - activated
+            - retired
+          properties:
+            preparation:
+              $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
+            activated:
+              $ref: '#/components/schemas/SettlementTemplateVersion'
+            retired:
+              oneOf:
+                - $ref: '#/components/schemas/SettlementTemplateVersion'
+                - type: 'null'
+        timestamp:
+          type: string
+          format: date-time
     ReconciliationRecord:
       type: object
       required:

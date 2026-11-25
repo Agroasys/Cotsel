@@ -18,6 +18,8 @@ import {
   parseUrlList,
 } from './envReaders';
 import { loadGaslessEnvironment } from './gaslessEnvironment';
+import { parseTemplateActivationAllowlist } from '../core/settlementTemplateInput';
+import { DEFAULT_TEMPLATE_ACTIVATION_ALLOWLIST } from '../core/settlementTemplateStore';
 
 dotenv.config();
 
@@ -97,6 +99,10 @@ export function loadConfig(): GatewayConfig {
     process.env.GATEWAY_STEP_UP_ACCEPTED_STRENGTHS ?? 'hardware_webauthn',
   );
   const stepUpEnforcement = process.env.GATEWAY_STEP_UP_ENFORCEMENT?.trim() || 'enforce';
+  const settlementTemplateActivationAllowlist = parseTemplateActivationAllowlist(
+    process.env.GATEWAY_TEMPLATE_ACTIVATION_ALLOWLIST ??
+      DEFAULT_TEMPLATE_ACTIVATION_ALLOWLIST.join(','),
+  );
   const settlementIngressEnabled = envBool('GATEWAY_SETTLEMENT_INGRESS_ENABLED', false);
   const immediateInspectionAcceptanceEnabled = envBool(
     'GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED',
@@ -429,6 +435,7 @@ export function loadConfig(): GatewayConfig {
     stepUpMaxAgeSeconds,
     stepUpAcceptedStrengths,
     stepUpEnforcement,
+    settlementTemplateActivationAllowlist,
     settlementIngressEnabled,
     immediateInspectionAcceptanceEnabled,
     settlementServiceAuthApiKeysJson,

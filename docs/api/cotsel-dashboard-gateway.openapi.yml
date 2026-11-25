@@ -42,6 +42,7 @@ tags:
   - name: Governance
   - name: Treasury
   - name: Compliance
+  - name: Settlement Templates
 security:
   - sessionBearer: []
 paths:
@@ -207,6 +208,22 @@ paths:
     $ref: ./cotsel-dashboard-gateway/paths/compliance-01.yml#/paths/~1compliance~1trades~1{tradeId}~1block-oracle-progression
   /compliance/trades/{tradeId}/resume-oracle-progression:
     $ref: ./cotsel-dashboard-gateway/paths/compliance-01.yml#/paths/~1compliance~1trades~1{tradeId}~1resume-oracle-progression
+  /settlement-templates:
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-templates-01.yml#/paths/~1settlement-templates
+  /settlement-templates/{templateId}/versions/{version}:
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-templates-01.yml#/paths/~1settlement-templates~1{templateId}~1versions~1{version}
+  /settlement-templates/{templateId}/versions/{version}/review:
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-templates-01.yml#/paths/~1settlement-templates~1{templateId}~1versions~1{version}~1review
+  /settlement-templates/activations:
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-templates-01.yml#/paths/~1settlement-templates~1activations
+  /settlement-templates/{templateId}/versions/{version}/activations:
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-templates-01.yml#/paths/~1settlement-templates~1{templateId}~1versions~1{version}~1activations
+  /settlement-templates/activations/{preparationId}/approve:
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-templates-01.yml#/paths/~1settlement-templates~1activations~1{preparationId}~1approve
+  /settlement-templates/activations/{preparationId}/confirm:
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-templates-01.yml#/paths/~1settlement-templates~1activations~1{preparationId}~1confirm
+  /settlement-templates/{templateId}/versions/{version}/retire:
+    $ref: ./cotsel-dashboard-gateway/paths/settlement-templates-01.yml#/paths/~1settlement-templates~1{templateId}~1versions~1{version}~1retire
 components:
   securitySchemes:
     sessionBearer: {$ref: ./cotsel-dashboard-gateway/components/shared.yml#/components/securitySchemes/sessionBearer}
@@ -215,6 +232,9 @@ components:
     XCorrelationId: {$ref: ./cotsel-dashboard-gateway/components/shared.yml#/components/parameters/XCorrelationId}
     IdempotencyKey: {$ref: ./cotsel-dashboard-gateway/components/shared.yml#/components/parameters/IdempotencyKey}
     TradeId: {$ref: ./cotsel-dashboard-gateway/components/shared.yml#/components/parameters/TradeId}
+    SettlementTemplateIdPath: {$ref: ./cotsel-dashboard-gateway/components/shared.yml#/components/parameters/SettlementTemplateIdPath}
+    SettlementTemplateActivationPreparationIdPath: {$ref: ./cotsel-dashboard-gateway/components/shared.yml#/components/parameters/SettlementTemplateActivationPreparationIdPath}
+    SettlementTemplateVersionPath: {$ref: ./cotsel-dashboard-gateway/components/shared.yml#/components/parameters/SettlementTemplateVersionPath}
     SettlementHandoffId: {$ref: ./cotsel-dashboard-gateway/components/shared.yml#/components/parameters/SettlementHandoffId}
     AccountingPeriodId: {$ref: ./cotsel-dashboard-gateway/components/shared.yml#/components/parameters/AccountingPeriodId}
     BatchId: {$ref: ./cotsel-dashboard-gateway/components/shared.yml#/components/parameters/BatchId}
@@ -340,6 +360,16 @@ components:
     SettlementRicardianDocumentRegistrationResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-03.yml#/components/schemas/SettlementRicardianDocumentRegistrationResponse}
     GaslessFinancialOutcomeRecoveryResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-04.yml#/components/schemas/GaslessFinancialOutcomeRecoveryResponse}
     WalletUsdcExecutionObservationResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-04.yml#/components/schemas/WalletUsdcExecutionObservationResponse}
+    SettlementTemplateId: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-templates-01.yml#/components/schemas/SettlementTemplateId}
+    SettlementTemplate: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-templates-01.yml#/components/schemas/SettlementTemplate}
+    SettlementTemplateVersion: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-templates-01.yml#/components/schemas/SettlementTemplateVersion}
+    SettlementTemplateCreateRequest: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-templates-01.yml#/components/schemas/SettlementTemplateCreateRequest}
+    SettlementTemplateVersionResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-templates-01.yml#/components/schemas/SettlementTemplateVersionResponse}
+    SettlementTemplateListResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-templates-01.yml#/components/schemas/SettlementTemplateListResponse}
+    SettlementTemplateActivationPreparation: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-templates-01.yml#/components/schemas/SettlementTemplateActivationPreparation}
+    SettlementTemplateActivationPreparationResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-templates-01.yml#/components/schemas/SettlementTemplateActivationPreparationResponse}
+    SettlementTemplateActivationPreparationListResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-templates-01.yml#/components/schemas/SettlementTemplateActivationPreparationListResponse}
+    SettlementTemplateActivationResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-templates-01.yml#/components/schemas/SettlementTemplateActivationResponse}
     ReconciliationRecord: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-01.yml#/components/schemas/ReconciliationRecord}
     ReconciliationPagination: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-01.yml#/components/schemas/ReconciliationPagination}
     ReconciliationListPayload: {$ref: ./cotsel-dashboard-gateway/components/schemas-reconciliation-01.yml#/components/schemas/ReconciliationListPayload}

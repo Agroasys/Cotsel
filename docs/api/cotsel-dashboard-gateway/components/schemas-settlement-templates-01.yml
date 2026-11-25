@@ -1,0 +1,218 @@
+components:
+  schemas:
+    SettlementTemplateId:
+      type: string
+      pattern: '^[a-z][a-z0-9.-]{1,62}$'
+    SettlementTemplate:
+      description: |
+        Canonical settlement terms (`@agroasys/sdk` `SettlementTemplate`). The hash covers every
+        key, so no other keys are accepted.
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, templateId, version, asset, milestones, fees, windows]
+      properties:
+        schemaVersion:
+          type: string
+          const: cotsel.settlement-template.v1
+        templateId:
+          $ref: '#/components/schemas/SettlementTemplateId'
+        version:
+          type: integer
+          minimum: 1
+        asset:
+          type: object
+          additionalProperties: false
+          required: [symbol, decimals, quantumBaseUnits]
+          properties:
+            symbol: { type: string }
+            decimals: { type: integer, minimum: 0 }
+            quantumBaseUnits: { type: string, pattern: '^[1-9][0-9]*$' }
+        milestones:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, releaseBps, deductsSupplierFee]
+            properties:
+              id: { type: string }
+              releaseBps: { type: integer, minimum: 1, maximum: 10000 }
+              deductsSupplierFee: { type: boolean }
+        fees:
+          type: object
+          additionalProperties: false
+          required: [buyerBps, supplierBps, fixedSupportFeeBaseUnits, rounding]
+          properties:
+            buyerBps: { type: integer, minimum: 0, maximum: 10000 }
+            supplierBps: { type: integer, minimum: 0, maximum: 9999 }
+            fixedSupportFeeBaseUnits: { type: string, pattern: '^(0|[1-9][0-9]*)$' }
+            rounding: { type: string, const: half-up-per-quantum }
+        windows:
+          type: object
+          additionalProperties: false
+          required:
+            - standardInspectionSeconds
+            - packagedLocalInspectionSeconds
+            - lockTimeoutSeconds
+            - inTransitTimeoutSeconds
+            - disputeProposalTtlSeconds
+          properties:
+            standardInspectionSeconds: { type: integer, minimum: 1 }
+            packagedLocalInspectionSeconds: { type: integer, minimum: 1 }
+            lockTimeoutSeconds: { type: integer, minimum: 1 }
+            inTransitTimeoutSeconds: { type: integer, minimum: 1 }
+            disputeProposalTtlSeconds: { type: integer, minimum: 1 }
+    SettlementTemplateVersion:
+      type: object
+      additionalProperties: false
+      required:
+        - templateId
+        - version
+        - schemaVersion
+        - template
+        - templateHash
+        - status
+        - createdBy
+        - createdAt
+        - reviewedBy
+        - reviewedAt
+        - activatedBy
+        - activatedAt
+        - retiredBy
+        - retiredAt
+        - requestId
+      properties:
+        templateId:
+          $ref: '#/components/schemas/SettlementTemplateId'
+        version: { type: integer, minimum: 1 }
+        schemaVersion: { type: string }
+        template:
+          $ref: '#/components/schemas/SettlementTemplate'
+        templateHash: { type: string, pattern: '^0x[0-9a-f]{64}$' }
+        status:
+          type: string
+          enum: [draft, reviewed, active, retired]
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        reviewedBy: { type: ['string', 'null'] }
+        reviewedAt: { type: ['string', 'null'], format: date-time }
+        activatedBy: { type: ['string', 'null'] }
+        activatedAt: { type: ['string', 'null'], format: date-time }
+        retiredBy: { type: ['string', 'null'] }
+        retiredAt: { type: ['string', 'null'], format: date-time }
+        requestId: { type: string }
+    SettlementTemplateCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [template]
+      properties:
+        template:
+          $ref: '#/components/schemas/SettlementTemplate'
+    SettlementTemplateVersionResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          $ref: '#/components/schemas/SettlementTemplateVersion'
+        timestamp: { type: string, format: date-time }
+    SettlementTemplateListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: object
+          additionalProperties: false
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/SettlementTemplateVersion'
+        timestamp: { type: string, format: date-time }
+    SettlementTemplateActivationPreparation:
+      type: object
+      additionalProperties: false
+      required:
+        - preparationId
+        - templateId
+        - version
+        - templateHash
+        - expectedActiveVersion
+        - expectedActiveHash
+        - state
+        - preparedBy
+        - preparedAt
+        - expiresAt
+        - approvedBy
+        - approvedAt
+        - confirmedBy
+        - confirmedAt
+        - supersededAt
+        - supersededReason
+      properties:
+        preparationId:
+          type: string
+          pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        templateId:
+          $ref: '#/components/schemas/SettlementTemplateId'
+        version: { type: integer, minimum: 1 }
+        templateHash: { type: string, pattern: '^0x[0-9a-f]{64}$' }
+        expectedActiveVersion: { type: ['integer', 'null'], minimum: 1 }
+        expectedActiveHash: { type: ['string', 'null'], pattern: '^0x[0-9a-f]{64}$' }
+        state:
+          type: string
+          enum: [prepared, approved, confirmed, superseded]
+        preparedBy: { type: string }
+        preparedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        approvedBy: { type: ['string', 'null'] }
+        approvedAt: { type: ['string', 'null'], format: date-time }
+        confirmedBy: { type: ['string', 'null'] }
+        confirmedAt: { type: ['string', 'null'], format: date-time }
+        supersededAt: { type: ['string', 'null'], format: date-time }
+        supersededReason: { type: ['string', 'null'] }
+    SettlementTemplateActivationPreparationResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
+        timestamp: { type: string, format: date-time }
+    SettlementTemplateActivationPreparationListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: object
+          additionalProperties: false
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
+        timestamp: { type: string, format: date-time }
+    SettlementTemplateActivationResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: object
+          additionalProperties: false
+          required: [preparation, activated, retired]
+          properties:
+            preparation:
+              $ref: '#/components/schemas/SettlementTemplateActivationPreparation'
+            activated:
+              $ref: '#/components/schemas/SettlementTemplateVersion'
+            retired:
+              oneOf:
+                - $ref: '#/components/schemas/SettlementTemplateVersion'
+                - type: 'null'
+        timestamp: { type: string, format: date-time }
