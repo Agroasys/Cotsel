@@ -77,7 +77,10 @@ Minimum gateway env contract:
 - `GATEWAY_STEP_UP_MAX_AGE_SECONDS` (default `300`)
 - `GATEWAY_STEP_UP_ACCEPTED_STRENGTHS` (default `hardware_webauthn`)
 - `GATEWAY_STEP_UP_ENFORCEMENT` (default `enforce`)
-- `GATEWAY_TEMPLATE_ACTIVATION_ALLOWLIST` (default `agroasys.launch:1`): settlement template versions that may become active. Change it only through review, and only for terms the escrow enforces; see `docs/runbooks/settlement-templates.md`.
+- `GATEWAY_TEMPLATE_ACTIVATION_ALLOWLIST` (default `agroasys.launch:1`).
+  This list defines which settlement template versions can become active.
+  Change the list only after review. Add only versions whose terms the escrow enforces.
+  Follow the [settlement template activation procedure](settlement-templates.md).
 - `GATEWAY_COMMIT_SHA`
 - `GATEWAY_BUILD_TIME`
 - `GATEWAY_INDEXER_REQUEST_TIMEOUT_MS`
@@ -90,6 +93,11 @@ Optional operations-health probe URLs:
 - `GATEWAY_TREASURY_BASE_URL`
 - `GATEWAY_RICARDIAN_BASE_URL`
 - `GATEWAY_NOTIFICATIONS_BASE_URL`
+
+For recovery and freeze preparation, `GATEWAY_RECONCILIATION_EVIDENCE_MAX_AGE_SECONDS`
+limits the age of the signed reconciliation snapshot. The default is `900`
+seconds. The permitted range is `60..86400` seconds. For verification rules, see
+[Signed reconciliation findings](reconciliation-signed-findings.md).
 
 Optional downstream service-auth contract:
 

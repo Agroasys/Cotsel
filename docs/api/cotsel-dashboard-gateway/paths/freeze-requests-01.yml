@@ -1,0 +1,111 @@
+paths:
+  /governance/freeze-requests/{requestId}:
+    get:
+      tags:
+        - Governance
+      summary: Read a verified request and its human approval lifecycle
+      operationId: getReconciliationFreezeRequest
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{64}$
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: The recorded result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationFreezeRequestResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /governance/freeze-requests/{requestId}/review:
+    post:
+      tags:
+        - Governance
+      summary: Record a human approval or rejection of a signed freeze request
+      operationId: reviewReconciliationFreezeRequest
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{64}$
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The recorded result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationFreezeReviewResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationFreezeReviewRequest'
+  /governance/freeze-requests/{requestId}/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare the approved trade pause for the registered hardware wallet
+      operationId: prepareReconciliationFreezeRequest
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{64}$
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The recorded result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'

@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { Pool } from 'pg';
+import type { ContainmentEvidenceService } from './core/containmentEvidence';
 import type { GatewayConfig } from './config/env';
 import type { AuthSessionClient } from './core/authSessionClient';
 import { GovernanceDirectSignMonitor } from './core/governanceDirectSignMonitor';
@@ -14,6 +15,7 @@ import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore'
 import type { IdempotencyStore } from './core/idempotencyStore';
 import { createGovernanceRouter } from './routes/governance';
 import { createPostgresAuditLogStore } from './core/auditLogStore';
+import { createPostgresFreezeReviewStore } from './core/freezeReviewStore';
 
 export function createGovernanceRuntime(config: GatewayConfig, pool: Pool) {
   const governanceActionStore = createPostgresGovernanceActionStore(pool);
@@ -33,7 +35,11 @@ export function createGovernanceRuntime(config: GatewayConfig, pool: Pool) {
 
   return {
     governanceStatusService,
-    createRouter: (authSessionClient: AuthSessionClient, idempotencyStore: IdempotencyStore) =>
+    createRouter: (
+      authSessionClient: AuthSessionClient,
+      idempotencyStore: IdempotencyStore,
+      containmentEvidence?: ContainmentEvidenceService,
+    ) =>
       createGovernanceRouter({
         authSessionClient,
         config,
@@ -42,6 +48,8 @@ export function createGovernanceRuntime(config: GatewayConfig, pool: Pool) {
         governanceMutationService,
         idempotencyStore,
         auditLogStore,
+        containmentEvidence,
+        freezeReviewStore: createPostgresFreezeReviewStore(pool),
       }),
     start: () => monitor.start(),
     stop: () => monitor.stop(),

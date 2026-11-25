@@ -103,6 +103,9 @@ export interface GovernancePreparedSigningPayload {
 }
 
 export interface GovernanceActionAuditRecord {
+  reconciliationFreezeRequest?: Record<string, unknown>;
+  reconciliationEvidence?: Record<string, unknown>;
+  reconciliationEvidenceCheck?: Record<string, unknown>;
   reason: string;
   evidenceLinks: EvidenceLink[];
   ticketRef: string;
@@ -249,6 +252,7 @@ export function isApprovalGovernanceContractMethod(contractMethod: string): bool
 }
 
 export function buildGovernanceIntentKey(input: {
+  evidenceReference?: string | null;
   category: GovernanceActionCategory;
   contractMethod: string;
   proposalId?: number | null;
@@ -268,6 +272,7 @@ export function buildGovernanceIntentKey(input: {
     normalizeIntentFragment(input.chainId),
     normalizeIntentFragment(input.approverWallet ?? null),
     normalizeIntentFragment(input.signerBindingId ?? null),
+    ...(input.evidenceReference ? [normalizeIntentFragment(input.evidenceReference)] : []),
   ].join('|');
 }
 

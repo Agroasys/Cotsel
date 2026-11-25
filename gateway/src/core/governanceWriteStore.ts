@@ -54,6 +54,9 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
     JSON.stringify(action.audit.approvedBy ?? []),
     action.audit.actorAccountId ?? null,
     JSON.stringify({
+      reconciliationEvidence: action.audit.reconciliationEvidence,
+      reconciliationFreezeRequest: action.audit.reconciliationFreezeRequest,
+      reconciliationEvidenceCheck: action.audit.reconciliationEvidenceCheck,
       signerBindingId: action.audit.signerBindingId ?? null,
       signerActionClass: action.audit.signerActionClass ?? null,
       signerEnvironment: action.audit.signerEnvironment ?? null,

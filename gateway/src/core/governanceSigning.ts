@@ -26,6 +26,7 @@ import { GatewayError } from '../errors';
 
 const GOVERNANCE_DIRECT_SIGN_ABI = new Interface([
   'function pause()',
+  'function pauseTrade(uint256 _tradeId)',
   'function proposeUnpause()',
   'function approveUnpause()',
   'function cancelUnpauseProposal()',
@@ -125,10 +126,20 @@ function requireTargetAddress(value: string | null | undefined, message: string)
 
 function buildGovernanceArgs(input: {
   contractMethod: string;
+  tradeId?: string | null;
   proposalId?: number | null;
   targetAddress?: string | null;
 }): GovernanceSigningArgValue[] {
   switch (input.contractMethod) {
+    case 'pauseTrade':
+      if (
+        !input.tradeId ||
+        !/^[1-9][0-9]{0,77}$/.test(input.tradeId) ||
+        BigInt(input.tradeId) >= 2n ** 256n
+      ) {
+        throw new GatewayError(400, 'VALIDATION_ERROR', 'Scoped pause requires a valid trade id');
+      }
+      return [input.tradeId];
     case 'pause':
     case 'proposeUnpause':
     case 'approveUnpause':
@@ -221,6 +232,7 @@ export function buildSigningPayloadDraft(
     contractMethod: string;
     proposalId?: number | null;
     targetAddress?: string | null;
+    tradeId?: string | null;
     expiresAt: string;
     auditReference: string;
     nonce: number;
