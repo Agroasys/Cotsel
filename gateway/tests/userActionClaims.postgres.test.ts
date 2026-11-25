@@ -29,7 +29,8 @@ describeLocal('user-action request PostgreSQL fencing', () => {
   }
   test('two replicas/new HTTP keys converge on one accepted operation and one signing claim', async () => {
     const f = await userActionEngineFixture(db.runtime);
-    const secondPool = new Pool({ ...db.runtime.options, max: 2 });
+    // pg keeps the password non-enumerable, so spreading the options drops it.
+    const secondPool = new Pool({ ...db.runtime.options, password: 'local-test-only', max: 2 });
     const locker = await db.owner.connect();
     try {
       const second = createUserActionRequestStore(secondPool, 60, () => f.ports.now().getTime());
