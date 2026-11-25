@@ -1,4 +1,4 @@
-# Reconciliation Runbook
+# Reconciliation runbook
 
 ## Purpose
 
@@ -69,7 +69,7 @@ scripts/cotsel.sh logs reconciliation
 - `Validating RPC endpoint for reconciliation startup`
 - `Reconciliation run completed`
 
-## Deterministic Drift Classifications
+## Deterministic drift classifications
 
 Source of truth: `reconciliation/src/core/classifier.ts`.
 
@@ -109,7 +109,7 @@ Operator rule:
 - Do not infer a terminal result from free-form text alone; record an explicit
   `outcome` in the incident or operator evidence artifact.
 
-## Treasury Sweep Reconciliation Invariants
+## Treasury sweep reconciliation invariants
 
 When pull-over-push treasury sweep is enabled, use these deterministic checks:
 
@@ -134,7 +134,7 @@ Failure interpretation:
 - If right side > left side: duplicate accounting or event ingestion bug.
 - Any mismatch across runs for same escrow is `CRITICAL` until explained.
 
-## Fiat Deposit Evidence Invariants
+## Fiat deposit evidence invariants
 
 Treasury deposit evidence source of truth:
 
@@ -159,7 +159,7 @@ Operator rules:
 - Do not mark treasury payout completion evidence as complete when `fiatDepositState` is `PENDING`, `PARTIAL`, `REVERSED`, or `FAILED`.
 - When `fiatDepositFailureReason` is non-null, attach provider event identifiers and treasury approval evidence to the incident packet.
 
-## Bank Payout Confirmation Invariants
+## Bank payout confirmation invariants
 
 Bank confirmation source of truth:
 
@@ -181,7 +181,7 @@ Operator rules:
 - `bankPayoutState="PENDING"` with treasury `payoutState="EXTERNAL_EXECUTION_CONFIRMED"` is a divergence and must be treated as missing bank evidence.
 - `bankPayoutState="REJECTED"` is always a payout exception and must be linked to the bank failure code or incident evidence.
 
-## Migration: Dual-Escrow Reconciliation
+## Migration: dual-escrow reconciliation
 
 Escrow contracts are not upgraded in place. During migration:
 
@@ -195,7 +195,7 @@ Migration is complete only when:
 - expected treasury payout events from legacy escrows are fully matched to treasury execution-evidence entries
 - no unresolved payout receiver rotation incidents remain
 
-## Retry/Redrive State Machine
+## Retry/redrive state machine
 
 Source of truth:
 
@@ -228,7 +228,7 @@ Oracle retry/redrive semantics (for settlement action remediation):
 - Terminal outcomes: `TERMINAL_FAILURE` or `EXHAUSTED_NEEDS_REDRIVE`.
 - Manual redrive and on-chain fallback flow are documented in `docs/runbooks/oracle-redrive.md`.
 
-## Staging Gate Evidence Output
+## Staging gate evidence output
 
 `scripts/runtime-gate.sh` captures both:
 
@@ -274,7 +274,7 @@ CI artifact name:
 - `INDEXER_GRAPHQL_URL is missing`: profile env not loaded.
 - Address validation errors: malformed `ESCROW_ADDRESS` or `USDC_ADDRESS`.
 
-## First 15 Minutes Checklist
+## First 15 minutes checklist
 
 - Execute `docs/incidents/first-15-minutes-checklist.md`.
 - Capture reconciliation logs and identify affected `tradeId`/`requestId` pairs.

@@ -1,4 +1,4 @@
-# Dashboard Gateway Operations
+# Dashboard gateway operations
 
 ## Purpose
 
