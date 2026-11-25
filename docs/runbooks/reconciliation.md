@@ -4,7 +4,7 @@
 
 Operate reconciliation safely in local/staging and diagnose drift failures.
 For lifecycle checkpoints across lock, stage-1, and final settlement, see `docs/runbooks/hybrid-split-walkthrough.md`.
-If a mismatch may be caused by routing/auth propagation/correlation breakdown between services, use `docs/runbooks/api-gateway-boundary.md` first to classify the handoff boundary before remediating reconciliation state.
+If routing, authentication or correlation may cause a mismatch, classify the boundary with `docs/runbooks/api-gateway-boundary.md`. Then diagnose the reconciliation state.
 If the incident includes gateway dead-lettered mutations or settlement callback deliveries, use `docs/runbooks/gateway-dead-letter-workflow.md` before replaying or reclassifying reconciliation drift.
 
 Automation-governance source of truth:
@@ -106,8 +106,7 @@ Current runtime truth:
 Operator rule:
 
 - For incident or treasury follow-up, attach any missing `correlationId`, actor context, `intent` and `outcome`. Use the nearest authoritative request ledger, gateway action or operator evidence packet.
-- Do not infer a terminal result from free-form text alone; record an explicit
-  `outcome` in the incident or operator evidence artifact.
+- Do not infer a terminal result from free-form text alone. Record an explicit `outcome` in the incident or operator evidence artifact.
 
 ## Treasury sweep reconciliation invariants
 
@@ -278,8 +277,7 @@ CI artifact name:
 
 - Execute `docs/incidents/first-15-minutes-checklist.md`.
 - Capture reconciliation logs and identify affected `tradeId`/`requestId` pairs.
-- Capture `correlationId`, `intent`, and `outcome` from the upstream gateway or
-  operator evidence source when the reconciliation logger does not emit them directly.
+- If the reconciliation logger omits these fields, use the upstream gateway or operator evidence source. Capture `correlationId`, `intent` and `outcome` from that source.
 - Confirm whether failure source is RPC, indexer GraphQL, or DB.
 - Start `docs/incidents/incident-evidence-template.md` for any mismatch that requires containment or operator escalation.
 - Use `docs/runbooks/operator-audit-evidence-template.md` when reconciliation output drives an operator approval or treasury follow-up.
