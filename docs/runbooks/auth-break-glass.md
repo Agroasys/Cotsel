@@ -1,4 +1,4 @@
-# Auth Break-Glass Runbook
+# Auth break-glass runbook
 
 This runbook governs temporary Cotsel admin elevation for emergencies.
 
@@ -10,6 +10,8 @@ operator onboarding, convenience access, planned release work, or bypassing the
 Agroasys platform admin model.
 
 ## Authority
+
+The incident uses these roles:
 
 - Initiator: incident commander or security owner.
 - Approver: a second production operator or security owner, unless the incident
@@ -190,7 +192,7 @@ Body:
 Revocation clears temporary elevation and revokes active sessions for the
 target profile.
 
-## Post-Incident Review
+## Post-incident review
 
 Endpoint:
 
@@ -235,7 +237,7 @@ Configure alerts for these events and conditions.
 - `auth.service_auth_denied`
 - break-glass grants that have not been reviewed within one business day
 
-## Evidence Retention
+## Evidence retention
 
 Retain:
 
