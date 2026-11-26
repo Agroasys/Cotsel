@@ -335,8 +335,8 @@
     },
     {
       "component": "gateway",
-      "headIdentity": "202611230017_settlement_templates",
-      "checksumSha256": "1605c56deb2ea408278357017b18b17f1a34172ccd997f450667bcbf0c08a5be"
+      "headIdentity": "202611240018_settlement_template_activations",
+      "checksumSha256": "d3aa500b37d819352d359663ed1e725044b00cdca3f8fe6d17feda5b3b742d5d"
     },
     {
       "component": "indexer",

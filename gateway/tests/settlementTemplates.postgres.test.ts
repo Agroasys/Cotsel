@@ -13,6 +13,7 @@ import {
   DEFAULT_TEMPLATE_ACTIVATION_ALLOWLIST,
   createPostgresSettlementTemplateStore,
 } from '../src/core/settlementTemplateStore';
+import { createPostgresTemplateActivationStore } from '../src/core/settlementTemplateActivationStore';
 import {
   createUserActionEnginePostgres,
   writeManifestThrough,
@@ -128,8 +129,11 @@ describePostgres('settlement templates through PostgreSQL (Cotsel#940)', () => {
     await expect(
       store.review({ templateId: 'agroasys.launch', version: 2, actor: 'alice' }),
     ).rejects.toMatchObject({ statusCode: 409 });
+    const activations = createPostgresTemplateActivationStore(db.runtime);
+    const change = (actor: string) => ({ actor, requestId: `req-${actor}` });
+    // A draft cannot even be prepared for activation.
     await expect(
-      store.activate({ templateId: 'agroasys.launch', version: 2, actor: 'bob' }),
+      activations.prepare({ templateId: 'agroasys.launch', version: 2, ...change('bob') }),
     ).rejects.toMatchObject({ statusCode: 409 });
 
     const reviewed = await store.review({
@@ -139,11 +143,9 @@ describePostgres('settlement templates through PostgreSQL (Cotsel#940)', () => {
     });
     expect(reviewed).toMatchObject({ status: 'reviewed', reviewedBy: 'bob' });
 
+    // Terms the escrow does not enforce are never prepared for activation.
     await expect(
-      store.activate({ templateId: 'agroasys.launch', version: 2, actor: 'alice' }),
-    ).rejects.toMatchObject({ statusCode: 409 });
-    await expect(
-      store.activate({ templateId: 'agroasys.launch', version: 2, actor: 'bob' }),
+      activations.prepare({ templateId: 'agroasys.launch', version: 2, ...change('bob') }),
     ).rejects.toMatchObject({
       statusCode: 409,
       details: expect.objectContaining({ reason: 'template_not_enforced_by_contract' }),
@@ -151,14 +153,54 @@ describePostgres('settlement templates through PostgreSQL (Cotsel#940)', () => {
     expect((await store.getActive('agroasys.launch'))?.version).toBe(1);
   });
 
+  it('commits a change only together with its audit record', async () => {
+    const store = createPostgresSettlementTemplateStore(db.runtime);
+    const failingAudit = async () => {
+      throw new Error('audit unavailable');
+    };
+    await expect(
+      store.createDraft({
+        template: { ...V2, version: 5 },
+        actor: 'alice',
+        requestId: 'req-v5',
+        audit: failingAudit,
+      }),
+    ).rejects.toThrow('audit unavailable');
+    expect(await store.get('agroasys.launch', 5)).toBeNull();
+
+    await store.createDraft({ template: { ...V2, version: 6 }, actor: 'alice', requestId: 'r6' });
+    await expect(
+      store.review({
+        templateId: 'agroasys.launch',
+        version: 6,
+        actor: 'zoe',
+        audit: failingAudit,
+      }),
+    ).rejects.toThrow('audit unavailable');
+    expect((await store.get('agroasys.launch', 6))?.status).toBe('draft');
+  });
+
   it('activates a new version and retires the previous one in one transaction', async () => {
-    const store = createPostgresSettlementTemplateStore(db.runtime, {
+    const store = createPostgresSettlementTemplateStore(db.runtime);
+    const activations = createPostgresTemplateActivationStore(db.runtime, {
       activationAllowlist: [...DEFAULT_TEMPLATE_ACTIVATION_ALLOWLIST, 'agroasys.launch:2'],
     });
-    const { activated, retired } = await store.activate({
+    const prepared = await activations.prepare({
       templateId: 'agroasys.launch',
       version: 2,
+      actor: 'dan',
+      requestId: 'req-prepare',
+    });
+    expect(prepared).toMatchObject({ expectedActiveVersion: 1, expectedActiveHash: V1_HASH });
+    await activations.approve({
+      preparationId: prepared.preparationId,
+      actor: 'erin',
+      requestId: 'req-approve',
+    });
+    const { activated, retired } = await activations.confirm({
+      preparationId: prepared.preparationId,
       actor: 'carol',
+      requestId: 'req-confirm',
     });
     expect(activated).toMatchObject({ version: 2, status: 'active', activatedBy: 'carol' });
     expect(retired).toMatchObject({ version: 1, status: 'retired', retiredBy: 'carol' });
@@ -295,12 +337,28 @@ describePostgres('settlement templates through PostgreSQL (Cotsel#940)', () => {
       statusCode: 409,
       details: expect.objectContaining({ reason: 'active_template_requires_replacement' }),
     });
-    // Only a direct database change can leave no active version; the gateway
-    // then refuses settlements rather than create one without terms.
-    await db.owner.query(
-      `UPDATE settlement_templates SET status = 'retired', retired_by = 'test', retired_at = NOW()
-       WHERE template_id = 'agroasys.launch' AND status = 'active'`,
-    );
+    // Even a direct UPDATE cannot retire the active version without a confirmed
+    // replacement (migration 018).
+    await expect(
+      db.owner.query(
+        `UPDATE settlement_templates SET status = 'retired', retired_by = 'test', retired_at = NOW()
+         WHERE template_id = 'agroasys.launch' AND status = 'active'`,
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+    // Only an intervention that disables triggers can leave no active version;
+    // the gateway then refuses settlements rather than create one without terms.
+    const owner = await db.owner.connect();
+    try {
+      await owner.query('BEGIN');
+      await owner.query('SET LOCAL session_replication_role = replica');
+      await owner.query(
+        `UPDATE settlement_templates SET status = 'retired', retired_by = 'test', retired_at = NOW()
+         WHERE template_id = 'agroasys.launch' AND status = 'active'`,
+      );
+      await owner.query('COMMIT');
+    } finally {
+      owner.release();
+    }
     await expect(
       createPostgresSettlementStore(db.runtime).createHandoff(handoffInput('no-terms')),
     ).rejects.toMatchObject({

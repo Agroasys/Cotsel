@@ -113,6 +113,13 @@
       "file": "schema/017_settlement_templates.sql",
       "sha256": "c252a13a92f50d7e400d9952e5c392e6d4b5ab138af0f81303598145d90ae525",
       "schema_sha256": "02d95dd8d1c8b053a61991a9970d54c50b7032c5297449b0c0f5e1fb3651cac0"
+    },
+    {
+      "version": "202611240018",
+      "name": "settlement_template_activations",
+      "file": "schema/018_settlement_template_activations.sql",
+      "sha256": "97cefc386a141e5ee1df20fd6a1943c081e5287c7b29fad847f7b9c5cca5487a",
+      "schema_sha256": "0c5642ba81ff4f3da67c3b9bab88f659bfa809a576b20a62a51eb2f38b3a281b"
     }
   ]
 }
