@@ -103,7 +103,7 @@ async function withPostgresContainer(fn) {
     throw error;
   } finally {
     try {
-      docker(['rm', '-f', containerName], { stdio: ['ignore', 'ignore', 'ignore'] });
+      docker(['rm', '-f', '-v', containerName], { stdio: ['ignore', 'ignore', 'ignore'] });
     } catch {
       // Best-effort cleanup after test failure.
     }
