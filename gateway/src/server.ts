@@ -385,6 +385,7 @@ async function bootstrap(): Promise<void> {
     createOperationsRouter({
       authSessionClient,
       config,
+      auditLogStore,
       operationsSummaryService,
       gaslessSettlementService,
       failedOperationStore,

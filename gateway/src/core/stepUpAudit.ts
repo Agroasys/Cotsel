@@ -17,6 +17,14 @@ export interface StepUpEvidence {
   ageSeconds: number | null;
   maxAgeSeconds: number;
   enforcement: 'enforce' | 'record';
+  /** Distinguishes the current authorizer from a replayed intent's original actor. */
+  authorization?: {
+    actorId: string;
+    actorUserId: string;
+    sessionReference: string;
+    requestId: string;
+    correlationId: string | null;
+  };
 }
 
 const scope = new AsyncLocalStorage<StepUpEvidence>();
