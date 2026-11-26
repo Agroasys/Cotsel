@@ -21,7 +21,9 @@
     "paths/treasury-01.yml",
     "paths/treasury-02.yml",
     "paths/compliance-01.yml",
-    "paths/settlement-templates-01.yml"
+    "paths/settlement-templates-01.yml",
+    "paths/reconciliation-containments-01.yml",
+    "paths/freeze-requests-01.yml"
   ],
   "components": [
     "components/shared.yml",
@@ -38,6 +40,7 @@
     "components/schemas-settlement-04.yml",
     "components/schemas-settlement-templates-01.yml",
     "components/schemas-reconciliation-01.yml",
+    "components/schemas-reconciliation-containments-01.yml",
     "components/schemas-ricardian-01.yml",
     "components/schemas-governance-01.yml",
     "components/schemas-treasury-01.yml",
@@ -47,6 +50,7 @@
     "components/schemas-compliance-01.yml",
     "components/schemas-settlement-execution-binding.yml",
     "components/schemas-settlement-user-action-binding.yml",
-    "components/schemas-settlement-user-action-inventory.yml"
+    "components/schemas-settlement-user-action-inventory.yml",
+    "components/schemas-freeze-requests-01.yml"
   ]
 }

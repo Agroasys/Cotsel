@@ -335,8 +335,8 @@
     },
     {
       "component": "gateway",
-      "headIdentity": "202611240019_settlement_callback_envelope",
-      "checksumSha256": "258c59a22bd292b3dd669e7928246db91ca3e50051e1f13b4b78eaf50d0dae34"
+      "headIdentity": "202611240020_reconciliation_freeze_reviews",
+      "checksumSha256": "11923eafd30aa793395e5dffa5d8af2326cc715843d7ed6061865f3d897114a4"
     },
     {
       "component": "indexer",

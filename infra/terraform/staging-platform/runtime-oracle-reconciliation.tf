@@ -99,6 +99,8 @@ locals {
     # Cotsel#951: every completed run is sealed with the foundation's evidence key.
     { name = "RECONCILIATION_FINDING_SIGN_TIMEOUT_MS", value = "5000" },
     { name = "RECONCILIATION_FINDING_SIGNER", value = "kms:${data.terraform_remote_state.foundation.outputs.reconciliation_finding_key_arn}" },
+    # containment-cli release verifies the incident's signed evidence first.
+    { name = "RECONCILIATION_FINDING_PUBLIC_KEYS", value = jsonencode({ (data.terraform_remote_state.foundation.outputs.reconciliation_finding_key_arn) = data.terraform_remote_state.foundation.outputs.reconciliation_finding_public_key }) },
     { name = "RECONCILIATION_HEALTH_PORT", value = "9090" },
     { name = "RECONCILIATION_CHAIN_READ_CONCURRENCY", value = "8" },
     { name = "RECONCILIATION_COVERAGE_BOUNDARY", value = "finalized" },

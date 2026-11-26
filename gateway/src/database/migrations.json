@@ -127,6 +127,13 @@
       "file": "schema/019_settlement_callback_envelope.sql",
       "sha256": "7b3bbfd89dd3791154b648d986711e4ab8e694afa9a5458e09229c4e4068f131",
       "schema_sha256": "8dc8dbbbe44e35f1105eab50808c79858baeb35e5dc26469a7fce1e0c0bd8021"
+    },
+    {
+      "version": "202611240020",
+      "name": "reconciliation_freeze_reviews",
+      "file": "schema/020_reconciliation_freeze_reviews.sql",
+      "sha256": "9550ec7450e31691d750e2bc20fd5e24ae1b8e1b9e544a14151d1b233b9da81f",
+      "schema_sha256": "5f7fa890bdd4f4f5d7aeab0b85cf48f4bf21abc315c4d9fbb917f3b6c317d8b5"
     }
   ]
 }

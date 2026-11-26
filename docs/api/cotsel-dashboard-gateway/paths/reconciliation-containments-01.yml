@@ -1,0 +1,66 @@
+paths:
+  /reconciliation/containments:
+    get:
+      tags:
+        - Reconciliation
+      summary: List open trade containments with verified evidence
+      description: |
+        Contained trades that are not yet released (Cotsel#951). The gateway verifies each containment's
+        signed reconciliation evidence itself: `evidence.status` is `verified` only when the opening run
+        verifies against its signed manifest, every cited finding is a verified finding of that run, and
+        the clearing run (if any) verifies too. A trade-scoped unpause approval is refused otherwise.
+      operationId: listReconciliationContainments
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 1024 }
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Open containments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationContainmentListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /reconciliation/containments/{tradeId}:
+    get:
+      tags:
+        - Reconciliation
+      summary: Get one trade's containment with verified evidence
+      operationId: getReconciliationContainment
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: tradeId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{1,78}$'
+      responses:
+        '200':
+          description: The containment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationContainmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'

@@ -12,17 +12,25 @@ const platform = join(root, 'staging-platform');
 const read = (dir, file) => readFileSync(join(dir, file), 'utf8');
 const KEY_ARN = 'data.terraform_remote_state.foundation.outputs.reconciliation_finding_key_arn';
 
-test('treasury, which verifies reconciliation runs, gets the verification key ring', () => {
-  // Treasury's config requires the keys whenever RECONCILIATION_DB_NAME is set.
-  // The oracle also reads that database, but only containments, never runs.
-  const text = read(platform, 'runtime-treasury-ricardian.tf');
-  assert.match(text, /name = "RECONCILIATION_DB_NAME"/u);
-  assert.ok(
-    text.includes(
-      `{ name = "RECONCILIATION_FINDING_PUBLIC_KEYS", value = jsonencode({ (${KEY_ARN}) = data.terraform_remote_state.foundation.outputs.reconciliation_finding_public_key }) }`,
-    ),
-    'treasury reads RECONCILIATION_DB_NAME without RECONCILIATION_FINDING_PUBLIC_KEYS',
-  );
+const KEY_RING = `{ name = "RECONCILIATION_FINDING_PUBLIC_KEYS", value = jsonencode({ (${KEY_ARN}) = data.terraform_remote_state.foundation.outputs.reconciliation_finding_public_key }) }`;
+
+test('every verifier gets the verification key ring from the foundation key', () => {
+  // Treasury's gate, the gateway's unpause guard and the containment release
+  // all verify runs. The oracle also reads that database, but only
+  // containments, and never decides on findings.
+  for (const file of [
+    'runtime-treasury-ricardian.tf',
+    'runtime-gateway-auth.tf',
+    'runtime-oracle-reconciliation.tf',
+  ]) {
+    assert.ok(
+      read(platform, file).includes(KEY_RING),
+      `${file} lacks RECONCILIATION_FINDING_PUBLIC_KEYS`,
+    );
+  }
+  // The gateway verifies over HTTP; it never holds a reconciliation database
+  // identity (failure-domain isolation, oracle-kms-isolation-selftest).
+  assert.doesNotMatch(read(platform, 'runtime-gateway-auth.tf'), /database\/reconciliation/u);
 });
 
 test('reconciliation signs with the same foundation key, through KMS', () => {

@@ -52,6 +52,11 @@ export interface PrepareGovernanceActionInput {
   proposalId?: number | null;
   targetAddress?: string | null;
   tradeId?: string | null;
+  /** The reconciliation evidence decision this approval was prepared on (R02). */
+  reconciliationEvidence?: Record<string, unknown>;
+  reconciliationFreezeRequest?: Record<string, unknown>;
+  evidenceReference?: string;
+  revalidateBeforeHandoff?: () => Promise<void>;
   audit: GovernanceMutationAuditInput;
   principal: GatewayPrincipal;
   signerWallet: string;
@@ -61,6 +66,7 @@ export interface PrepareGovernanceActionInput {
 }
 
 export interface ConfirmGovernanceBroadcastInput {
+  reconciliationEvidenceCheck?: Record<string, unknown>;
   actionId: string;
   txHash: string;
   signerWallet: string;

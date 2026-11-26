@@ -193,6 +193,7 @@ test('service migration manifests pin immutable schema checksums', async () => {
           { version: '202611230017', name: 'settlement_templates' },
           { version: '202611240018', name: 'settlement_template_activations' },
           { version: '202611240019', name: 'settlement_callback_envelope' },
+          { version: '202611240020', name: 'reconciliation_freeze_reviews' },
         ],
       );
       assert.match(manifest.migrations[1].schema_sha256, /^[a-f0-9]{64}$/);
