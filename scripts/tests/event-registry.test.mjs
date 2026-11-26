@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import {
   compatibilityProblems,
@@ -26,6 +27,8 @@ function copyRoot() {
     'oracle/src',
     'reconciliation/src',
     'indexer/src',
+    'notifications/src/envelope.ts',
+    'gateway/src/core/settlementCallbackEnvelope.ts',
   ]) {
     fs.cpSync(path.join(ROOT, relative), path.join(target, relative), { recursive: true });
   }
@@ -229,4 +232,129 @@ test('a notification type may stop being emitted while its published schema rema
   assert.ok(source.includes('INDEXER_POISON_LOG'));
   fs.writeFileSync(file, source.replaceAll('INDEXER_POISON_LOG', replacement));
   assert.deepEqual(registryProblems(root), []);
+});
+
+test('the producer library lists exactly the registered notification types', () => {
+  const root = copyRoot();
+  const file = path.join(root, 'notifications/src/envelope.ts');
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace("  'INDEXER_POISON_LOG',\n", ''));
+  assert.match(
+    registryProblems(root).join('\n'),
+    /REGISTERED_NOTIFICATION_TYPES differs from the registry/,
+  );
+});
+
+test('every registered notification type produces a schema-valid envelope', () => {
+  // ajv is a gateway dependency; there is no root copy.
+  const requireFromGateway = createRequire(path.join(ROOT, 'gateway/package.json'));
+  const Ajv2020 = requireFromGateway('ajv/dist/2020').default;
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  ajv.addFormat(
+    'date-time',
+    (value) => !Number.isNaN(Date.parse(value)) && /T.*(Z|[+-]\d\d:\d\d)$/u.test(value),
+  );
+  const read = (file) =>
+    JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/api/events', file), 'utf8'));
+  const validateEnvelope = ajv.compile(read('envelope.v1.schema.json'));
+  const validatePayload = ajv.compile(read('notification-event.v1.schema.json'));
+  const { buildNotificationEnvelope, REGISTERED_NOTIFICATION_TYPES } = createRequire(
+    import.meta.url,
+  )(path.join(ROOT, 'notifications/dist/index.js'));
+
+  const sources = { INDEXER: 'indexer', ORACLE: 'oracle', RECONCILIATION: 'reconciliation' };
+  for (const type of REGISTERED_NOTIFICATION_TYPES) {
+    const event = {
+      source: sources[type.split('_')[0]],
+      type,
+      severity: 'critical',
+      dedupKey: `${type.toLowerCase()}:1`,
+      message: 'contract test',
+      correlation: { tradeId: '42' },
+      metadata: { count: 1 },
+    };
+    const envelope = buildNotificationEnvelope(event, { eventId: 'evt-1' });
+    assert.ok(validateEnvelope(envelope), `${type}: ${ajv.errorsText(validateEnvelope.errors)}`);
+    assert.ok(
+      validatePayload(envelope.payload),
+      `${type}: ${ajv.errorsText(validatePayload.errors)}`,
+    );
+    assert.equal(envelope.settlementId, '42');
+    assert.equal(envelope.orderingKey, event.dedupKey);
+  }
+  const unlinked = buildNotificationEnvelope({
+    source: 'indexer',
+    type: 'INDEXER_POISON_LOG',
+    severity: 'critical',
+    dedupKey: 'indexer:poison:startup-blocked',
+    message: 'startup blocked',
+    correlation: {},
+  });
+  assert.equal(unlinked.settlementId, null);
+  assert.ok(validateEnvelope(unlinked), ajv.errorsText(validateEnvelope.errors));
+});
+
+test('a file that only enqueues an unregistered type fails the check', () => {
+  const root = copyRoot();
+  fs.writeFileSync(
+    path.join(root, 'oracle/src/rogue-enqueue.ts'),
+    "export const raise = (o: { enqueue(e: unknown): void }) => o.enqueue({ type: 'ROGUE_UNREGISTERED' });\n",
+  );
+  assert.match(registryProblems(root).join('\n'), /ROGUE_UNREGISTERED/);
+});
+
+test('the callback builder wraps the frozen v1 payload in a schema-valid registered envelope', async () => {
+  const requireFromGateway = createRequire(path.join(ROOT, 'gateway/package.json'));
+  const ts = requireFromGateway('typescript');
+  const source = fs.readFileSync(
+    path.join(ROOT, 'gateway/src/core/settlementCallbackEnvelope.ts'),
+    'utf8',
+  );
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ES2022 },
+  }).outputText;
+  const { buildSettlementCallbackEnvelope, SETTLEMENT_CALLBACK_EVENT } = await import(
+    `data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`
+  );
+  const fixture = JSON.parse(
+    fs.readFileSync(
+      path.join(ROOT, 'docs/api/fixtures/cotsel-settlement-callback.v1.json'),
+      'utf8',
+    ),
+  );
+  const registry = JSON.parse(
+    fs.readFileSync(path.join(ROOT, 'docs/api/events/registry.json'), 'utf8'),
+  );
+  const contract = registry.contracts.find((entry) => entry.id === fixture.contractVersion);
+  assert.deepEqual(SETTLEMENT_CALLBACK_EVENT, contract.envelope);
+  const Ajv2020 = requireFromGateway('ajv/dist/2020').default;
+  const ajv = new Ajv2020({ strict: false });
+  ajv.addFormat('date-time', (value) => !Number.isNaN(Date.parse(value)));
+  const validate = ajv.compile(
+    JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/api/events/envelope.v1.schema.json'), 'utf8')),
+  );
+  const envelope = buildSettlementCallbackEnvelope(fixture, fixture.eventId);
+  assert.ok(validate(envelope), ajv.errorsText(validate.errors));
+  assert.deepEqual(envelope.payload, fixture);
+  assert.equal(envelope.orderingKey, fixture.tradeId);
+  assert.throws(
+    () =>
+      buildSettlementCallbackEnvelope(
+        { ...fixture, contractVersion: 'unregistered.v1' },
+        fixture.eventId,
+      ),
+    /unregistered/,
+  );
+  assert.throws(() => buildSettlementCallbackEnvelope(fixture, 'different-event'), /Invalid/);
+});
+
+test('an unregistered callback envelope fails the release check', () => {
+  const root = copyRoot();
+  const file = path.join(root, 'gateway/src/core/settlementCallbackEnvelope.ts');
+  fs.writeFileSync(
+    file,
+    fs
+      .readFileSync(file, 'utf8')
+      .replace("type: 'cotsel.settlement-callback'", "type: 'unregistered.callback'"),
+  );
+  assert.match(registryProblems(root).join('\n'), /producer envelope differs from the registry/);
 });

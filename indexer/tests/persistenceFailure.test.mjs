@@ -138,6 +138,7 @@ test(
       const { DurableNotifier, NotificationOutbox } = require('@agroasys/notifications');
       const models = require('../lib/model');
       const NotificationMigration = require('../db/migrations/1785700000000-NotificationOutbox.js');
+      const NotificationEnvelopeMigration = require('../db/migrations/1785800000000-NotificationOutboxEnvelope.js');
       const pool = createPool ? createPool() : await createAdminPool(port);
       const quarantinePool = createPool ? createPool() : await createAdminPool(port);
       let database;
@@ -147,6 +148,9 @@ test(
         const quote = (name) => '"' + name.replaceAll('"', '""') + '"';
         await new Migration().up({ query: (sql, params) => pool.query(sql, params) });
         await new NotificationMigration().up({ query: (sql, params) => pool.query(sql, params) });
+        await new NotificationEnvelopeMigration().up({
+          query: (sql, params) => pool.query(sql, params),
+        });
         source = await new DataSource({
           type: 'postgres',
           host: pool.options.host,

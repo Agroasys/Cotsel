@@ -158,12 +158,12 @@ export function openApiSchemaText(yaml, name) {
 export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
 /**
- * Notification types raised at notify(...) / raise(...) call sites. Resolves a
+ * Notification types raised at notify(...), raise(...) or enqueue(...) call sites. Resolves a
  * `type: identifier` to the literals assigned to that identifier in the same
  * file, which covers the ternaries the producers use.
  */
 export function emittedNotificationTypes(source) {
-  if (!/\.notify\(|\.raise\(/u.test(source)) return new Set();
+  if (!/\.notify\(|\.raise\(|\.enqueue\(/u.test(source)) return new Set();
   const found = new Set();
   const literals = (expression) =>
     [...expression.matchAll(/'([A-Z][A-Z0-9_]+)'/gu)].map((match) => match[1]);
@@ -248,6 +248,14 @@ export function registryProblems(root) {
     if (fixture.contractVersion !== contract.id) {
       problems.push(`${contract.id}: fixture declares ${fixture.contractVersion}`);
     }
+    if (contract.id === 'cotsel.settlement-callback.v1') {
+      const source = fs.readFileSync(path.join(root, 'gateway/src/core/settlementCallbackEnvelope.ts'), 'utf8');
+      const block = /SETTLEMENT_CALLBACK_EVENT\s*=\s*\{([\s\S]*?)\}/u.exec(source)?.[1] ?? '';
+      const declared = Object.fromEntries([...block.matchAll(/(\w+):\s*'([^']+)'/gu)].map((entry) => [entry[1], entry[2]]));
+      if (!contract.envelope || ['type', 'version', 'producer', 'outbox'].some((key) => contract.envelope[key] !== declared[key])) {
+        problems.push(`${contract.id}: producer envelope differs from the registry`);
+      }
+    }
   }
 
   const notification = byType.get('cotsel.notification');
@@ -266,6 +274,24 @@ export function registryProblems(root) {
       if (!registered.has(type))
         problems.push(`notification type ${type} is emitted but not registered`);
     }
+    // The producer library carries its own copy of the registered types; keep it in step.
+    const envelopeSource = path.join(root, 'notifications/src/envelope.ts');
+    if (fs.existsSync(envelopeSource)) {
+      const declared = registeredTypesDeclaredIn(fs.readFileSync(envelopeSource, 'utf8'));
+      const expected = [...registered].sort();
+      if (JSON.stringify([...declared].sort()) !== JSON.stringify(expected)) {
+        problems.push(
+          `notifications/src/envelope.ts REGISTERED_NOTIFICATION_TYPES differs from the registry (${[...declared].sort().join(', ')} vs ${expected.join(', ')})`,
+        );
+      }
+    }
   }
   return problems;
+}
+
+/** Reads the REGISTERED_NOTIFICATION_TYPES array literal from the producer library. */
+export function registeredTypesDeclaredIn(source) {
+  const match = /REGISTERED_NOTIFICATION_TYPES\s*=\s*\[([\s\S]*?)\]/u.exec(source);
+  if (!match) return [];
+  return [...match[1].matchAll(/'([A-Z][A-Z0-9_]+)'/gu)].map((entry) => entry[1]);
 }

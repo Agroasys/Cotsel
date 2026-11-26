@@ -192,6 +192,7 @@ test('service migration manifests pin immutable schema checksums', async () => {
           { version: '202610180016', name: 'user_action_requests' },
           { version: '202611230017', name: 'settlement_templates' },
           { version: '202611240018', name: 'settlement_template_activations' },
+          { version: '202611240019', name: 'settlement_callback_envelope' },
         ],
       );
       assert.match(manifest.migrations[1].schema_sha256, /^[a-f0-9]{64}$/);
@@ -238,7 +239,7 @@ test('indexer migration job validates history and serializes TypeORM execution',
     .map((file) => `migrations/${file}`)
     .sort();
   assert.deepEqual(manifest.migrations.map((migration) => migration.file).sort(), migrationFiles);
-  assert.equal(manifest.migrations.length, 20);
+  assert.equal(manifest.migrations.length, 21);
 });
 
 test('runtime readiness requires the exact applied migration history', async () => {

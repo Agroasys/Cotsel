@@ -21,6 +21,7 @@ import {
   storedSettlementAmountToNumber,
 } from './settlementAmount';
 import { LAUNCH_SETTLEMENT_TEMPLATE_ID } from './settlementTemplateStore';
+import { buildSettlementCallbackEnvelope } from './settlementCallbackEnvelope';
 
 export * from './settlementStoreTypes';
 import type {
@@ -341,8 +342,9 @@ async function createCallbackDeliveryWithClient(
        status,
        attempt_count,
        next_attempt_at,
-       request_id
-     ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, 0, $7, $8)
+       request_id,
+       envelope
+     ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, 0, $7, $8, $9::jsonb)
      RETURNING
        delivery_id AS "deliveryId",
        handoff_id AS "handoffId",
@@ -370,6 +372,7 @@ async function createCallbackDeliveryWithClient(
       input.status,
       input.nextAttemptAt,
       input.requestId,
+      JSON.stringify(buildSettlementCallbackEnvelope(input.requestBody, input.eventId)),
     ],
   );
 

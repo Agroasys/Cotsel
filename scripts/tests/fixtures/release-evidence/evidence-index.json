@@ -3,12 +3,12 @@
   "candidateId": "cotsel-2026-08-05-fixture",
   "manifest": {
     "path": "scripts/tests/fixtures/release-evidence/candidate-manifest.json",
-    "sha256": "0484a0231f756af83b293a3b45697b7dadb536b3a9b2b35a44d8ccdc57259674"
+    "sha256": "18f6f5d3950045cdf9dd9250cc410345ffbd1d9a9155543791b48ded6673d95a"
   },
   "environmentReport": {
     "path": "ci-reports/environment-report.json",
     "sha256": "66d51889f1ac4eeee3064c44ab784d5039216adf53c0b1ae073f1c61a5f4e2e1",
-    "manifestSha256": "0484a0231f756af83b293a3b45697b7dadb536b3a9b2b35a44d8ccdc57259674",
+    "manifestSha256": "18f6f5d3950045cdf9dd9250cc410345ffbd1d9a9155543791b48ded6673d95a",
     "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
   },
   "generatedAt": "2026-08-05T10:00:00.000Z",
@@ -50,10 +50,10 @@
         "contractDeployedBytecodeSha256": "8ae6bd40151f975007997152aa60a5421b1fccc59e2fc866da27f8467af7b61a",
         "migrationIdentities": [
           "auth@202611230006_session_authentication_assurance#sha256:f6544887a54ee862c1632ed12349fa15d89d76f31a8a9b768dd798881520b48e",
-          "gateway@202611240018_settlement_template_activations#sha256:d3aa500b37d819352d359663ed1e725044b00cdca3f8fe6d17feda5b3b742d5d",
-          "indexer@1785700000000_notification_outbox#sha256:431c1d012f15da6c54b55dbd57edf1b67b5acdcba702b36f9a41bba50eacba9e",
-          "oracle@202610220001_notification_outbox#sha256:796b64b1b93c6a129596bb7414989c3c352dabe9b9f13c9d21edcf3bc56d5d07",
-          "reconciliation@202611010002_enumeration_cycles#sha256:40977cf0a81d8bcc7c1169b3b6977b32bb6e77610f5c0643b3eb5824f5bae913",
+          "gateway@202611240019_settlement_callback_envelope#sha256:258c59a22bd292b3dd669e7928246db91ca3e50051e1f13b4b78eaf50d0dae34",
+          "indexer@1785800000000_notification_outbox_envelope#sha256:ff043bbd83c1485ddccf5b50ae1b06978619b4f0ac29a8a2cf6634d48d80e229",
+          "oracle@202611230001_notification_outbox_envelope#sha256:09f1d46900023cd4c4db79f9458b8cbd90c0d2077799ff254dc4ce8a8158f034",
+          "reconciliation@202611230001_notification_outbox_envelope#sha256:d56899b267a5c46ee87c841d14e5246c2bb64cac8965ef883c34a7b715829985",
           "ricardian@202609290002_tenant_binding#sha256:ddb8c28133c8f5efb6d4afb32a14777967c30908c860501a097781e8898c96d6",
           "treasury@202611020010_export_bounds#sha256:eb04c0980a6ce07254b28dbf66b30c42f6a898a81a8f0d6d7b0bad9390abc3d4"
         ],
@@ -108,10 +108,10 @@
         "contractDeployedBytecodeSha256": "8ae6bd40151f975007997152aa60a5421b1fccc59e2fc866da27f8467af7b61a",
         "migrationIdentities": [
           "auth@202611230006_session_authentication_assurance#sha256:f6544887a54ee862c1632ed12349fa15d89d76f31a8a9b768dd798881520b48e",
-          "gateway@202611240018_settlement_template_activations#sha256:d3aa500b37d819352d359663ed1e725044b00cdca3f8fe6d17feda5b3b742d5d",
-          "indexer@1785700000000_notification_outbox#sha256:431c1d012f15da6c54b55dbd57edf1b67b5acdcba702b36f9a41bba50eacba9e",
-          "oracle@202610220001_notification_outbox#sha256:796b64b1b93c6a129596bb7414989c3c352dabe9b9f13c9d21edcf3bc56d5d07",
-          "reconciliation@202611010002_enumeration_cycles#sha256:40977cf0a81d8bcc7c1169b3b6977b32bb6e77610f5c0643b3eb5824f5bae913",
+          "gateway@202611240019_settlement_callback_envelope#sha256:258c59a22bd292b3dd669e7928246db91ca3e50051e1f13b4b78eaf50d0dae34",
+          "indexer@1785800000000_notification_outbox_envelope#sha256:ff043bbd83c1485ddccf5b50ae1b06978619b4f0ac29a8a2cf6634d48d80e229",
+          "oracle@202611230001_notification_outbox_envelope#sha256:09f1d46900023cd4c4db79f9458b8cbd90c0d2077799ff254dc4ce8a8158f034",
+          "reconciliation@202611230001_notification_outbox_envelope#sha256:d56899b267a5c46ee87c841d14e5246c2bb64cac8965ef883c34a7b715829985",
           "ricardian@202609290002_tenant_binding#sha256:ddb8c28133c8f5efb6d4afb32a14777967c30908c860501a097781e8898c96d6",
           "treasury@202611020010_export_bounds#sha256:eb04c0980a6ce07254b28dbf66b30c42f6a898a81a8f0d6d7b0bad9390abc3d4"
         ],
