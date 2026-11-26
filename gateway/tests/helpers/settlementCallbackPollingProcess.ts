@@ -6,13 +6,14 @@ import { createApp } from '../../src/app';
 import { SettlementCallbackDispatcher } from '../../src/core/settlementCallbackDispatcher';
 import { createPostgresSettlementStore } from '../../src/core/settlementStore';
 import { baseTestGatewayConfig } from '../support/testConfig';
+import { testPostgresPort } from './userActionEnginePostgres';
 
 async function main() {
   const database = process.argv[2];
   if (!/^ua_[a-f0-9]{32}$/.test(database ?? '')) throw new Error('Invalid fixture database');
   const pool = new Pool({
     host: '127.0.0.1',
-    port: 5432,
+    port: testPostgresPort(),
     database,
     user: database,
     password: 'local-test-only',
