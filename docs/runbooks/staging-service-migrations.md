@@ -63,6 +63,37 @@ Select the current task family and revision for exactly one service. Record the
 private subnet IDs, internal-services security group, data-client security
 group, and ECS cluster ARN. Do not read or record a secret value.
 
+## Check the migration ledger and legacy containments
+
+Use the approved `database-parity-verification` task with the exact reviewed
+revision. Its `COTSEL_DB_PREFLIGHT_*` records contain migration metadata and
+containment counts. The task reads each database in a separate read-only snapshot.
+
+Before the migration, compare the task output with the manifest in the reviewed
+image. Use `<service>/src/database/migrations.json` for a service database. Use
+`indexer/db/migrations.json` for the indexer.
+
+1. Confirm collection exited zero and printed its success message.
+2. Find the service's `COTSEL_DB_PREFLIGHT_LEDGER` record.
+3. For a populated ledger, require `present=true` and `missing_checksums=0`.
+4. Confirm `entries` equals the number of `COTSEL_DB_PREFLIGHT_MIGRATION` records for that service.
+5. Compare the records in order with the leading entries of the image manifest.
+6. Match both `version` and `sha256` for every applied migration.
+7. Match each service migration's `schema_sha256` against the manifest.
+8. Stop if a ledger entry is missing from the manifest or any checksum differs.
+9. Stop on missing ledger evidence unless the approved plan covers baseline adoption.
+
+For the initial signed reconciliation cutover, require both legacy containment
+counts to be zero. Confirm `signed_runs_present=false` and migration
+`202611230002` is absent. Repeat the check after stopping the old writers.
+Follow [legacy incident recovery](reconciliation-signed-findings.md#recover-a-legacy-incident)
+if either containment count is nonzero.
+
+After the migration, compare all expected entries, including the new schema
+head. Keep the preflight records with the migration task evidence. A successful
+collection records observed state. Source and restore parity requires the
+separate [backup and restore procedure](postgres-backup-restore-recovery.md).
+
 ## Run one migration
 
 ```bash
@@ -100,7 +131,7 @@ The request must contain no `overrides` object. Record the returned task ARN.
 3. Confirm the single migration container exited `0`.
 4. Inspect the `migrate` log stream in the service CloudWatch log group and
    confirm the success marker names the expected service.
-5. Query the migration ledger through the approved verifier task.
+5. Compare the migration ledger with the image manifest through the approved verifier task.
 6. For adoption, confirm `application_mode=adopted` and the manifest fingerprint.
 7. Confirm application table counts and critical row counts did not change.
 8. Confirm CloudTrail `RunTask` evidence has no command or environment
