@@ -63,6 +63,89 @@ sha256_stream() {
   printf '%s\n' "${checksum%% *}"
 }
 
+collect_preflight_metadata() {
+  # The ledger and reconciliation cutover checks share one snapshot per database.
+  # Recovery fingerprints are collected separately and still require a write freeze.
+  preflight_metadata="$(
+    run_verifier_check 'migration preflight query' psql --no-psqlrc --dbname "${database_name}" \
+      --set ON_ERROR_STOP=1 --set "service=${service_name}" --set "database=${database_name}" \
+      --quiet --tuples-only --no-align <<'SQL'
+BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
+
+SELECT
+  :'service' = 'indexer' AS is_indexer,
+  :'service' = 'reconciliation' AS is_reconciliation,
+  to_regclass(CASE WHEN :'service' = 'indexer'
+    THEN 'public.migrations' ELSE 'public.cotsel_schema_migrations' END) IS NOT NULL AS ledger_present
+\gset
+
+\if :ledger_present
+WITH ledger AS (
+\if :is_indexer
+  -- Older TypeORM ledgers may have no checksum column or contain NULL checksums.
+  SELECT id AS ordering, timestamp::text AS version,
+    trim(to_jsonb(migration)->>'checksum') AS checksum,
+    NULL::text AS schema_checksum, 'unknown' AS application_mode
+  FROM public.migrations migration
+\else
+  SELECT row_number() OVER (ORDER BY version) AS ordering, version,
+    trim(checksum) AS checksum, trim(schema_checksum) AS schema_checksum, application_mode
+  FROM public.cotsel_schema_migrations
+  WHERE service_name = :'service'
+\endif
+), ledger_summary AS (
+  SELECT count(*) AS entries, count(*) FILTER (WHERE checksum IS NULL) AS missing_checksums,
+    count(*) = count(DISTINCT version) AND count(*) FILTER (WHERE (
+      version ~ '^[0-9]{12,14}$'
+      AND (checksum ~ '^[a-f0-9]{64}$' OR (:'is_indexer'::boolean AND checksum IS NULL))
+      AND (schema_checksum ~ '^[a-f0-9]{64}$' OR (:'is_indexer'::boolean AND schema_checksum IS NULL))
+      AND (application_mode IN ('adopted', 'executed') OR (:'is_indexer'::boolean AND application_mode = 'unknown'))
+    ) IS NOT TRUE) = 0 AS valid
+  FROM ledger
+)
+SELECT record FROM (
+  SELECT 0 AS record_group, 0 AS ordering,
+    CASE WHEN valid THEN format(
+      'COTSEL_DB_PREFLIGHT_LEDGER service=%s database=%s present=true entries=%s missing_checksums=%s',
+      :'service', :'database', entries, missing_checksums
+    ) ELSE 'COTSEL_DB_PREFLIGHT_INVALID' END AS record
+  FROM ledger_summary
+  UNION ALL
+  SELECT 1, ordering, format(
+    'COTSEL_DB_PREFLIGHT_MIGRATION service=%s database=%s version=%s sha256=%s schema_sha256=%s application_mode=%s',
+    :'service', :'database', version, coalesce(checksum, 'missing'),
+    coalesce(schema_checksum, 'none'), application_mode
+  )
+  FROM ledger
+) AS records
+ORDER BY record_group, ordering;
+\else
+SELECT format('COTSEL_DB_PREFLIGHT_LEDGER service=%s database=%s present=false entries=0 missing_checksums=0',
+  :'service', :'database');
+\endif
+
+\if :is_reconciliation
+SELECT CASE WHEN public.current_app_service_name() = 'reconciliation'
+    AND row_security_active('public.reconcile_trade_containments') THEN format(
+    'COTSEL_DB_PREFLIGHT_LEGACY_CONTAINMENT service=%s database=%s signed_runs_present=%s contained=%s reconciled_pending_approval=%s',
+    :'service', :'database', (to_regclass('public.reconcile_run_manifests') IS NOT NULL)::text,
+    count(*) FILTER (WHERE state = 'CONTAINED'), count(*) FILTER (WHERE state = 'RECONCILED_PENDING_APPROVAL')
+  ) ELSE 'COTSEL_DB_PREFLIGHT_INVALID' END
+FROM public.reconcile_trade_containments;
+\endif
+
+COMMIT;
+SQL
+  )" || return 1
+  case "${preflight_metadata}" in
+    ''|*COTSEL_DB_PREFLIGHT_INVALID*)
+      printf 'Database recovery verification failed for service %s during migration preflight validation.\n' "${service_name}" >&2
+      return 1
+      ;;
+  esac
+  printf '%s\n' "${preflight_metadata}"
+}
+
 collect_database() {
   service_name="${1}"
   database_name="${2}"
@@ -76,6 +159,7 @@ collect_database() {
   export PGPASSWORD="${runtime_password}"
   export PGOPTIONS="-c default_transaction_read_only=on -c app.service_name=${service_name} -c app.connection_role=runtime -c app.runtime_db_user=${runtime_username}"
 
+  collect_preflight_metadata
   server_version="$(run_verifier_check 'server version query' psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align -c "SELECT current_setting('server_version_num')")"
 
   schema_sha256="$(

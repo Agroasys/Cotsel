@@ -117,6 +117,7 @@ const fixtureRowValue = 'fixture-row-must-not-appear';
 const fixtureRow = JSON.stringify({ private: fixtureRowValue });
 const fixtureError = 'fixture-database-error-must-not-appear';
 const fixtureSchema = 'CREATE TABLE public.fixture (id bigint);';
+const fixtureChecksum = sha256('migration');
 
 async function manifestCollectionFixture(t) {
   const mockDirectory = await mkdtemp(path.join(tmpdir(), 'cotsel-recovery-manifest-'));
@@ -134,6 +135,25 @@ ${failIfRequested}
 arguments="$*"
 input="$(cat)"
 case "$arguments $input" in
+  *'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'*)
+    service="\${PGUSER%_runtime}"
+    case "$FAILED_VERIFIER_STEP" in
+      absent) printf '%s\\n' "COTSEL_DB_PREFLIGHT_LEDGER service=$service database=cotsel_$service present=false entries=0 missing_checksums=0" ;;
+      unchecksummed)
+        printf '%s\\n' "COTSEL_DB_PREFLIGHT_LEDGER service=$service database=cotsel_$service present=true entries=1 missing_checksums=1"
+        printf '%s\\n' "COTSEL_DB_PREFLIGHT_MIGRATION service=$service database=cotsel_$service version=202611230002 sha256=missing schema_sha256=none application_mode=unknown"
+        ;;
+      invalid) printf '%s\\n' COTSEL_DB_PREFLIGHT_INVALID ;;
+      *)
+        printf '%s\\n' "COTSEL_DB_PREFLIGHT_LEDGER service=$service database=cotsel_$service present=true entries=1 missing_checksums=0"
+        printf '%s\\n' "COTSEL_DB_PREFLIGHT_MIGRATION service=$service database=cotsel_$service version=202611230002 sha256=${fixtureChecksum} schema_sha256=none application_mode=executed"
+        ;;
+    esac
+    if [ "$service" = reconciliation ]; then
+      printf '%s\\n' 'COTSEL_DB_PREFLIGHT_LEGACY_CONTAINMENT service=reconciliation database=cotsel_reconciliation signed_runs_present=false contained=1 reconciled_pending_approval=2'
+    fi
+    fail_if_requested metadata
+    ;;
   *current_setting*) printf '%s\\n' '160013' ;;
   *'SELECT record_type'*) printf '%s\\n' 'current_role|fixture_runtime|login=true,superuser=false'; fail_if_requested access ;;
   *"relkind = 'S'"*) printf '%s\\n' 'public|fixture_id_seq|public|fixture_id_seq' ;;
@@ -250,7 +270,66 @@ test('manifest collection emits scoped redacted evidence for all seven databases
   assert.equal(result.stdout.split(`data_sha256=${sha256(`${fixtureRow}\n`)}`).length - 1, 7);
   assert.equal(result.stdout.split(`state_sha256=${sha256('1|true\n')}`).length - 1, 7);
   assert.match(result.stdout, /Cotsel recovery manifest collection passed/);
-  assert.doesNotThrow(() => parseManifest(result.stdout, 'collector'));
+  const preflightLines = result.stdout
+    .split('\n')
+    .filter((line) => line.startsWith('COTSEL_DB_PREFLIGHT_'));
+  assert.equal(preflightLines.length, 15);
+  for (const service of services) {
+    assert.ok(
+      preflightLines.includes(
+        `COTSEL_DB_PREFLIGHT_LEDGER service=${service} database=cotsel_${service} present=true entries=1 missing_checksums=0`,
+      ),
+    );
+    assert.ok(
+      preflightLines.includes(
+        `COTSEL_DB_PREFLIGHT_MIGRATION service=${service} database=cotsel_${service} version=202611230002 sha256=${fixtureChecksum} schema_sha256=none application_mode=executed`,
+      ),
+    );
+  }
+  assert.ok(
+    preflightLines.includes(
+      'COTSEL_DB_PREFLIGHT_LEGACY_CONTAINMENT service=reconciliation database=cotsel_reconciliation signed_runs_present=false contained=1 reconciled_pending_approval=2',
+    ),
+  );
+  const recoveryOnly = result.stdout
+    .split('\n')
+    .filter((line) => !line.startsWith('COTSEL_DB_PREFLIGHT_'))
+    .join('\n');
+  assert.deepEqual(
+    parseManifest(result.stdout, 'collector'),
+    parseManifest(recoveryOnly, 'collector'),
+  );
+});
+
+test('manifest collection reports missing migration evidence explicitly', async (t) => {
+  const runManifest = await manifestCollectionFixture(t);
+  const absent = runManifest({ failure: 'absent' });
+  assert.equal(absent.status, 0, absent.stderr);
+  assert.match(
+    absent.stdout,
+    /COTSEL_DB_PREFLIGHT_LEDGER .* present=false entries=0 missing_checksums=0/,
+  );
+  assert.doesNotMatch(absent.stdout, /COTSEL_DB_PREFLIGHT_MIGRATION/);
+  const unchecksummed = runManifest({ failure: 'unchecksummed' });
+  assert.equal(unchecksummed.status, 0, unchecksummed.stderr);
+  assert.match(
+    unchecksummed.stdout,
+    /COTSEL_DB_PREFLIGHT_LEDGER .* present=true entries=1 missing_checksums=1/,
+  );
+  assert.match(unchecksummed.stdout, /COTSEL_DB_PREFLIGHT_MIGRATION .* sha256=missing /);
+});
+
+test('manifest collection refuses invalid or failed metadata reads', async (t) => {
+  const runManifest = await manifestCollectionFixture(t);
+  for (const failure of ['metadata', 'invalid']) {
+    await t.test(failure, () => {
+      const result = runManifest({ failure });
+      assert.equal(result.status, 1, result.stderr);
+      assert.doesNotMatch(result.stdout, /COTSEL_DB_PREFLIGHT_|collection passed/);
+      assert.match(result.stderr, /Database recovery verification failed for service auth/);
+      assertRedacted(result);
+    });
+  }
 });
 
 test('manifest collection rejects incomplete or failed fingerprint streams', async (t) => {
