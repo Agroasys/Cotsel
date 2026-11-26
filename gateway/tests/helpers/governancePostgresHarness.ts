@@ -135,7 +135,7 @@ export async function withGovernancePostgres(fn: (port: number) => Promise<void>
     throw error;
   } finally {
     try {
-      docker(['rm', '-f', containerName], { stdio: ['ignore', 'ignore', 'ignore'] });
+      docker(['rm', '-f', '-v', containerName], { stdio: ['ignore', 'ignore', 'ignore'] });
     } catch {
       // Best-effort cleanup of the disposable database.
     }
