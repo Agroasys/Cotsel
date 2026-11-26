@@ -96,6 +96,9 @@ locals {
     { name = "RECONCILIATION_BATCH_SIZE", value = "100" },
     { name = "RECONCILIATION_DAEMON_INTERVAL_MS", value = "60000" },
     { name = "RECONCILIATION_ENABLED", value = "true" },
+    # Cotsel#951: every completed run is sealed with the foundation's evidence key.
+    { name = "RECONCILIATION_FINDING_SIGN_TIMEOUT_MS", value = "5000" },
+    { name = "RECONCILIATION_FINDING_SIGNER", value = "kms:${data.terraform_remote_state.foundation.outputs.reconciliation_finding_key_arn}" },
     { name = "RECONCILIATION_HEALTH_PORT", value = "9090" },
     { name = "RECONCILIATION_CHAIN_READ_CONCURRENCY", value = "8" },
     { name = "RECONCILIATION_COVERAGE_BOUNDARY", value = "finalized" },

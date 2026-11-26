@@ -8,6 +8,11 @@ process.env.INDEXER_GRAPHQL_URL =
   process.env.INDEXER_GRAPHQL_URL || 'http://127.0.0.1:3100/graphql';
 
 import { ReconciliationGateService } from '../src/core/reconciliationGate';
+import type { RunEvidenceVerifier } from '../src/core/reconciliationEvidenceGate';
+
+// The mocked pools model runs whose signed manifest verifies (Cotsel#951); the
+// verification itself runs against PostgreSQL in the reconciliation suite.
+const signedRun: RunEvidenceVerifier = async () => ({ ok: true, manifest: {} as never });
 
 type QueryResult<Row> = { rows: Row[] };
 type ReconciliationGatePool = NonNullable<
@@ -50,6 +55,7 @@ describe('ReconciliationGateService', () => {
     });
     const service = new ReconciliationGateService({
       pool,
+      verifyRun: signedRun,
       now: () => new Date('2026-03-31T00:15:00Z'),
     });
     expect(await service.snapshotRunAnchor()).toMatchObject({
@@ -79,6 +85,7 @@ describe('ReconciliationGateService', () => {
     const gate = (
       await new ReconciliationGateService({
         pool,
+        verifyRun: signedRun,
         now: () => new Date('2026-03-31T00:15:00Z'),
       }).assessTrades(['trade-1'])
     ).get('trade-1');
@@ -98,6 +105,7 @@ describe('ReconciliationGateService', () => {
     });
     const service = new ReconciliationGateService({
       pool,
+      verifyRun: signedRun,
       now: () => new Date('2026-03-31T00:15:00.000Z'),
     });
 
@@ -145,6 +153,7 @@ describe('ReconciliationGateService', () => {
     });
     const service = new ReconciliationGateService({
       pool,
+      verifyRun: signedRun,
       now: () => new Date('2026-03-31T00:30:01.000Z'),
       maxAgeSeconds: 900,
       maxRunningRunAgeSeconds: 900,
@@ -197,6 +206,7 @@ describe('ReconciliationGateService', () => {
     });
     const service = new ReconciliationGateService({
       pool,
+      verifyRun: signedRun,
       now: () => new Date('2026-03-31T00:25:00.000Z'),
       maxAgeSeconds: 900,
       maxRunningRunAgeSeconds: 900,
@@ -217,6 +227,72 @@ describe('ReconciliationGateService', () => {
       coverageToBlock: 1_000_000,
       coverageComplete: true,
       blockedReasons: [],
+    });
+  });
+  describe('signed evidence (Cotsel#951)', () => {
+    const cleanRunPool = () =>
+      createPoolMock({
+        "WHERE status = 'COMPLETED'": () => ({
+          rows: [
+            {
+              run_key: 'run-2',
+              completed_at: new Date('2026-03-31T00:20:00.000Z'),
+              coverage_from_block: '0',
+              coverage_to_block: '1000000',
+              coverage_complete: true,
+            },
+          ],
+        }),
+        "WHERE status = 'RUNNING'": () => ({ rows: [{ count: '0' }] }),
+        "status='COMPLETED'": () => ({
+          rows: [
+            {
+              run_key: 'run-2',
+              completed_at: new Date('2026-03-31T00:20:00.000Z'),
+              coverage_from_block: '0',
+              coverage_to_block: '1000000',
+              coverage_complete: true,
+            },
+          ],
+        }),
+        "status='RUNNING'": () => ({ rows: [{ count: '0' }] }),
+        'FROM reconcile_run_trades': () => ({ rows: [{ trade_id: 'trade-1' }] }),
+        'FROM reconcile_drifts': () => ({ rows: [] }),
+      });
+    const gateWith = (verifyRun: RunEvidenceVerifier) =>
+      new ReconciliationGateService({
+        pool: cleanRunPool(),
+        verifyRun,
+        now: () => new Date('2026-03-31T00:25:00.000Z'),
+        maxAgeSeconds: 900,
+        maxRunningRunAgeSeconds: 900,
+      });
+
+    test.each([
+      ['unsigned', 'not signed (reconciliation_evidence_unsigned)'],
+      ['findings_mismatch', 'findings_mismatch (reconciliation_evidence_invalid)'],
+      ['scope_mismatch', 'scope_mismatch (reconciliation_evidence_invalid)'],
+      ['bad_signature', 'bad_signature (reconciliation_evidence_invalid)'],
+    ] as const)(
+      'a fresh, drift-free trade is blocked when the run is %s',
+      async (reason, expected) => {
+        const verifyRun = jest.fn<ReturnType<RunEvidenceVerifier>, Parameters<RunEvidenceVerifier>>(
+          async () => ({ ok: false, reason }),
+        );
+        const gate = (await gateWith(verifyRun).assessTrades(['trade-1'])).get('trade-1');
+        expect(verifyRun).toHaveBeenCalledWith(expect.anything(), 'run-2');
+        expect(gate?.status).toBe('BLOCKED');
+        expect(gate?.blockedReasons.join(' ')).toContain(expected);
+      },
+    );
+
+    test('an empty export cannot anchor on a run whose evidence does not verify', async () => {
+      await expect(
+        gateWith(async () => ({ ok: false, reason: 'run_mismatch' })).snapshotRunAnchor(),
+      ).rejects.toThrow('reconciliation_evidence_invalid');
+      await expect(gateWith(signedRun).snapshotRunAnchor()).resolves.toMatchObject({
+        runKey: 'run-2',
+      });
     });
   });
 });

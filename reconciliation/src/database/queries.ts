@@ -1,6 +1,8 @@
 import type { Pool, PoolClient } from 'pg';
 import { pool } from './connection';
 import { config } from '../config';
+import type { FindingSigner } from '../core/findingSigner';
+import { configuredFindingSigner, sealRunManifest } from './runManifest';
 import { LIVE_LEASE_PREDICATE, assertLeaseHeld, releaseLease } from './leases';
 import type { DriftFinding, RunLeaseIdentity, RunStats } from '../types';
 
@@ -273,7 +275,10 @@ export async function finalizeRun(
       | { advance: false; tailFirstSeenAt: Date | null };
   },
   db: Pool = pool,
+  signer?: FindingSigner,
 ): Promise<void> {
+  // Resolved before the transaction: a run cannot complete without a signer.
+  const sealer = input.stats.status === 'COMPLETED' ? (signer ?? configuredFindingSigner()) : null;
   const client = await db.connect();
   try {
     await client.query('BEGIN');
@@ -281,6 +286,8 @@ export async function finalizeRun(
     // Before completeRun, so the run row records the tallies `publish` produced.
     await input.publish?.(client);
     await completeRun(input.stats, client);
+    // Sealed in the completing transaction; 006 makes the run immutable after it.
+    if (sealer) await sealRunManifest(client, input.stats.runKey, sealer);
     // The run is terminal, so the key is free immediately rather than after a
     // TTL. This rides the same transaction: a rolled-back run keeps its lease.
     await releaseLease(input.lease, client);

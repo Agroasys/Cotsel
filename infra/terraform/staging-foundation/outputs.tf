@@ -58,7 +58,7 @@ output "runtime_execution_role_arns" {
 }
 
 output "runtime_task_role_arns" {
-  description = "Non-signing task roles for isolated runtime services."
+  description = "Task roles for isolated runtime services. None signs chain transactions; reconciliation signs evidence digests with reconciliation_finding_key_arn only."
   value       = { for name, role in aws_iam_role.runtime_task : name => role.arn }
 }
 
@@ -80,4 +80,14 @@ output "runtime_prerequisite_log_groups" {
       name = aws_cloudwatch_log_group.relayer.name
     }
   }
+}
+
+output "reconciliation_finding_key_arn" {
+  description = "The KMS key that signs reconciliation run manifests (Cotsel#951); also the manifest key id."
+  value       = aws_kms_key.reconciliation_findings.arn
+}
+
+output "reconciliation_finding_public_key" {
+  description = "Base64 SPKI DER public key that verifies reconciliation run manifests."
+  value       = data.aws_kms_public_key.reconciliation_findings.public_key
 }

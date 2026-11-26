@@ -2,6 +2,10 @@ import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { Pool } from 'pg';
 import { runVersionedMigrations } from '@agroasys/shared-db/migrate';
+import {
+  completeAndSealRun,
+  TEST_FINDING_PUBLIC_KEYS_JSON,
+} from './helpers/sealedReconciliationRun';
 
 const describePostgres = process.env.TREASURY_POSTGRES_TESTS === 'true' ? describe : describe.skip;
 
@@ -40,7 +44,7 @@ describePostgres('reconciliation reader row security', () => {
       });
       await db.query(`GRANT USAGE ON SCHEMA public TO "${readerRole}"`);
       await db.query(
-        `GRANT SELECT ON reconcile_runs, reconcile_run_trades, reconcile_drifts TO "${readerRole}"`,
+        `GRANT SELECT ON reconcile_runs, reconcile_run_trades, reconcile_drifts, reconcile_run_manifests TO "${readerRole}"`,
       );
       const run =
         await db.query(`INSERT INTO reconcile_runs (run_key, mode, status, completed_at, coverage_from_block, coverage_to_block, coverage_complete)
@@ -49,7 +53,9 @@ describePostgres('reconciliation reader row security', () => {
         "INSERT INTO reconcile_run_trades (run_id, run_key, trade_id) VALUES ($1, 'run-1', 'trade-1')",
         [run.rows[0].id],
       );
-      await db.query(
+      await completeAndSealRun(
+        db,
+        'run-1',
         "UPDATE reconcile_runs SET status='COMPLETED', completed_at=NOW() AT TIME ZONE 'UTC' WHERE run_key='run-1'",
       );
       noContext = new Pool({
@@ -73,6 +79,7 @@ describePostgres('reconciliation reader row security', () => {
       process.env.RECONCILIATION_DB_USER = readerRole;
       process.env.RECONCILIATION_DB_PASSWORD = 'fixture-password';
       process.env.RECONCILIATION_DB_SSL_MODE = 'disable';
+      process.env.RECONCILIATION_FINDING_PUBLIC_KEYS = TEST_FINDING_PUBLIC_KEYS_JSON;
       const { ReconciliationGateService } = await import('../src/core/reconciliationGate');
       service = new ReconciliationGateService();
       expect((await service.assessTrades(['trade-1'])).get('trade-1')).toMatchObject({
@@ -94,6 +101,25 @@ describePostgres('reconciliation reader row security', () => {
       await expect(
         noContext.query("UPDATE reconcile_runs SET status='FAILED' WHERE run_key='run-1'"),
       ).rejects.toThrow(/permission denied/);
+
+      // Cotsel#951: a scope row injected past the published-evidence triggers
+      // (as a database owner could) would clear a trade never compared; the
+      // signed manifest no longer matches, so the gate blocks the whole run.
+      const owner = await db.connect();
+      try {
+        await owner.query('BEGIN');
+        await owner.query('SET LOCAL session_replication_role = replica');
+        await owner.query(
+          "INSERT INTO reconcile_run_trades (run_id, run_key, trade_id) VALUES ($1, 'run-1', 'trade-2')",
+          [run.rows[0].id],
+        );
+        await owner.query('COMMIT');
+      } finally {
+        owner.release();
+      }
+      const forged = (await service.assessTrades(['trade-1', 'trade-2'])).get('trade-2');
+      expect(forged?.status).toBe('BLOCKED');
+      expect(forged?.blockedReasons.join(' ')).toContain('reconciliation_evidence_invalid');
     } finally {
       await service?.close();
       await noContext?.end();

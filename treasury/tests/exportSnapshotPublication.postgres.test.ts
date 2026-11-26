@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { Pool } from 'pg';
 import { runVersionedMigrations } from '@agroasys/shared-db/migrate';
+import { completeAndSealRun, testRunVerifier } from './helpers/sealedReconciliationRun';
 
 const describePostgres = process.env.TREASURY_POSTGRES_TESTS === 'true' ? describe : describe.skip;
 describePostgres('snapshot evidence publication across databases', () => {
@@ -66,7 +67,7 @@ describePostgres('snapshot evidence publication across databases', () => {
     }
     await reconciliation.query(`GRANT USAGE ON SCHEMA public TO "${readerRole}"`);
     await reconciliation.query(
-      `GRANT SELECT ON reconcile_runs, reconcile_run_trades, reconcile_drifts TO "${readerRole}"`,
+      `GRANT SELECT ON reconcile_runs, reconcile_run_trades, reconcile_drifts, reconcile_run_manifests TO "${readerRole}"`,
     );
     reader = new Pool({
       ...connection,
@@ -87,7 +88,9 @@ describePostgres('snapshot evidence publication across databases', () => {
       "INSERT INTO reconcile_run_trades (run_id,run_key,trade_id) SELECT $1,'published','trade-'||n FROM generate_series(1,501) n",
       [run.rows[0].id],
     );
-    await reconciliation.query(
+    await completeAndSealRun(
+      reconciliation,
+      'published',
       "UPDATE reconcile_runs SET status='COMPLETED',completed_at=NOW() AT TIME ZONE 'UTC',coverage_from_block=0,coverage_to_block=110,coverage_complete=true WHERE run_key='published'",
     );
     Object.assign(process.env, {
@@ -108,6 +111,7 @@ describePostgres('snapshot evidence publication across databases', () => {
     closeService = (await import('../src/database/connection')).closeConnection;
     service = new ReconciliationGateService({
       pool: reader,
+      verifyRun: testRunVerifier,
       now: () => new Date(Date.now() + reconciliationOffset),
     });
     build = async (key, mode) => {

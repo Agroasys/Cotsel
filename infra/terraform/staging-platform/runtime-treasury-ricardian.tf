@@ -87,6 +87,10 @@ locals {
       { name = "RECONCILIATION_DB_NAME", value = "cotsel_reconciliation" },
       { name = "RECONCILIATION_DB_PORT", value = "5432" },
       { name = "RECONCILIATION_DB_SSL_MODE", value = "verify-full" },
+      # Cotsel#951. The gate trusts a run only after its signed manifest
+      # verifies; the key ring is the foundation's evidence key. When the key
+      # rotates, keep the retired entry here so earlier runs stay verifiable.
+      { name = "RECONCILIATION_FINDING_PUBLIC_KEYS", value = jsonencode({ (data.terraform_remote_state.foundation.outputs.reconciliation_finding_key_arn) = data.terraform_remote_state.foundation.outputs.reconciliation_finding_public_key }) },
       { name = "RECONCILIATION_MAX_AGE_SECONDS", value = "900" },
       { name = "RECONCILIATION_MAX_RUNNING_RUN_AGE_SECONDS", value = "900" },
       # WP-4 FAIL-06. Canonicality decides payout eligibility, so no single RPC

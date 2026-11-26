@@ -1,10 +1,10 @@
-# Reconciliation Runbook
+# Reconciliation runbook
 
 ## Purpose
 
 Operate reconciliation safely in local/staging and diagnose drift failures.
 For lifecycle checkpoints across lock, stage-1, and final settlement, see `docs/runbooks/hybrid-split-walkthrough.md`.
-If a mismatch may be caused by routing/auth propagation/correlation breakdown between services, use `docs/runbooks/api-gateway-boundary.md` first to classify the handoff boundary before remediating reconciliation state.
+If routing, authentication or correlation may cause a mismatch, classify the boundary with `docs/runbooks/api-gateway-boundary.md`. Then diagnose the reconciliation state.
 If the incident includes gateway dead-lettered mutations or settlement callback deliveries, use `docs/runbooks/gateway-dead-letter-workflow.md` before replaying or reclassifying reconciliation drift.
 
 Automation-governance source of truth:
@@ -43,7 +43,14 @@ pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out 
 
 Notes:
 
-- Report command reads reconciliation DB (`DB_NAME`), treasury DB (`TREASURY_DB_NAME`), and indexer DB (`INDEXER_DB_NAME`) using the same Postgres host/user/password env set.
+- The report command reads the reconciliation database specified by `DB_NAME`.
+  If `TREASURY_DB_NAME` is set, the command also reads the treasury database.
+  Unless the treasury settings override them, the command uses the same
+  Postgres host, port, user, and password for both databases.
+- The report records the verification result in `evidence.status`. The possible
+  values are `verified`, `failed`, `unsigned`, and `unverifiable`.
+  If `RECONCILIATION_FINDING_PUBLIC_KEYS` is unset, the status is `unverifiable`.
+  See the [signed reconciliation findings runbook](reconciliation-signed-findings.md).
 - Output schema is stable and ordered by `tradeId`, then `txHash`; missing fields are emitted as explicit `null`.
 - Treasury-linked rows now also surface `rampReference`, `fiatDepositState`, `fiatDepositFailureReason`, and `fiatDepositObservedAt` when deposit evidence exists.
 - Treasury-linked rows also surface `bankReference`, `bankPayoutState`, `bankFailureCode`, `bankConfirmedAt`, and `bankPayoutDivergenceReason` when bank-finality evidence exists.
@@ -62,7 +69,7 @@ scripts/cotsel.sh logs reconciliation
 - `Validating RPC endpoint for reconciliation startup`
 - `Reconciliation run completed`
 
-## Deterministic Drift Classifications
+## Deterministic drift classifications
 
 Source of truth: `reconciliation/src/core/classifier.ts`.
 
@@ -98,14 +105,10 @@ Current runtime truth:
 
 Operator rule:
 
-- When reconciliation output is used for incident or treasury follow-up, attach
-  missing `correlationId`, actor context, `intent`, and `outcome` from the
-  nearest authoritative request ledger, gateway action, or operator evidence
-  packet.
-- Do not infer a terminal result from free-form text alone; record an explicit
-  `outcome` in the incident or operator evidence artifact.
+- For incident or treasury follow-up, attach any missing `correlationId`, actor context, `intent` and `outcome`. Use the nearest authoritative request ledger, gateway action or operator evidence packet.
+- Do not infer a terminal result from free-form text alone. Record an explicit `outcome` in the incident or operator evidence artifact.
 
-## Treasury Sweep Reconciliation Invariants
+## Treasury sweep reconciliation invariants
 
 When pull-over-push treasury sweep is enabled, use these deterministic checks:
 
@@ -130,7 +133,7 @@ Failure interpretation:
 - If right side > left side: duplicate accounting or event ingestion bug.
 - Any mismatch across runs for same escrow is `CRITICAL` until explained.
 
-## Fiat Deposit Evidence Invariants
+## Fiat deposit evidence invariants
 
 Treasury deposit evidence source of truth:
 
@@ -155,7 +158,7 @@ Operator rules:
 - Do not mark treasury payout completion evidence as complete when `fiatDepositState` is `PENDING`, `PARTIAL`, `REVERSED`, or `FAILED`.
 - When `fiatDepositFailureReason` is non-null, attach provider event identifiers and treasury approval evidence to the incident packet.
 
-## Bank Payout Confirmation Invariants
+## Bank payout confirmation invariants
 
 Bank confirmation source of truth:
 
@@ -177,7 +180,7 @@ Operator rules:
 - `bankPayoutState="PENDING"` with treasury `payoutState="EXTERNAL_EXECUTION_CONFIRMED"` is a divergence and must be treated as missing bank evidence.
 - `bankPayoutState="REJECTED"` is always a payout exception and must be linked to the bank failure code or incident evidence.
 
-## Migration: Dual-Escrow Reconciliation
+## Migration: dual-escrow reconciliation
 
 Escrow contracts are not upgraded in place. During migration:
 
@@ -191,7 +194,7 @@ Migration is complete only when:
 - expected treasury payout events from legacy escrows are fully matched to treasury execution-evidence entries
 - no unresolved payout receiver rotation incidents remain
 
-## Retry/Redrive State Machine
+## Retry/redrive state machine
 
 Source of truth:
 
@@ -224,7 +227,7 @@ Oracle retry/redrive semantics (for settlement action remediation):
 - Terminal outcomes: `TERMINAL_FAILURE` or `EXHAUSTED_NEEDS_REDRIVE`.
 - Manual redrive and on-chain fallback flow are documented in `docs/runbooks/oracle-redrive.md`.
 
-## Staging Gate Evidence Output
+## Staging gate evidence output
 
 `scripts/runtime-gate.sh` captures both:
 
@@ -270,12 +273,11 @@ CI artifact name:
 - `INDEXER_GRAPHQL_URL is missing`: profile env not loaded.
 - Address validation errors: malformed `ESCROW_ADDRESS` or `USDC_ADDRESS`.
 
-## First 15 Minutes Checklist
+## First 15 minutes checklist
 
 - Execute `docs/incidents/first-15-minutes-checklist.md`.
 - Capture reconciliation logs and identify affected `tradeId`/`requestId` pairs.
-- Capture `correlationId`, `intent`, and `outcome` from the upstream gateway or
-  operator evidence source when the reconciliation logger does not emit them directly.
+- If the reconciliation logger omits these fields, use the upstream gateway or operator evidence source. Capture `correlationId`, `intent` and `outcome` from that source.
 - Confirm whether failure source is RPC, indexer GraphQL, or DB.
 - Start `docs/incidents/incident-evidence-template.md` for any mismatch that requires containment or operator escalation.
 - Use `docs/runbooks/operator-audit-evidence-template.md` when reconciliation output drives an operator approval or treasury follow-up.

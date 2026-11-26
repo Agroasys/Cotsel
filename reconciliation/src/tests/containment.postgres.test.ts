@@ -12,11 +12,15 @@ import {
   openContainment,
   recordCleanReconciliation,
   recordPauseObservation,
-  releaseContainment,
 } from '../database/containments';
 import { readPendingRunAlerts } from '../database/alertOutbox';
 import { applyContainment, publishFinding } from '../core/runControls';
 import { qualifyDiscrepancies } from '../core/containment';
+import { parsePublicKeys, verifyRunEvidence } from '@agroasys/shared-db/reconciliationEvidence';
+import { localPublicKeyDerBase64 } from '../core/findingSigner';
+import { RISK_RULES_VERSION } from '../core/riskRules';
+import type { TradeContainedAlertPayload } from '../types';
+import { BASE_TEST_ENV } from './helpers/reconciliationEnv';
 import {
   type AdminPool,
   BOUNDARY,
@@ -32,6 +36,7 @@ import {
   readyForRelease,
   RUNTIME_ROLE,
   scenarioRunner,
+  releaseCurrentContainment,
   stats,
   withPostgresContainer,
 } from './helpers/reconciliationPostgres';
@@ -104,14 +109,11 @@ test(
           await recordPauseObservation(pausedAt('7'), pool);
 
           // Approval alone, while the trade is still diverging, releases nothing.
-          assert.equal(
-            await releaseContainment({ tradeId: '7', evidence: approval() }, pool),
-            null,
-          );
+          assert.equal(await releaseCurrentContainment(pool, '7', approval()), null);
 
           await recordCleanReconciliation({ tradeId: '7', runKey: 'daemon-2' }, pool);
 
-          const released = await releaseContainment({ tradeId: '7', evidence: approval() }, pool);
+          const released = await releaseCurrentContainment(pool, '7', approval());
           assert.equal(released?.state, 'RELEASED');
           assert.equal(released?.approval_tx_hash, approval().txHash);
           assert.equal(released?.approval_chain_id, '84532');
@@ -128,10 +130,7 @@ test(
           await openIncident(pool, 'daemon-1');
           await recordCleanReconciliation({ tradeId: '7', runKey: 'daemon-2' }, pool);
 
-          assert.equal(
-            await releaseContainment({ tradeId: '7', evidence: approval() }, pool),
-            null,
-          );
+          assert.equal(await releaseCurrentContainment(pool, '7', approval()), null);
           assert.equal((await getContainment('7', pool))?.state, 'RECONCILED_PENDING_APPROVAL');
         });
 
@@ -151,7 +150,7 @@ test(
 
         await scenario('one governed unpause cannot release two trades', async (pool) => {
           await readyForRelease(pool);
-          await releaseContainment({ tradeId: '7', evidence: approval() }, pool);
+          await releaseCurrentContainment(pool, '7', approval());
 
           await openContainment(
             {
@@ -167,7 +166,7 @@ test(
           await recordCleanReconciliation({ tradeId: '8', runKey: 'daemon-2' }, pool);
 
           await assert.rejects(
-            releaseContainment({ tradeId: '8', evidence: approval({ tradeId: '8' }) }, pool),
+            releaseCurrentContainment(pool, '8', approval({ tradeId: '8' })),
             ReplayedApprovalError,
           );
           assert.equal((await getContainment('8', pool))?.state, 'RECONCILED_PENDING_APPROVAL');
@@ -186,10 +185,7 @@ test(
           // So is the pause observation: the previous incident's pause was
           // lifted, and this one has not been enforced on chain yet.
           assert.equal(again.row.pause_observed_at, null);
-          assert.equal(
-            await releaseContainment({ tradeId: '7', evidence: approval() }, pool),
-            null,
-          );
+          assert.equal(await releaseCurrentContainment(pool, '7', approval()), null);
         });
 
         await scenario(
@@ -198,14 +194,14 @@ test(
             // The full round trip: contained, released, diverging again, cleared
             // again — and the original approval is spent.
             await readyForRelease(pool);
-            await releaseContainment({ tradeId: '7', evidence: approval() }, pool);
+            await releaseCurrentContainment(pool, '7', approval());
 
             await openIncident(pool, 'daemon-3');
             await recordPauseObservation(pausedAt('7'), pool);
             await recordCleanReconciliation({ tradeId: '7', runKey: 'daemon-4' }, pool);
 
             await assert.rejects(
-              releaseContainment({ tradeId: '7', evidence: approval() }, pool),
+              releaseCurrentContainment(pool, '7', approval()),
               ReplayedApprovalError,
             );
           },
@@ -369,6 +365,32 @@ test(
               'TRADE_CONTAINED',
             ]);
             assert.ok((await getContainment('7', pool))?.pause_observed_at instanceof Date);
+
+            // Cotsel#951: the freeze request cites the signed findings. Every
+            // digest it carries is listed in the run's sealed manifest.
+            const contained = (await readPendingRunAlerts(50, pool)).find(
+              (row) => row.kind === 'TRADE_CONTAINED',
+            );
+            const payload = contained?.payload as unknown as TradeContainedAlertPayload;
+            assert.equal(payload.rulesVersion, RISK_RULES_VERSION);
+            assert.equal(payload.findingDigests?.length, 1);
+            const sealed = await verifyRunEvidence(
+              pool,
+              'daemon-1',
+              parsePublicKeys(
+                JSON.stringify({
+                  'reconciliation-test-key': localPublicKeyDerBase64(
+                    BASE_TEST_ENV.RECONCILIATION_FINDING_SIGNING_KEY,
+                  ),
+                }),
+              ),
+            );
+            assert.equal(sealed.ok, true);
+            if (sealed.ok) {
+              for (const digest of payload.findingDigests ?? []) {
+                assert.ok(sealed.manifest.findings.digests.includes(digest), digest);
+              }
+            }
           },
         );
 

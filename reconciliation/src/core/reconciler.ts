@@ -40,7 +40,6 @@ import { prepareEnumeration, enumerateIndexer, verifyCycleBoundary } from './enu
 import {
   publishEnumerationPage,
   priorCycleHasHoldingFindings,
-  aggregateCycleEvidence,
 } from '../database/enumerationCycles';
 
 export class ReconciliationService {
@@ -389,19 +388,14 @@ export class ReconciliationService {
               sla,
               scopedTradeIds: pendingScope,
               findings: pendingFindings,
+              finishedCycleId: cycleFinished ? discovery.cycle.id : null,
               ...containment,
             },
             client,
           );
-          if (cycleFinished) {
-            await aggregateCycleEvidence(
-              { cycleId: discovery.cycle.id, runId: row.id, runKey, stats },
-              client,
-            );
-            if (stats.coverage && coherent) {
-              stats.coverage.window = { ...window, fromTradeId: 0n };
-              stats.coverage.fromBlock = 0;
-            }
+          if (cycleFinished && stats.coverage && coherent) {
+            stats.coverage.window = { ...window, fromTradeId: 0n };
+            stats.coverage.fromBlock = 0;
           }
         },
         cursor: cursorHeld

@@ -4,6 +4,7 @@ import { Logger } from '../utils/logger';
 import { upsertDrift, upsertRunTradeScope } from '../database/queries';
 import { markAbandonedRuns } from '../database/leases';
 import { enqueueRunAlert } from '../database/alertOutbox';
+import { aggregateCycleEvidence } from '../database/enumerationCycles';
 import {
   listBlockingContainments,
   openContainment,
@@ -16,6 +17,8 @@ import {
   generateIncidentReference,
   qualifyDiscrepancies,
 } from './containment';
+import { findingDigest } from '@agroasys/shared-db/reconciliationEvidence';
+import { RISK_RULES_V1_DIGEST, RISK_RULES_VERSION } from './riskRules';
 import type { QualifiedDiscrepancy } from './containment';
 import { getErrorMessage } from './runHelpers';
 import type { EscrowGovernanceReader } from '../blockchain/escrowGovernance';
@@ -266,6 +269,11 @@ export async function applyContainment(
             openedRunKey: row.opened_run_key,
             openedAt: row.opened_at.toISOString(),
             observationCount: row.observation_count,
+            findingDigests: discrepancy.findings.map((finding) =>
+              findingDigest({ runKey: input.runKey, ...finding }),
+            ),
+            rulesVersion: RISK_RULES_VERSION,
+            rulesDigest: RISK_RULES_V1_DIGEST,
           },
         },
       },
@@ -358,6 +366,7 @@ export async function publishRunOutcome(
     sla: CoverageSlaVerdict;
     scopedTradeIds: string[];
     findings: DriftFinding[];
+    finishedCycleId: string | null;
     qualified: QualifiedDiscrepancy[];
     cleanTradeIds: ReadonlySet<string>;
     pauseObservations: ReadonlyMap<string, TradePauseObservation>;
@@ -371,6 +380,19 @@ export async function publishRunOutcome(
   for (const finding of input.findings) {
     await publishFinding(
       { runId: input.runId, runKey: input.runKey, finding, stats: input.stats },
+      client,
+    );
+  }
+
+  // Clearance must agree with the complete evidence this run will sign.
+  if (input.finishedCycleId) {
+    await aggregateCycleEvidence(
+      {
+        cycleId: input.finishedCycleId,
+        runId: input.runId,
+        runKey: input.runKey,
+        stats: input.stats,
+      },
       client,
     );
   }

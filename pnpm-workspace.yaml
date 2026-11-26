@@ -17,7 +17,6 @@ packages:
   - treasury
 
 linkWorkspacePackages: true
-pnpmfile: patches/permissionless-ox-peer.cjs
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   # Security fix GHSA-j3cq-92fq-qg5f; the Gateway dev dependency pins 8.7.2.
@@ -67,8 +66,8 @@ minimumReleaseAgeExclude:
 overrides:
   # GHSA-7mx3-vvmw-hjmv affects every earlier GraphQL Tools utils major (PR #865);
   # GHSA-c4qx-w738-7hr3 affects 10.10.1 through 12.0.1.
-  '@graphql-tools/utils@<12.0.4': 12.0.4
   '@babel/core@<=7.29.0': 7.29.6
+  '@graphql-tools/utils@<12.0.4': 12.0.4
   '@humanfs/node': 0.16.8
   '@protobufjs/utf8': 1.1.1
   adm-zip: 0.6.1
@@ -102,20 +101,20 @@ overrides:
   lodash: 4.18.1
   # GHSA-477h-4r7f-fvrx affects long-password hashing in older pbkdf2 releases.
   pbkdf2@<=3.1.6: 3.1.7
-  # body-parser 2.4.0 requires qs ^6.16.1.
-  qs: 6.16.1
   # GHSA-jqcg-44mw-7w3h affects the Express trust-proxy dependency (PR #865).
   proxy-addr@<2.0.8: 2.0.8
+  # body-parser 2.4.0 requires qs ^6.16.1.
+  qs: 6.16.1
   serialize-javascript: 7.1.3
   socket.io-parser: 4.2.7
   tmp: 0.2.7
   # GHSA-xjj6-f33q-929c and GHSA-4qv8-2p9j-2685.
   undici@<7: 6.29.1
   uuid@<11.1.1: 11.1.1
-  # GHSA-mrhx-c7xc-m3w5 (viem > abitype > zod).
-  zod@>=4 <4.6.6: 4.6.6
   ws@>=7 <7.5.11: 7.5.11
   ws@>=8 <8.20.1: 8.21.0
+  # GHSA-mrhx-c7xc-m3w5 (viem > abitype > zod).
+  zod@>=4 <4.6.6: 4.6.6
 
 patchedDependencies:
   '@subsquid/typeorm-store@1.9.2': patches/@subsquid__typeorm-store@1.9.2.patch
@@ -127,11 +126,11 @@ patchedDependencies:
   # Backport GHSA-3g3m-2fjr-6pw4 to the locked glob majors.
   glob@10.5.0: patches/glob@10.5.0.patch
   glob@13.0.6: patches/glob@13.0.6.patch
-  # Backport upstream642137b for GHSA-6jcc-5g8w-32mx without changing the SDK's supported i18next major.
   i18next@25.8.12: patches/i18next@25.8.12.patch
-  # Backport GHSA-g3hv-75wg-m249 to minimatch versions with preprocessing.
-  minimatch@9.0.9: patches/minimatch@9.0.9.patch
   minimatch@10.2.5: patches/minimatch@10.2.5.patch
   minimatch@10.2.6: patches/minimatch@10.2.6.patch
+  # Backport GHSA-g3hv-75wg-m249 to minimatch versions with preprocessing.
+  minimatch@9.0.9: patches/minimatch@9.0.9.patch
   stream-json@1.9.1: patches/stream-json@1.9.1.patch
+pnpmfile: patches/permissionless-ox-peer.cjs
 preferWorkspacePackages: true

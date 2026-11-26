@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { reportEvidence } from './core/reportEvidence';
 import { createServicePool, parsePostgresSslMode } from '@agroasys/shared-db';
 import { Pool } from 'pg';
 import { projectTreasuryAccountingState } from '@agroasys/sdk';
@@ -478,7 +479,8 @@ async function main(): Promise<void> {
     }
 
     const report = buildReconciliationReport(resolvedRunKey, rows);
-    writeReport(args.outPath, report, args.pretty);
+    const evidence = await reportEvidence(reconciliationPool, resolvedRunKey);
+    writeReport(args.outPath, { ...report, evidence }, args.pretty);
   } finally {
     await reconciliationPool.end();
     if (treasuryPool) {

@@ -8,6 +8,8 @@ import { runVersionedMigrations } from '@agroasys/shared-db/migrate';
 import { claimRun } from '../../database/leases';
 import {
   openContainment,
+  releaseContainment,
+  getContainment,
   recordCleanReconciliation,
   recordPauseObservation,
 } from '../../database/containments';
@@ -218,4 +220,16 @@ export async function readyForRelease(pool: Pool): Promise<void> {
   await openIncident(pool, 'daemon-1');
   await recordPauseObservation(pausedAt('7'), pool);
   await recordCleanReconciliation({ tradeId: '7', runKey: 'daemon-2' }, pool);
+}
+
+/** Release using the state this caller has just read; race tests pass an older snapshot explicitly. */
+export async function releaseCurrentContainment(
+  pool: Pool,
+  tradeId: string,
+  evidence: GovernedUnpauseEvidence,
+) {
+  return releaseContainment(
+    { tradeId, evidence, expected: await getContainment(tradeId, pool) },
+    pool,
+  );
 }

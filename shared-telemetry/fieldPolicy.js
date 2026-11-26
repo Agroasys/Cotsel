@@ -274,6 +274,9 @@ const INTERNAL_FIELDS = [
   'alertId',
   'dedupKey',
   'incidentReference',
+  // Cotsel#951: the signed findings and risk rules a containment cites.
+  'findingDigests',
+  'rulesDigest',
   'ledgerEntryId',
   'entryKey',
   'resourceId',

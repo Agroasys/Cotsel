@@ -250,6 +250,10 @@ export interface TradeContainmentRow {
   state: ContainmentState;
   opened_run_key: string;
   opened_at: Date;
+  /** Every finding the current incident cites, with the signed run it came from. */
+  cited_findings: Array<{ runKey: string; digest: string }>;
+  /** Incident number for this trade; a divergence after release starts the next. */
+  episode: number;
   qualifying_codes: string[];
   evidence: Record<string, unknown>;
   observation_count: number;
@@ -331,6 +335,14 @@ export interface TradeContainedAlertPayload {
   openedRunKey: string;
   openedAt: string;
   observationCount: number;
+  /**
+   * Digests of the findings that opened or re-observed the containment, each
+   * listed in the run's signed manifest, and the risk rules applied (Cotsel#951).
+   * Absent on alerts queued before signing shipped.
+   */
+  findingDigests?: string[];
+  rulesVersion?: string;
+  rulesDigest?: string;
 }
 
 export interface TradePauseUnconfirmedAlertPayload {

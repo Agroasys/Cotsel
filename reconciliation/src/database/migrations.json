@@ -57,6 +57,27 @@
       "file": "008_notification_outbox_envelope.sql",
       "sha256": "2b937d5e1bb23a168add2b70b836a189650c8c93c33367bed20be9186dcc233b",
       "schema_sha256": "345285d919e43a97d394f593c097fdc6f71b93911858173ded89449b11691f24"
+    },
+    {
+      "version": "202611230002",
+      "name": "run_manifests",
+      "file": "009_run_manifests.sql",
+      "sha256": "e66ddd42e18abf00c6daac5f6bb70b21f45b16dcf6f1f3726025cc5050a30377",
+      "schema_sha256": "873dcbcbd9c3fedf482abc8ecc85f5cba132e1789c0773fab094333e9047de08"
+    },
+    {
+      "version": "202611240003",
+      "name": "containment_lineage",
+      "file": "010_containment_lineage.sql",
+      "sha256": "6bc6b5c1fec8aab8209648c3eccb0b5a4f0735df7507be2bb25b1e95fa1b2c24",
+      "schema_sha256": "1735a466988c30ea545cae6b74cfe5509fdcc49efdbef44bb41a7e534b9c91e5"
+    },
+    {
+      "version": "202611240004",
+      "name": "governance_freeze_requests",
+      "file": "011_governance_freeze_requests.sql",
+      "sha256": "4acfc6252cd29262b5a9cfa8041299ac772bbaeefae83e5d340f538c73e370c4",
+      "schema_sha256": "8ec598c9397a90facd7518a7f8f8a0fe91b082dd4a094d4da870ec1ee7f8b183"
     }
   ]
 }

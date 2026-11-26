@@ -6,6 +6,11 @@ import {
   requireReconciliationSnapshotProtocol,
   type SnapshotRunSelection,
 } from './reconciliationSnapshot';
+import {
+  configuredRunVerifier,
+  evidenceFailure,
+  type RunEvidenceVerifier,
+} from './reconciliationEvidenceGate';
 
 export interface TradeReconciliationGate {
   tradeId: string;
@@ -96,13 +101,17 @@ export class ReconciliationGateService {
   private readonly now: () => Date;
   private readonly maxAgeSeconds: number;
   private readonly maxRunningRunAgeSeconds: number;
+  private readonly verifyRun: RunEvidenceVerifier;
 
   constructor(deps?: {
     pool?: PoolLike | null;
     now?: () => Date;
     maxAgeSeconds?: number;
     maxRunningRunAgeSeconds?: number;
+    /** Defaults to verifying against config.reconciliationFindingPublicKeys. */
+    verifyRun?: RunEvidenceVerifier;
   }) {
+    this.verifyRun = deps?.verifyRun ?? configuredRunVerifier();
     this.ownsPool = deps?.pool === undefined && config.reconciliationDb !== null;
     this.pool =
       deps?.pool !== undefined
@@ -198,6 +207,8 @@ export class ReconciliationGateService {
     ) {
       throw new Error('Reconciliation evidence is unavailable or incomplete');
     }
+    const evidenceReason = evidenceFailure(row.run_key, await this.verifyRun(reader, row.run_key));
+    if (evidenceReason) throw new Error(evidenceReason);
     return {
       runKey: row.run_key,
       completedAt: row.completed_at,
@@ -323,6 +334,8 @@ export class ReconciliationGateService {
           ? 'Latest completed reconciliation run published an incomplete chain range'
           : 'Latest completed reconciliation run did not publish a chain coverage watermark';
 
+    // Verified in the same consistent read as the scope and drift rows below.
+    const evidenceReason = evidenceFailure(runKey, await this.verifyRun(reader, runKey));
     const [scopedTrades, driftCounts] = await Promise.all([
       reader.query<ScopedTradeRow>(
         `SELECT trade_id
@@ -358,6 +371,9 @@ export class ReconciliationGateService {
       }
       if (coverageReason) {
         blockedReasons.push(coverageReason);
+      }
+      if (evidenceReason) {
+        blockedReasons.push(evidenceReason);
       }
 
       if (blockedReasons.length > 0) {

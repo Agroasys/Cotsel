@@ -11,6 +11,10 @@
  * Postgres test overrides the DB values and passes its own pool explicitly.
  */
 export const BASE_TEST_ENV: Record<string, string> = {
+  // Test-only P-256 key that seals runs in tests (Cotsel#951). Never used elsewhere.
+  RECONCILIATION_FINDING_SIGNER: 'local:reconciliation-test-key',
+  RECONCILIATION_FINDING_SIGNING_KEY:
+    'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQglzDJvJOtR+6q7JAUrwaTYUSAsxJqmipQpBBxsXQEzRqhRANCAAQkVFd/VsSvDON2oUvd/fReM0rV260jeHClu+f+rL+jTeXxKs3R9AaXsZ58LsIo5ZqVeL9enQ4S9Mq3oEbb4FiS',
   RECONCILIATION_ENABLED: 'true',
   RECONCILIATION_DAEMON_INTERVAL_MS: '60000',
   RECONCILIATION_BATCH_SIZE: '100',

@@ -81,6 +81,11 @@ export class RunAlerts {
         openedRunKey: payload.openedRunKey,
         openedAt: payload.openedAt,
         observationCount: payload.observationCount,
+        // Each digest is in the run's signed manifest: the freeze request cites
+        // verifiable evidence, and the escalation still needs an admin to act.
+        findingDigests: payload.findingDigests?.join(',') ?? null,
+        rulesVersion: payload.rulesVersion ?? null,
+        rulesDigest: payload.rulesDigest ?? null,
       },
     });
   }

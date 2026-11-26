@@ -1,9 +1,23 @@
 import type { Pool, PoolClient } from 'pg';
 import { pool } from './connection';
 import type { GovernedUnpauseEvidence, TradeContainmentRow, TradePauseObservation } from '../types';
+import { QUALIFYING_DISCREPANCY_CODES } from '../core/containment';
 
 /** Postgres unique-violation, raised when an approval receipt is replayed. */
 const UNIQUE_VIOLATION = '23505';
+// Legacy timestamp columns store UTC without a zone. Read them as instants.
+const CONTAINMENT_DATES = [
+  'opened_at',
+  'last_observed_at',
+  'pause_observed_at',
+  'pause_last_checked_at',
+  'cleared_at',
+  'approved_at',
+  'released_at',
+  'updated_at',
+]
+  .map((column) => `${column} AT TIME ZONE 'UTC' AS ${column}`)
+  .join(', ');
 
 export class ReplayedApprovalError extends Error {
   constructor(readonly txHash: string) {
@@ -17,14 +31,34 @@ export class ReplayedApprovalError extends Error {
 /** Either the pool or a client bound to an open transaction. */
 type Executor = Pool | PoolClient;
 
+/** One cited finding: its digest and the signed run it was found in. */
+export interface CitedFinding {
+  runKey: string;
+  digest: string;
+}
+
+function citedFindingsOf(runKey: string, evidence: Record<string, unknown>): CitedFinding[] {
+  const findings = Array.isArray(evidence.findings) ? evidence.findings : [];
+  return findings
+    .map((finding) => (finding as { digest?: unknown }).digest)
+    .filter((digest): digest is string => typeof digest === 'string')
+    .map((digest) => ({ runKey, digest }));
+}
+
 /**
  * Open a containment for a trade, or fold a repeat sighting into the standing
  * one.
  *
- * The incident reference and `opened_at` are never overwritten: an operator
- * quoting a reference must keep reaching the same incident. A trade that had
- * reconciled clean and is now diverging again regresses to `CONTAINED`, because
- * the evidence that justified releasing it no longer holds.
+ * While an incident is open, its reference, `opened_at` and opening run never
+ * change, and every sighting appends its findings to `cited_findings` with the
+ * run they came from (review R03). Nothing is replaced, so every cited digest
+ * stays verifiable against its own signed run. A trade that had reconciled
+ * clean and is now diverging again regresses to `CONTAINED`, because the
+ * evidence that justified releasing it no longer holds.
+ *
+ * A trade that was RELEASED and diverges again opens a *new* incident: a new
+ * reference, opening run, lineage and episode. Nothing approved for the
+ * earlier incident can match it.
  */
 export async function openContainment(
   input: {
@@ -36,32 +70,14 @@ export async function openContainment(
   },
   executor: Executor = pool,
 ): Promise<{ row: TradeContainmentRow; opened: boolean }> {
-  const result = await executor.query<TradeContainmentRow & { was_opened: boolean }>(
-    `INSERT INTO reconcile_trade_containments (
-        trade_id, incident_reference, state, opened_run_key,
-        qualifying_codes, evidence, observation_count,
-        last_observed_run_key, last_observed_at
-     ) VALUES ($1, $2, 'CONTAINED', $3, $4::text[], $5::jsonb, 1, $3, NOW())
-     ON CONFLICT (trade_id) DO UPDATE SET
-        state = 'CONTAINED',
-        qualifying_codes = (
-          SELECT ARRAY(
-            SELECT DISTINCT unnest(
-              reconcile_trade_containments.qualifying_codes || EXCLUDED.qualifying_codes
-            ) ORDER BY 1
-          )
-        ),
-        evidence = EXCLUDED.evidence,
-        observation_count = reconcile_trade_containments.observation_count + 1,
-        last_observed_run_key = EXCLUDED.last_observed_run_key,
-        last_observed_at = NOW(),
-        -- A fresh divergence invalidates any pending clearance.
-        cleared_run_key = NULL,
-        cleared_at = NULL,
-        -- It also invalidates the recovery evidence of the previous incident.
-        -- A governed unpause lifted the pause it was granted for; this trade is
-        -- diverging again, so it is neither paused nor approved any more, and
-        -- the receipt that released it cannot release it a second time.
+  const cited = JSON.stringify(citedFindingsOf(input.runKey, input.evidence));
+  // Lock the standing row (if any) so a concurrent writer cannot interleave.
+  const prior = await executor.query<{ state: string }>(
+    'SELECT state FROM reconcile_trade_containments WHERE trade_id = $1 FOR UPDATE',
+    [input.tradeId],
+  );
+  const priorState = prior.rows[0]?.state ?? null;
+  const reset = `
         pause_observed_at = NULL,
         pause_observed_block = NULL,
         approval_tx_hash = NULL,
@@ -76,19 +92,79 @@ export async function openContainment(
         approval_required = NULL,
         approved_at = NULL,
         released_at = NULL,
-        updated_at = NOW()
-     RETURNING *, (xmax = 0) AS was_opened`,
-    [
-      input.tradeId,
-      input.incidentReference,
-      input.runKey,
-      input.qualifyingCodes,
-      JSON.stringify(input.evidence),
-    ],
-  );
+        cleared_run_key = NULL,
+        cleared_at = NULL,
+        updated_at = (NOW() AT TIME ZONE 'UTC')`;
 
-  const row = result.rows[0];
-  return { row, opened: row.was_opened };
+  let result;
+  if (priorState === null) {
+    result = await executor.query<TradeContainmentRow>(
+      `INSERT INTO reconcile_trade_containments (
+          trade_id, incident_reference, state, opened_run_key,
+          qualifying_codes, evidence, observation_count,
+          last_observed_run_key, last_observed_at, cited_findings, opened_at, updated_at
+       ) VALUES ($1, $2, 'CONTAINED', $3, $4::text[], $5::jsonb, 1, $3, (NOW() AT TIME ZONE 'UTC'), $6::jsonb, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
+       RETURNING *, ${CONTAINMENT_DATES}`,
+      [
+        input.tradeId,
+        input.incidentReference,
+        input.runKey,
+        input.qualifyingCodes,
+        JSON.stringify(input.evidence),
+        cited,
+      ],
+    );
+  } else if (priorState === 'RELEASED') {
+    // A new incident. The previous one's recovery evidence is spent with it.
+    result = await executor.query<TradeContainmentRow>(
+      `UPDATE reconcile_trade_containments SET
+          state = 'CONTAINED',
+          incident_reference = $2,
+          opened_run_key = $3,
+          opened_at = (NOW() AT TIME ZONE 'UTC'),
+          qualifying_codes = $4::text[],
+          evidence = $5::jsonb,
+          observation_count = 1,
+          last_observed_run_key = $3,
+          last_observed_at = (NOW() AT TIME ZONE 'UTC'),
+          cited_findings = $6::jsonb,
+          episode = episode + 1,
+          ${reset}
+       WHERE trade_id = $1
+       RETURNING *, ${CONTAINMENT_DATES}`,
+      [
+        input.tradeId,
+        input.incidentReference,
+        input.runKey,
+        input.qualifyingCodes,
+        JSON.stringify(input.evidence),
+        cited,
+      ],
+    );
+  } else {
+    // The standing incident sees it again: append, never replace.
+    result = await executor.query<TradeContainmentRow>(
+      `UPDATE reconcile_trade_containments SET
+          state = 'CONTAINED',
+          qualifying_codes = (
+            SELECT ARRAY(SELECT DISTINCT unnest(qualifying_codes || $3::text[]) ORDER BY 1)
+          ),
+          evidence = $4::jsonb,
+          observation_count = observation_count + 1,
+          last_observed_run_key = $2,
+          last_observed_at = (NOW() AT TIME ZONE 'UTC'),
+          cited_findings = cited_findings || (
+            SELECT COALESCE(jsonb_agg(entry), '[]'::jsonb)
+            FROM jsonb_array_elements($5::jsonb) AS entry
+            WHERE NOT cited_findings @> jsonb_build_array(entry)
+          ),
+          ${reset}
+       WHERE trade_id = $1
+       RETURNING *, ${CONTAINMENT_DATES}`,
+      [input.tradeId, input.runKey, input.qualifyingCodes, JSON.stringify(input.evidence), cited],
+    );
+  }
+  return { row: result.rows[0], opened: priorState === null || priorState === 'RELEASED' };
 }
 
 /**
@@ -96,9 +172,10 @@ export async function openContainment(
  *
  * This moves the incident to `RECONCILED_PENDING_APPROVAL` — evidence that the
  * divergence is gone, which is necessary but not sufficient: the trade stays
- * blocked until a governed approval is recorded. The `opened_run_key` guard
- * makes "fresh" literal, so the run that opened an incident can never be the
- * run that clears it.
+ * blocked until a governed approval is recorded. The caller supplies a direct
+ * clean comparison after it persists all findings the run will sign. A copied
+ * qualifying finding still prevents clearance. A later eligible run can replace
+ * a previously contradicted clearance while its signed evidence stays intact.
  */
 export async function recordCleanReconciliation(
   input: {
@@ -108,18 +185,30 @@ export async function recordCleanReconciliation(
   executor: Executor = pool,
 ): Promise<TradeContainmentRow | null> {
   const result = await executor.query<TradeContainmentRow>(
-    `UPDATE reconcile_trade_containments
+    `UPDATE reconcile_trade_containments AS c
      SET state = 'RECONCILED_PENDING_APPROVAL',
          cleared_run_key = $2,
-         cleared_at = NOW(),
+         cleared_at = (NOW() AT TIME ZONE 'UTC'),
          last_observed_run_key = $2,
-         last_observed_at = NOW(),
-         updated_at = NOW()
-     WHERE trade_id = $1
-       AND state = 'CONTAINED'
-       AND opened_run_key <> $2
-     RETURNING *`,
-    [input.tradeId, input.runKey],
+         last_observed_at = (NOW() AT TIME ZONE 'UTC'),
+         updated_at = (NOW() AT TIME ZONE 'UTC')
+     WHERE c.trade_id = $1
+       AND c.opened_run_key <> $2
+       AND c.last_observed_run_key IS DISTINCT FROM $2
+       AND NOT EXISTS (
+         SELECT 1 FROM reconcile_drifts d
+         WHERE d.run_key = $2 AND d.trade_id = c.trade_id AND d.mismatch_code = ANY($3::text[])
+       )
+       AND (
+         c.state = 'CONTAINED'
+         OR (c.state = 'RECONCILED_PENDING_APPROVAL' AND EXISTS (
+           SELECT 1 FROM reconcile_drifts d
+           WHERE d.run_key = c.cleared_run_key AND d.trade_id = c.trade_id
+             AND d.mismatch_code = ANY($3::text[])
+         ))
+       )
+     RETURNING *, ${CONTAINMENT_DATES}`,
+    [input.tradeId, input.runKey, [...QUALIFYING_DISCREPANCY_CODES]],
   );
 
   return result.rows[0] ?? null;
@@ -140,10 +229,10 @@ export async function recordPauseObservation(
 ): Promise<void> {
   await executor.query(
     `UPDATE reconcile_trade_containments
-     SET pause_last_checked_at = NOW(),
-         pause_observed_at = CASE WHEN $2 THEN NOW() ELSE pause_observed_at END,
+     SET pause_last_checked_at = (NOW() AT TIME ZONE 'UTC'),
+         pause_observed_at = CASE WHEN $2 THEN (NOW() AT TIME ZONE 'UTC') ELSE pause_observed_at END,
          pause_observed_block = CASE WHEN $2 THEN $3::bigint ELSE pause_observed_block END,
-         updated_at = NOW()
+         updated_at = (NOW() AT TIME ZONE 'UTC')
      WHERE trade_id = $1
        AND state <> 'RELEASED'`,
     [observation.tradeId, observation.paused, observation.blockNumber],
@@ -172,10 +261,15 @@ export async function releaseContainment(
   input: {
     tradeId: string;
     evidence: GovernedUnpauseEvidence;
+    expected: Pick<
+      TradeContainmentRow,
+      'incident_reference' | 'episode' | 'cleared_run_key'
+    > | null;
   },
   executor: Executor = pool,
 ): Promise<TradeContainmentRow | null> {
   const { evidence } = input;
+  if (!input.expected) return null;
 
   try {
     const result = await executor.query<TradeContainmentRow>(
@@ -185,6 +279,8 @@ export async function releaseContainment(
          WHERE trade_id = $1
            AND state = 'RECONCILED_PENDING_APPROVAL'
            AND pause_observed_at IS NOT NULL
+           AND incident_reference = $13 AND episode = $14 AND cleared_run_key = $15
+         FOR UPDATE
        ), spent AS (
          INSERT INTO reconcile_spent_unpause_approvals (
             tx_hash, trade_id, incident_reference, chain_id, block_number, log_index
@@ -205,11 +301,11 @@ export async function releaseContainment(
            approval_approvers = $9::text[],
            approval_count = $10,
            approval_required = $11,
-           approved_at = $12,
-           released_at = NOW(),
-           updated_at = NOW()
+           approved_at = $12::timestamptz AT TIME ZONE 'UTC',
+           released_at = (NOW() AT TIME ZONE 'UTC'),
+           updated_at = (NOW() AT TIME ZONE 'UTC')
        WHERE trade_id = (SELECT trade_id FROM spent)
-       RETURNING *`,
+       RETURNING *, ${CONTAINMENT_DATES}`,
       [
         input.tradeId,
         evidence.txHash,
@@ -223,6 +319,9 @@ export async function releaseContainment(
         evidence.approvalCount,
         evidence.requiredApprovals,
         evidence.executedAt,
+        input.expected.incident_reference,
+        input.expected.episode,
+        input.expected.cleared_run_key,
       ],
     );
 
@@ -252,7 +351,7 @@ export async function isTradeContained(
   executor: Executor = pool,
 ): Promise<TradeContainmentRow | null> {
   const result = await executor.query<TradeContainmentRow>(
-    `SELECT * FROM reconcile_trade_containments
+    `SELECT *, ${CONTAINMENT_DATES} FROM reconcile_trade_containments
      WHERE trade_id = $1 AND state <> 'RELEASED'`,
     [tradeId],
   );
@@ -270,9 +369,9 @@ export async function listBlockingContainments(
   executor: Executor = pool,
 ): Promise<TradeContainmentRow[]> {
   const result = await executor.query<TradeContainmentRow>(
-    `SELECT * FROM reconcile_trade_containments
+    `SELECT *, ${CONTAINMENT_DATES} FROM reconcile_trade_containments
      WHERE state <> 'RELEASED'
-     ORDER BY opened_at ASC`,
+     ORDER BY reconcile_trade_containments.opened_at ASC`,
   );
 
   return result.rows;
@@ -283,7 +382,7 @@ export async function getContainment(
   executor: Executor = pool,
 ): Promise<TradeContainmentRow | null> {
   const result = await executor.query<TradeContainmentRow>(
-    'SELECT * FROM reconcile_trade_containments WHERE trade_id = $1',
+    `SELECT *, ${CONTAINMENT_DATES} FROM reconcile_trade_containments WHERE trade_id = $1`,
     [tradeId],
   );
 

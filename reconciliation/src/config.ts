@@ -57,6 +57,39 @@ export interface ReconciliationConfig {
   notificationsEscalationWebhookUrl?: string;
   notificationsCooldownMs: number;
   notificationsRequestTimeoutMs: number;
+  /**
+   * The key that seals each completed run's findings (Cotsel#951). Null when
+   * unset: the daemon then refuses to start, so findings are never published
+   * unsigned. Only the local profile may sign with a key held in the
+   * environment; staging and production sign through KMS.
+   */
+  findingSigner: FindingSignerConfig | null;
+  findingSignTimeoutMs: number;
+}
+
+export type FindingSignerConfig =
+  { mode: 'kms'; keyId: string } | { mode: 'local'; keyId: string; privateKeyDerBase64: string };
+
+/**
+ * RECONCILIATION_FINDING_SIGNER is `kms:<key id or ARN>` or `local:<label>`; the
+ * part after the first colon is the key id recorded in every manifest.
+ */
+function findingSignerConfig(profile: string): FindingSignerConfig | null {
+  const spec = optionalEnv('RECONCILIATION_FINDING_SIGNER');
+  if (!spec) return null;
+  const separator = spec.indexOf(':');
+  const mode = separator > 0 ? spec.slice(0, separator) : spec;
+  const keyId = separator > 0 ? spec.slice(separator + 1) : '';
+  assert(
+    (mode === 'kms' || mode === 'local') && keyId.length > 0 && keyId.length <= 2048,
+    'RECONCILIATION_FINDING_SIGNER must be kms:<key id> or local:<label>',
+  );
+  if (mode === 'kms') return { mode, keyId };
+  assert(
+    profile === 'local',
+    'RECONCILIATION_FINDING_SIGNER=local is refused outside COTSEL_ENVIRONMENT=local; use kms',
+  );
+  return { mode, keyId, privateKeyDerBase64: env('RECONCILIATION_FINDING_SIGNING_KEY') };
 }
 
 function env(name: string): string {
@@ -155,7 +188,7 @@ function coverageBoundaryPreference(): CoverageBoundaryPreference {
 }
 
 export function loadConfig(): ReconciliationConfig {
-  deploymentProfile(process.env.NODE_ENV || 'development');
+  const profile = deploymentProfile(process.env.NODE_ENV || 'development');
   const notificationsEnabled = envBool('NOTIFICATIONS_ENABLED', false);
   const notificationsWebhookUrl = process.env.NOTIFICATIONS_WEBHOOK_URL;
 
@@ -231,6 +264,8 @@ export function loadConfig(): ReconciliationConfig {
     notificationsEscalationWebhookUrl: optionalEnv('NOTIFICATIONS_ESCALATION_WEBHOOK_URL'),
     notificationsCooldownMs: envNumber('NOTIFICATIONS_COOLDOWN_MS', 300000),
     notificationsRequestTimeoutMs: envNumber('NOTIFICATIONS_REQUEST_TIMEOUT_MS', 5000),
+    findingSigner: findingSignerConfig(profile),
+    findingSignTimeoutMs: envNumber('RECONCILIATION_FINDING_SIGN_TIMEOUT_MS', 5000),
   };
 
   assert(config.daemonIntervalMs >= 1000, 'RECONCILIATION_DAEMON_INTERVAL_MS must be >= 1000');
@@ -262,6 +297,11 @@ export function loadConfig(): ReconciliationConfig {
   assert(
     config.notificationsRequestTimeoutMs >= 1000,
     'NOTIFICATIONS_REQUEST_TIMEOUT_MS must be >= 1000',
+  );
+  // One signature per run, under the run's lease: bounded well inside the TTL.
+  assert(
+    config.findingSignTimeoutMs >= 500 && config.findingSignTimeoutMs * 4 <= config.leaseTtlMs,
+    'RECONCILIATION_FINDING_SIGN_TIMEOUT_MS must be >= 500 and at most a quarter of RECONCILIATION_LEASE_TTL_MS',
   );
   return config;
 }

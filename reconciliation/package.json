@@ -22,14 +22,15 @@
     "healthcheck": "node dist/healthcheck.js"
   },
   "dependencies": {
-    "@agroasys/shared-db": "^1.0.0",
-    "@agroasys/sdk": "workspace:*",
-    "ethers": "^6.17.0",
-    "dotenv": "^18.0.10",
-    "pg": "^8.23.1",
     "@agroasys/notifications": "^1.0.0",
+    "@agroasys/sdk": "workspace:*",
+    "@agroasys/shared-db": "^1.0.0",
+    "@agroasys/shared-edge": "workspace:*",
     "@agroasys/shared-telemetry": "workspace:*",
-    "@agroasys/shared-edge": "workspace:*"
+    "@aws-sdk/client-kms": "3.1167.0",
+    "dotenv": "^18.0.10",
+    "ethers": "^6.17.0",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
