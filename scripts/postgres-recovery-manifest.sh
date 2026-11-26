@@ -25,23 +25,42 @@ set -eu
 export PGHOST="${COTSEL_POSTGRES_HOST}"
 export PGPORT="${COTSEL_POSTGRES_PORT:-5432}"
 export PGSSLMODE='verify-full'
-export PGSSLROOTCERT='/tmp/aws-rds-global-bundle.pem'
 
 umask 077
-manifest_files=''
+work_directory="$(mktemp -d "${TMPDIR:-/tmp}/cotsel-recovery.XXXXXXXXXX")"
+export PGSSLROOTCERT="${work_directory}/aws-rds-global-bundle.pem"
+stream_complete_file="${work_directory}/stream-complete"
 cleanup() {
-  for manifest_file in ${manifest_files}; do
-    rm -f "${manifest_file}"
-  done
-  rm -f "${PGSSLROOTCERT}"
+  rm -rf "${work_directory}"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
 
 wget --quiet -O "${PGSSLROOTCERT}" 'https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem'
-printf '%s  %s\n' '90a6f1a7978a1b1b096dca6c57511ca48d3b8cf052f8e704baf358f34ea2f21b' "${PGSSLROOTCERT}" | sha256sum -c -s
+sha256sum -c -s <<EOF
+90a6f1a7978a1b1b096dca6c57511ca48d3b8cf052f8e704baf358f34ea2f21b  ${PGSSLROOTCERT}
+EOF
+
+run_verifier_check() {
+  check_name="${1}"
+  shift
+  # Client diagnostics can contain credentials, connection details, or row values.
+  if ! "$@" 2>/dev/null; then
+    printf 'Database recovery verification failed for service %s during %s.\n' "${service_name}" "${check_name}" >&2
+    return 1
+  fi
+}
 
 sha256_stream() {
-  sha256sum | awk '{print $1}'
+  # POSIX sh returns the final command's status for a pipeline. Record producer
+  # success separately while piping its output directly into sha256sum.
+  rm -f "${stream_complete_file}" || return 1
+  checksum="$(
+    (run_verifier_check "$@" && : >"${stream_complete_file}") \
+      | run_verifier_check 'SHA-256 calculation' sha256sum
+  )" || return 1
+  [ -f "${stream_complete_file}" ] || return 1
+  printf '%s\n' "${checksum%% *}"
 }
 
 collect_database() {
@@ -49,31 +68,29 @@ collect_database() {
   database_name="${2}"
   runtime_username="${3}"
   runtime_password="${4}"
-  manifest_file="/tmp/cotsel-recovery-${service_name}-$$.manifest"
-  table_list_file="/tmp/cotsel-recovery-${service_name}-$$.tables"
-  sequence_list_file="/tmp/cotsel-recovery-${service_name}-$$.sequences"
-  manifest_files="${manifest_files} ${manifest_file} ${table_list_file} ${sequence_list_file}"
+  manifest_file="${work_directory}/${service_name}.manifest"
+  table_list_file="${work_directory}/${service_name}.tables"
+  sequence_list_file="${work_directory}/${service_name}.sequences"
 
   export PGUSER="${runtime_username}"
   export PGPASSWORD="${runtime_password}"
-  export PGOPTIONS="-c app.service_name=${service_name} -c app.connection_role=runtime -c app.runtime_db_user=${runtime_username}"
+  export PGOPTIONS="-c default_transaction_read_only=on -c app.service_name=${service_name} -c app.connection_role=runtime -c app.runtime_db_user=${runtime_username}"
 
-  server_version="$(psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align -c "SELECT current_setting('server_version_num')")"
+  server_version="$(run_verifier_check 'server version query' psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align -c "SELECT current_setting('server_version_num')")"
 
   schema_sha256="$(
-    pg_dump \
+    sha256_stream 'schema fingerprint' pg_dump \
       --dbname "${database_name}" \
+      --schema=public --schema=squid_processor \
       --schema-only \
       --no-owner \
       --no-privileges \
       --no-comments \
-      --restrict-key='cotselrecovery' \
-      | sha256_stream
+      --restrict-key='cotselrecovery'
   )"
 
   access_sha256="$(
-    psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator '|' <<'SQL' \
-      | sha256_stream
+    sha256_stream 'access fingerprint' psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator '|' <<'SQL'
 SELECT record_type, object_name, detail
 FROM (
   SELECT
@@ -132,7 +149,7 @@ ORDER BY record_type, object_name, detail;
 SQL
   )"
 
-  psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator '|' <<'SQL' >"${table_list_file}"
+  run_verifier_check 'table catalog query' psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator '|' <<'SQL' >"${table_list_file}"
 SELECT
   namespace_row.nspname,
   class_row.relname,
@@ -152,11 +169,10 @@ SQL
   while IFS='|' read -r schema_name table_name quoted_schema quoted_table; do
     [ -n "${schema_name}" ] || continue
     qualified_table="${quoted_schema}.${quoted_table}"
-    row_count="$(psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align -c "SELECT count(*) FROM ${qualified_table}")"
+    row_count="$(run_verifier_check 'row count query' psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align -c "SELECT count(*) FROM ${qualified_table}")"
     data_sha256="$(
-      psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet -c \
-        "COPY (SELECT row_json FROM (SELECT row_to_json(cotsel_row)::text AS row_json FROM ${qualified_table} AS cotsel_row) AS serialized_rows ORDER BY row_json) TO STDOUT" \
-        | sha256_stream
+      sha256_stream 'table data fingerprint' psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet -c \
+        "COPY (SELECT row_json FROM (SELECT row_to_json(cotsel_row)::text AS row_json FROM ${qualified_table} AS cotsel_row) AS serialized_rows ORDER BY row_json) TO STDOUT"
     )"
 
     table_count=$((table_count + 1))
@@ -170,7 +186,7 @@ SQL
     printf '%s\n' "${record}" >>"${manifest_file}"
   done <"${table_list_file}"
 
-  psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator '|' <<'SQL' >"${sequence_list_file}"
+  run_verifier_check 'sequence catalog query' psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator '|' <<'SQL' >"${sequence_list_file}"
 SELECT
   namespace_row.nspname,
   class_row.relname,
@@ -188,9 +204,8 @@ SQL
     [ -n "${schema_name}" ] || continue
     qualified_sequence="${quoted_schema}.${quoted_sequence}"
     state_sha256="$(
-      psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator '|' \
-        -c "SELECT last_value, is_called FROM ${qualified_sequence}" \
-        | sha256_stream
+      sha256_stream 'sequence state fingerprint' psql --dbname "${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator '|' \
+        -c "SELECT last_value, is_called FROM ${qualified_sequence}"
     )"
     sequence_count=$((sequence_count + 1))
     record="DATABASE_RECOVERY_SEQUENCE service=${service_name} database=${database_name} schema=${schema_name} sequence=${sequence_name} state_sha256=${state_sha256}"
@@ -198,7 +213,7 @@ SQL
     printf '%s\n' "${record}" >>"${manifest_file}"
   done <"${sequence_list_file}"
 
-  database_data_sha256="$(LC_ALL=C sort "${manifest_file}" | sha256_stream)"
+  database_data_sha256="$(LC_ALL=C sha256_stream 'manifest sort' sort "${manifest_file}")"
   printf '%s\n' \
     "DATABASE_RECOVERY_SUMMARY service=${service_name} database=${database_name} server_version=${server_version} tables=${table_count} sequences=${sequence_count} exact_rows=${exact_rows} migration_tables=${migration_table_count} schema_sha256=${schema_sha256} access_sha256=${access_sha256} data_sha256=${database_data_sha256}"
 }

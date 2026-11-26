@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { chmod, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -112,24 +112,66 @@ test('manifest parser requires the canonical migration ledger name', () => {
   );
 });
 
-test('manifest collection emits redacted exact-count evidence for all seven databases', async () => {
+const fixturePassword = 'fixture-password-must-not-appear';
+const fixtureRowValue = 'fixture-row-must-not-appear';
+const fixtureRow = JSON.stringify({ private: fixtureRowValue });
+const fixtureError = 'fixture-database-error-must-not-appear';
+const fixtureSchema = 'CREATE TABLE public.fixture (id bigint);';
+
+async function manifestCollectionFixture(t) {
   const mockDirectory = await mkdtemp(path.join(tmpdir(), 'cotsel-recovery-manifest-'));
+  t.after(() => rm(mockDirectory, { recursive: true, force: true }));
+  const failIfRequested = `
+fail_if_requested() {
+  if [ "$FAILED_VERIFIER_STEP" = "$1" ]; then
+    printf '%s\\n' '${fixtureError}' >&2
+    exit 2
+  fi
+}
+`;
   const mockPsql = `#!/bin/sh
+${failIfRequested}
 arguments="$*"
 input="$(cat)"
 case "$arguments $input" in
   *current_setting*) printf '%s\\n' '160013' ;;
-  *'SELECT record_type'*) printf '%s\\n' 'current_role|fixture_runtime|login=true,superuser=false' ;;
+  *'SELECT record_type'*) printf '%s\\n' 'current_role|fixture_runtime|login=true,superuser=false'; fail_if_requested access ;;
   *"relkind = 'S'"*) printf '%s\\n' 'public|fixture_id_seq|public|fixture_id_seq' ;;
-  *quote_ident*) printf '%s\\n' 'public|fixture|public|fixture' ;;
-  *'SELECT last_value'*) printf '%s\\n' '1|true' ;;
+  *quote_ident*)
+    case "$arguments" in
+      *cotsel_indexer*) printf '%s\\n' 'public|migrations|public|migrations' ;;
+      *) printf '%s\\n' 'public|cotsel_schema_migrations|public|cotsel_schema_migrations' ;;
+    esac
+    ;;
+  *'SELECT last_value'*) printf '%s\\n' '1|true'; fail_if_requested sequence ;;
   *'SELECT count(*)'*) printf '%s\\n' '1' ;;
-  *'COPY ('*) printf '%s\\n' '{"id":1}' ;;
+  *'COPY ('*) printf '%s\\n' '${fixtureRow}'; fail_if_requested rows ;;
   *) printf 'unexpected psql call: %s\\n' "$arguments" >&2; exit 2 ;;
 esac
 `;
   const mockPgDump = `#!/bin/sh
-printf '%s\\n' 'CREATE TABLE public.fixture (id bigint);'
+${failIfRequested}
+if [ "$VERIFY_SCHEMA_SCOPE" = '1' ]; then
+  schemas=''
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --schema=*) schemas="$schemas \${1#*=}" ;;
+      --schema|-n) shift; schemas="$schemas $1" ;;
+    esac
+    shift
+  done
+  case "$schemas" in
+    ' public squid_processor'|' squid_processor public') ;;
+    *) printf '%s\\n' 'permission denied for schema cotsel_adoption' >&2; exit 2 ;;
+  esac
+fi
+printf '%s\\n' '${fixtureSchema}'
+fail_if_requested schema
+`;
+  const mockSort = `#!/bin/sh
+${failIfRequested}
+command -p sort "$@" || exit $?
+fail_if_requested sort
 `;
   const mockWget = `#!/bin/sh
 output=''
@@ -139,16 +181,19 @@ done
 printf '%s\\n' 'fixture-ca' >"$output"
 `;
   const mockSha256sum = `#!/bin/sh
+${failIfRequested}
 case "\${1:-}" in
   -c) cat >/dev/null; exit 0 ;;
 esac
-shasum -a 256
+shasum -a 256 || exit $?
+fail_if_requested sha256
 `;
 
   await Promise.all(
     [
       ['psql', mockPsql],
       ['pg_dump', mockPgDump],
+      ['sort', mockSort],
       ['wget', mockWget],
       ['sha256sum', mockSha256sum],
     ].map(async ([name, contents]) => {
@@ -158,29 +203,67 @@ shasum -a 256
     }),
   );
 
-  const secretMarker = 'must-not-appear';
   const environment = {
     ...process.env,
     PATH: `${mockDirectory}:${process.env.PATH}`,
     COTSEL_POSTGRES_HOST: 'restored.internal',
+    TMPDIR: mockDirectory,
   };
   for (const service of services) {
     environment[`${service.toUpperCase()}_RUNTIME_USERNAME`] = `${service}_runtime`;
-    environment[`${service.toUpperCase()}_RUNTIME_PASSWORD`] = secretMarker;
+    environment[`${service.toUpperCase()}_RUNTIME_PASSWORD`] = fixturePassword;
   }
 
-  const result = spawnSync(manifestScript, [], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    env: environment,
-  });
+  return ({ failure = '', verifySchemaScope = false } = {}) =>
+    spawnSync(manifestScript, [], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      env: {
+        ...environment,
+        FAILED_VERIFIER_STEP: failure,
+        VERIFY_SCHEMA_SCOPE: verifySchemaScope ? '1' : '',
+      },
+    });
+}
+
+function assertRedacted({ stdout, stderr }) {
+  const output = stdout + stderr;
+  for (const privateValue of [
+    fixturePassword,
+    fixtureRowValue,
+    fixtureError,
+    'restored.internal',
+  ]) {
+    assert.equal(output.includes(privateValue), false);
+  }
+}
+
+test('manifest collection emits scoped redacted evidence for all seven databases', async (t) => {
+  const runManifest = await manifestCollectionFixture(t);
+  const result = runManifest({ verifySchemaScope: true });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout.includes(secretMarker), false);
-  assert.equal(result.stdout.includes('restored.internal'), false);
+  assertRedacted(result);
   assert.equal((result.stdout.match(/DATABASE_RECOVERY_TABLE/g) ?? []).length, 7);
   assert.equal((result.stdout.match(/DATABASE_RECOVERY_SEQUENCE/g) ?? []).length, 7);
   assert.equal((result.stdout.match(/DATABASE_RECOVERY_SUMMARY/g) ?? []).length, 7);
+  assert.equal(result.stdout.split(`schema_sha256=${sha256(`${fixtureSchema}\n`)}`).length - 1, 7);
+  assert.equal(result.stdout.split(`data_sha256=${sha256(`${fixtureRow}\n`)}`).length - 1, 7);
+  assert.equal(result.stdout.split(`state_sha256=${sha256('1|true\n')}`).length - 1, 7);
   assert.match(result.stdout, /Cotsel recovery manifest collection passed/);
+  assert.doesNotThrow(() => parseManifest(result.stdout, 'collector'));
+});
+
+test('manifest collection rejects incomplete or failed fingerprint streams', async (t) => {
+  const runManifest = await manifestCollectionFixture(t);
+  for (const failure of ['schema', 'access', 'rows', 'sequence', 'sort', 'sha256']) {
+    await t.test(failure, () => {
+      const result = runManifest({ failure });
+      assert.equal(result.status, 1, result.stderr);
+      assert.doesNotMatch(result.stdout, /DATABASE_RECOVERY_SUMMARY|collection passed/);
+      assert.match(result.stderr, /Database recovery verification failed for service auth/);
+      assertRedacted(result);
+    });
+  }
 });
 
 test('Terraform registers exact verifier commands with only a non-secret target-host override', async () => {
