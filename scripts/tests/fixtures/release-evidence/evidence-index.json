@@ -3,12 +3,12 @@
   "candidateId": "cotsel-2026-08-05-fixture",
   "manifest": {
     "path": "scripts/tests/fixtures/release-evidence/candidate-manifest.json",
-    "sha256": "4f010852e8df2f26977c19ba56f98970cad9fab4a963d36b6c940c15160d8a40"
+    "sha256": "e975964b57d42284356dff9a7b8b80aa8b1b2d0a02e4dd4a6baa18d816abc4ff"
   },
   "environmentReport": {
     "path": "ci-reports/environment-report.json",
     "sha256": "66d51889f1ac4eeee3064c44ab784d5039216adf53c0b1ae073f1c61a5f4e2e1",
-    "manifestSha256": "4f010852e8df2f26977c19ba56f98970cad9fab4a963d36b6c940c15160d8a40",
+    "manifestSha256": "e975964b57d42284356dff9a7b8b80aa8b1b2d0a02e4dd4a6baa18d816abc4ff",
     "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
   },
   "generatedAt": "2026-08-05T10:00:00.000Z",
@@ -36,12 +36,12 @@
           "sha256:6e33d4b88a889b1a4b913bbf45710f34f9230ac1820c9b72e664ab8d2ed222ed",
           "sha256:6ffabb39cb7ba94c8066ec5cc947b018ebd7ef698bf94791352bdca5d9e1512d",
           "sha256:80cf73b685658e3e2fa98957f4b7970b8589583bb7ca11e861b6df6b7f4ed4d1",
-          "sha256:81739c1be5f411dbd121418a48dae429074a6053459595732e019c88da114dd6",
           "sha256:a5df9814f45b9e10734227325219b3a31a9d24cc964a813766dbfa2f2ae1e572",
           "sha256:b7abbd1eafec7c7b391cadcb749a30ed3da2acf2cb2758f768b475b93e703ce4",
+          "sha256:bbf9605cf06bd2cc16b989e8cf9c30df419e510f74954b313d72311dbf9b1925",
+          "sha256:c17d1ab0f3420628bb4448cdb4b4a9e68b39eb3cfe8b3bee5bdd909fc180c110",
           "sha256:c4855460e18ba344e6b1baf6dcef4d673c963e01ec6ca2f208eb774a959f3deb",
           "sha256:d3639ba71107e76ea1fc982e65b3ee7efe19ed1e0f2025413b0b74645a935ccd",
-          "sha256:e6551bbc69760729040a4412d489e05503e068fa64a8cec40cbc865d471c8e94",
           "sha256:ee02dbffbf3763cccdd29719a5ce518c4e47ce4c7fe178ee8bb60078dd5bb857"
         ],
         "environment": "base-sepolia-staging",
@@ -94,12 +94,12 @@
           "sha256:6e33d4b88a889b1a4b913bbf45710f34f9230ac1820c9b72e664ab8d2ed222ed",
           "sha256:6ffabb39cb7ba94c8066ec5cc947b018ebd7ef698bf94791352bdca5d9e1512d",
           "sha256:80cf73b685658e3e2fa98957f4b7970b8589583bb7ca11e861b6df6b7f4ed4d1",
-          "sha256:81739c1be5f411dbd121418a48dae429074a6053459595732e019c88da114dd6",
           "sha256:a5df9814f45b9e10734227325219b3a31a9d24cc964a813766dbfa2f2ae1e572",
           "sha256:b7abbd1eafec7c7b391cadcb749a30ed3da2acf2cb2758f768b475b93e703ce4",
+          "sha256:bbf9605cf06bd2cc16b989e8cf9c30df419e510f74954b313d72311dbf9b1925",
+          "sha256:c17d1ab0f3420628bb4448cdb4b4a9e68b39eb3cfe8b3bee5bdd909fc180c110",
           "sha256:c4855460e18ba344e6b1baf6dcef4d673c963e01ec6ca2f208eb774a959f3deb",
           "sha256:d3639ba71107e76ea1fc982e65b3ee7efe19ed1e0f2025413b0b74645a935ccd",
-          "sha256:e6551bbc69760729040a4412d489e05503e068fa64a8cec40cbc865d471c8e94",
           "sha256:ee02dbffbf3763cccdd29719a5ce518c4e47ce4c7fe178ee8bb60078dd5bb857"
         ],
         "environment": "base-sepolia-staging",
