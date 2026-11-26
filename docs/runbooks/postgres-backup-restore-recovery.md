@@ -136,15 +136,23 @@ The task:
 
 - receives only the seven runtime credentials;
 - has no application task role;
-- connects with TLS certificate verification;
+- connects with TLS certificate verification and read-only transactions by default;
 - emits exact per-table row counts and deterministic data fingerprints;
 - emits sequence-state fingerprints;
 - emits database-level schema, access, and data fingerprints;
 - never emits row contents, passwords, or endpoints.
 
-Wait for exit code zero. Export the exact CloudWatch log stream to a protected,
-redacted evidence file. Preserve the log group, stream, task ARN, task-definition
-revision, start and stop times, and source RDS identifier.
+The manifest covers `public` and `squid_processor`. The separate
+`cotsel_adoption` schema contains migration control metadata that requires
+privileged access.
+
+Require exit code zero and the `Cotsel recovery manifest collection passed.`
+message. A failed query, dump, sort, or hash fails collection. Reject logs with
+collection errors. Discard partial fingerprints from a failed task.
+
+Export the exact CloudWatch log stream to a protected, redacted evidence file.
+Preserve the log group, stream, task ARN, task-definition revision, start and
+stop times, and source RDS identifier.
 
 ## Restore to an isolated RDS instance
 
@@ -188,7 +196,8 @@ Do not override the command, image, credentials, task role, execution role,
 network, or logging configuration. Keep the target endpoint out of public issue
 comments even though it is not a credential.
 
-Export the target log stream, then compare the two protected files:
+Apply the source manifest completion checks to the target task. Export the
+target log stream, then compare the two protected files:
 
 ```bash
 scripts/compare-postgres-recovery-manifests.mjs \
