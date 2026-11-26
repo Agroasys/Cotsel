@@ -300,6 +300,7 @@ async function bootstrap(): Promise<void> {
       complianceService,
       idempotencyStore,
       failedOperationWorkflow: errorHandlerWorkflow,
+      auditLogStore,
     }),
   );
   extraRouter.use(
@@ -317,6 +318,7 @@ async function bootstrap(): Promise<void> {
       config,
       treasuryReadService,
       treasuryWorkflowService,
+      auditLogStore,
     }),
   );
   extraRouter.use(
@@ -366,6 +368,7 @@ async function bootstrap(): Promise<void> {
     createOperationsRouter({
       authSessionClient,
       config,
+      auditLogStore,
       operationsSummaryService,
       gaslessSettlementService,
       failedOperationStore,

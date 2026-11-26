@@ -1,4 +1,4 @@
-# Dashboard Gateway Operations
+# Dashboard gateway operations
 
 ## Purpose
 
@@ -74,6 +74,9 @@ Minimum gateway env contract:
 - `GATEWAY_WRITE_ALLOWLIST`
 - `GATEWAY_OPERATOR_SIGNER_ENVIRONMENT`
 - `GATEWAY_GOVERNANCE_PREPARATION_TTL_SECONDS`
+- `GATEWAY_STEP_UP_MAX_AGE_SECONDS` (default `300`)
+- `GATEWAY_STEP_UP_ACCEPTED_STRENGTHS` (default `hardware_webauthn`)
+- `GATEWAY_STEP_UP_ENFORCEMENT` (default `enforce`)
 - `GATEWAY_COMMIT_SHA`
 - `GATEWAY_BUILD_TIME`
 - `GATEWAY_INDEXER_REQUEST_TIMEOUT_MS`
@@ -123,8 +126,37 @@ Safety rules:
 - If `GATEWAY_WRITE_ALLOWLIST` is empty, mutations must reject writes even when enabled.
 - The gateway process must never hold the human governance signer key.
 - No governance executor secret is part of the supported current runtime.
-- Approved write operators for later enablement are Aston and `czpyioe`, but `GATEWAY_WRITE_ALLOWLIST`
-  must contain the exact local auth principal IDs used by the auth service. Do not guess identifiers.
+- Approved write operators for later enablement are Aston and `czpyioe`. Set `GATEWAY_WRITE_ALLOWLIST` to the exact local principal IDs from the auth service. Do not guess identifiers.
+
+### Step-up for privileged mutations
+
+The gateway checks upstream additional authentication (step-up) for governance,
+treasury, and compliance mutations. The auth service supplies
+`authentication.authTime` and `authentication.strength` in the session.
+
+Dashboard/API failed-operation replay also requires this check, including compliance decisions, oracle progression controls and settlement callback redelivery.
+The freshness check runs before replay idempotency.
+A replayed compliance action's audit row retains the authorizing assurance.
+`metadata.stepUp.authorization` identifies the current authorizer, hashed session reference and replay request.
+The action retains its original intent actor and request ID.
+
+A step-up is valid when its age does not exceed `GATEWAY_STEP_UP_MAX_AGE_SECONDS`
+and its strength is in `GATEWAY_STEP_UP_ACCEPTED_STRENGTHS`. In `enforce` mode,
+if the step-up is invalid, the gateway returns `403 FORBIDDEN` with
+`details.reason = step_up_required`. After a new upstream step-up, repeat the
+Agroasys session exchange.
+
+Use `record` mode only for rollback. In `record` mode, the gateway records
+failed step-up checks without blocking a request on step-up.
+
+For each request that reaches the step-up check, the gateway writes the step-up
+evidence and request ID to `audit_log`. The row records one of these events.
+
+- `gateway.step_up_verified` for a valid step-up.
+- `gateway.step_up_required` for a refusal in `enforce` mode.
+- `gateway.step_up_stale` for a failed check in `record` mode.
+
+If the audit write fails, the gateway refuses the request.
 
 ### Sponsored participant USDC sends
 
@@ -139,9 +171,7 @@ and broadcasts that authorization. Incoming USDC receipts do not call this route
 sponsored gas.
 
 Agroasys records the sponsorship source as `pooled_settlement_support_fees`. This is pooled treasury
-funding, not a promise that one order's USD 4 support fee is reserved for one transfer. Operators must
-reconcile the returned request ID, transaction hash, gas used, effective gas price, native cost, and
-executor address against the Agroasys transfer record. A successful HTTP response without complete
+funding, not a promise that one order's USD 4 support fee is reserved for one transfer. Reconcile the returned request ID, transaction hash, gas used and effective gas price with the Agroasys transfer record. Reconcile the returned native cost and executor address with the same record. A successful HTTP response without complete
 receipt evidence is invalid.
 
 Operational controls:
@@ -149,20 +179,24 @@ Operational controls:
 - monitor `GET /api/dashboard-gateway/v1/operations/gasless-relayer/readiness` before enabling sends;
 - use the dedicated relayer KMS signer in staging and production;
 - refill or pause using the thresholds in `gateway-governance-signer-custody.md`;
-- on an ambiguous timeout, retry with the same platform transfer ID and idempotency key; the USDC
-  authorization nonce prevents a second token spend;
-- if broadcast may have succeeded but receipt evidence is unavailable, hold the Agroasys ledger
-  reserve and reconcile on-chain before releasing or retrying with a new authorization.
+- On an ambiguous timeout, retry with the same platform transfer ID and idempotency key. The USDC authorization nonce prevents a second token spend;
+- If broadcast might have succeeded but receipt evidence is unavailable, hold the Agroasys ledger reserve.
+  Reconcile on-chain before releasing the reserve or retrying with a new authorization.
 
 ## Startup procedure
 
-1. Confirm the Node 22.23.2 baseline.
-2. Confirm Postgres database exists for `GATEWAY_DB_NAME`.
-3. Start gateway service.
-4. Run migrations on startup.
-5. Verify liveness, then readiness.
+Apply migrations through a dedicated runner before starting the runtime service. Runtime startup checks the migration history; it does not apply schema changes. For staging, follow [Staging service database migrations](staging-service-migrations.md).
 
-Example local commands:
+Start the gateway in this order:
+
+1. Confirm the Node 22.23.2 baseline.
+2. Confirm that the database specified by `GATEWAY_DB_NAME` exists.
+3. Apply the reviewed migrations through the dedicated migration runner.
+4. Start the gateway service.
+5. Verify liveness.
+6. Verify readiness.
+
+The local Compose commands start the required migration service before the gateway. Use these example local commands:
 
 ```bash
 corepack enable
@@ -181,7 +215,7 @@ curl -fsS -H "Authorization: Bearer <session>" \
 ## Health and readiness interpretation
 
 - `/healthz`: process is alive
-- `/readyz`: Postgres, auth service, chain RPC, indexer GraphQL, and (when gasless execution is enabled) a non-blocked gasless relayer can serve; each check is time-bounded and reports no error text. See [service-readiness.md](service-readiness.md)
+- `/readyz`: Postgres, auth, chain RPC and indexer GraphQL can serve. With gasless execution enabled, the relayer must also be available and unblocked. Each check has a time limit and reports no error text. See [Service readiness](service-readiness.md).
 - `/version`: build, commit, and repository metadata
 
 Readiness must stay green before enabling connected dashboard mode.
@@ -290,9 +324,7 @@ Operational rules:
   - last-known reference metadata
   - last successful verification time
   - current degraded or unavailable state
-- During outage, operators must capture issuer ID, subject reference, provider
-  reference, evidence reference, expiry, and affected `tradeId`/`correlationId`
-  values in the incident or audit evidence packet.
+- During an outage, record issuer ID, subject reference, provider reference, evidence reference and expiry in the incident or audit packet. Record the affected `tradeId` and `correlationId` values in that packet.
 
 Escalation:
 
@@ -303,40 +335,41 @@ Escalation:
 
 ## Governance direct-sign procedure
 
-**IMPLEMENTED IN SOURCE / NOT DEPLOYMENT-ACCEPTED.** Do not use this procedure
-until the reviewed release and migrations are deployed, the signer register is
-populated with named independent hardware-wallet custodians, and the release
-evidence window is explicitly approved.
+**IMPLEMENTED IN SOURCE / NOT DEPLOYMENT-ACCEPTED.** Before using this procedure, confirm all of these prerequisites:
 
-1. Gateway validates authz and payload.
-2. Gateway requires the exact active signer binding and derives a deterministic
-   `intentKey` from the action, chain, signer, binding, method, and parameters.
-3. If an open action already exists for the same `intentKey`, the gateway returns that existing action instead of creating a duplicate row.
-4. Otherwise the gateway writes `governance_actions` + `audit_log` atomically with status `prepared` and flow type `direct_sign`.
-5. The response includes the canonical signing payload and prepared payload hash.
-6. The admin reviews the complete transaction on the hardware device, then signs
-   and broadcasts with that device through compatible wallet software.
-7. The caller submits `POST /governance/actions/:actionId/confirm`.
-8. Gateway records `broadcast` or `broadcast_pending_verification` and starts backend monitoring.
-9. Operators verify tx hash, verification state, monitoring state, receipt, and
-   the chain's `finalized` block tag reaching the receipt block. Block depth
-   alone never finalizes an action; see
-   `docs/architecture/transaction-finality-model.md`.
+- The reviewed release and migrations are deployed.
+- The signer register names independent hardware-wallet custodians.
+- The release evidence window is explicitly approved.
 
-The gateway never signs or broadcasts governance transactions. Do not use an
-old checkout, manual contract call, direct database write, executor, queue,
-replay worker, KMS key, or CLI command as a substitute.
+The gateway validates authorization and payload before preparing an action. It requires the exact active signer binding. It derives `intentKey` from the action, chain, signer, binding, method and parameters.
 
-## Rollback procedure
+If an open action has the same `intentKey`, the gateway returns that action without creating a duplicate. Otherwise, it writes `governance_actions` and `audit_log` atomically, with status `prepared` and flow type `direct_sign`. The response contains the canonical signing payload and prepared payload hash.
 
-If gateway behavior regresses after deploy:
+Use this sequence after preparation:
+
+1. Review the complete transaction on the hardware device.
+2. Sign with that device through compatible wallet software.
+3. Broadcast through the authorized wallet procedure.
+4. Submit `POST /governance/actions/:actionId/confirm`.
+5. Verify the transaction hash, verification state, monitoring state and receipt.
+6. Verify that the chain's `finalized` block tag has reached the receipt block.
+
+The gateway records `broadcast` or `broadcast_pending_verification` and starts backend monitoring. Block depth alone never finalizes an action. See [Transaction finality model](../architecture/transaction-finality-model.md).
+
+The gateway never signs or broadcasts governance transactions. Do not substitute an old checkout, manual contract call or direct database write. Do not substitute an executor, queue, replay worker, KMS key or CLI command.
+
+## Recover from a gateway regression
+
+Use this procedure if gateway behavior regresses after deployment. Keep governance mutations blocked until the release is assessed. Do not fabricate governance action evidence.
 
 1. Set `GATEWAY_ENABLE_MUTATIONS=false`.
-2. Redeploy or restart gateway with the safe config.
-3. Keep governance mutation paths blocked until the release is assessed.
-4. Revert the release if required.
-5. Capture request IDs and available runtime evidence before retrying any
-   supported operation. Do not fabricate governance action evidence.
+2. Deploy the gateway with the write-blocking configuration.
+3. Capture request IDs and available runtime evidence.
+4. Assess the release failure.
+5. Prepare a reviewed repair image that preserves the applied migrations and required controls.
+6. Validate the repair through the approved release procedure.
+
+An earlier image cannot start if its manifest lacks applied migrations. Keep the migration ledger intact. Use only a reviewed image with the matching migration manifest and required verification controls. If a compatible earlier image is unavailable, repair forward. The full image recovery rehearsal remains pending under review item D1.
 
 ## Verification checklist
 

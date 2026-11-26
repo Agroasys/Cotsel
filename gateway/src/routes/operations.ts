@@ -4,6 +4,7 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import { GatewayConfig } from '../config/env';
 import { AuthSessionClient } from '../core/authSessionClient';
+import type { AuditLogStore } from '../core/auditLogStore';
 import {
   FailedOperationState,
   FailedOperationStore,
@@ -20,6 +21,7 @@ import {
   requireMutationWriteAccess,
 } from '../middleware/auth';
 import { createIdempotencyMiddleware } from '../middleware/idempotency';
+import { requireRecentStepUp } from '../middleware/stepUp';
 import { successResponse } from '../responses';
 import { GatewayError } from '../errors';
 
@@ -31,6 +33,7 @@ export interface OperationsRouterOptions {
   failedOperationStore?: FailedOperationStore | null;
   failedOperationReplayer?: GatewayFailedOperationReplayer | null;
   idempotencyStore?: IdempotencyStore | null;
+  auditLogStore?: AuditLogStore;
 }
 
 const FAILED_OPERATION_STATES: readonly FailedOperationState[] = [
@@ -194,6 +197,7 @@ export function createOperationsRouter(options: OperationsRouterOptions): Router
     '/operations/failed-operations/:failedOperationId/replay',
     requireMutationWriteAccess(),
     requireOperatorActionCapability('operations:replay'),
+    requireRecentStepUp(options.config, { auditLogStore: options.auditLogStore }),
     replayIdempotency,
     async (req, res, next) => {
       try {

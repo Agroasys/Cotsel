@@ -28,6 +28,8 @@ import {
   type ComplianceControlReplaySpec,
   type ComplianceDecisionReplaySpec,
 } from '../core/errorHandlerWorkflow';
+import { requireRecentStepUp } from '../middleware/stepUp';
+import type { AuditLogStore } from '../core/auditLogStore';
 
 export interface ComplianceRouterOptions {
   authSessionClient: AuthSessionClient;
@@ -35,6 +37,8 @@ export interface ComplianceRouterOptions {
   complianceService: ComplianceService;
   idempotencyStore: IdempotencyStore;
   failedOperationWorkflow?: GatewayErrorHandlerWorkflow;
+  /** Records the step-up evidence of each privileged mutation (Cotsel#946). */
+  auditLogStore?: AuditLogStore;
 }
 
 type MutationRequest = Request<Record<string, string | string[]>, unknown, Record<string, unknown>>;
@@ -181,6 +185,9 @@ async function handleMutation(
 export function createComplianceRouter(options: ComplianceRouterOptions): Router {
   const router = Router();
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
+  const requireComplianceStepUp = requireRecentStepUp(options.config, {
+    auditLogStore: options.auditLogStore,
+  });
   const idempotency = createIdempotencyMiddleware(options.idempotencyStore);
 
   router.use('/compliance', authenticate);
@@ -276,6 +283,7 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
     '/compliance/decisions',
     requireMutationWriteAccess(),
     requireOperatorActionCapability('compliance:write'),
+    requireComplianceStepUp,
     idempotency,
     (req, res, next) =>
       handleMutation(
@@ -315,6 +323,7 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
     '/compliance/trades/:tradeId/block-oracle-progression',
     requireMutationWriteAccess(),
     requireOperatorActionCapability('compliance:write'),
+    requireComplianceStepUp,
     idempotency,
     (req, res, next) =>
       handleMutation(
@@ -358,6 +367,7 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
     '/compliance/trades/:tradeId/resume-oracle-progression',
     requireMutationWriteAccess(),
     requireOperatorActionCapability('compliance:write'),
+    requireComplianceStepUp,
     idempotency,
     (req, res, next) =>
       handleMutation(
