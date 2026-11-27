@@ -86,7 +86,11 @@ data "aws_iam_policy_document" "gateway_execution" {
       aws_secretsmanager_secret.platform["gateway-to-treasury-auth"].arn,
       aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn,
       aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn,
-      ], local.relayer_kms_enabled ? [
+      ], var.trusted_session_exchange_enabled ? [
+      aws_secretsmanager_secret.platform["auth-upstream-exchange"].arn,
+      ] : [], var.admin_control_enabled ? [
+      aws_secretsmanager_secret.platform["auth-admin-control"].arn,
+      ] : [], local.relayer_kms_enabled ? [
       aws_secretsmanager_secret.platform["gateway-managed-signer"].arn,
     ] : [])
   }

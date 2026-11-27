@@ -97,6 +97,16 @@ resource "aws_ecs_service" "gateway" {
     container_port   = 3600
   }
 
+  dynamic "load_balancer" {
+    for_each = var.dashboard_session_routes_enabled ? [aws_lb_target_group.dashboard_auth_session[0].arn] : []
+
+    content {
+      target_group_arn = load_balancer.value
+      container_name   = "auth"
+      container_port   = 3005
+    }
+  }
+
   service_registries {
     registry_arn = data.terraform_remote_state.foundation.outputs.runtime_service_discovery_arns["gateway"]
   }

@@ -1,4 +1,9 @@
 locals {
+  dashboard_cors_allowed_origins = join(",", concat(
+    ["https://agroasys.com", "https://app.agroasys.com"],
+    var.dashboard_origin == "" ? [] : [var.dashboard_origin],
+  ))
+
   gasless_policy_environment = var.gasless_execution_policy == null ? [] : [
     { name = "GATEWAY_GASLESS_MAX_GAS_LIMIT", value = tostring(var.gasless_execution_policy.max_gas_limit) },
     { name = "GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI", value = var.gasless_execution_policy.max_fee_per_gas_wei },
@@ -22,8 +27,8 @@ locals {
     { name = "GATEWAY_CHAIN_ID", value = tostring(local.base_sepolia_chain_id) },
     { name = "GATEWAY_COMMIT_SHA", value = var.gateway_image_tag },
     { name = "GATEWAY_CONTRACT_ADDRESS_REQUIRED", value = "true" },
-    { name = "GATEWAY_CORS_ALLOWED_ORIGINS", value = "https://agroasys.com,https://app.agroasys.com" },
-    { name = "GATEWAY_ENABLE_MUTATIONS", value = "false" },
+    { name = "GATEWAY_CORS_ALLOWED_ORIGINS", value = local.dashboard_cors_allowed_origins },
+    { name = "GATEWAY_ENABLE_MUTATIONS", value = tostring(var.gateway_enable_mutations) },
     { name = "GATEWAY_ESCROW_ADDRESS", value = var.base_sepolia_escrow_address },
     { name = "GATEWAY_EXPLORER_BASE_URL", value = local.base_sepolia_explorer_url },
     { name = "GATEWAY_GASLESS_EXECUTION_ENABLED", value = tostring(var.gasless_execution_enabled) },
@@ -97,8 +102,9 @@ locals {
   }
 
   auth_environment = [
-    { name = "AUTH_ADMIN_CONTROL_ENABLED", value = "false" },
-    { name = "AUTH_CORS_ALLOWED_ORIGINS", value = "https://agroasys.com,https://app.agroasys.com" },
+    { name = "AUTH_ADMIN_CONTROL_ENABLED", value = tostring(var.admin_control_enabled) },
+    { name = "AUTH_ADMIN_CONTROL_ALLOWED_API_KEY_IDS", value = var.admin_control_allowed_api_key_ids },
+    { name = "AUTH_CORS_ALLOWED_ORIGINS", value = local.dashboard_cors_allowed_origins },
     { name = "AUTH_CORS_ALLOW_NO_ORIGIN", value = "false" },
     { name = "AUTH_RATE_LIMIT_ENABLED", value = "true" },
     { name = "AUTH_RATE_LIMIT_FAIL_OPEN", value = "false" },
@@ -112,15 +118,20 @@ locals {
     { name = "PGSSLMODE", value = "verify-full" },
     { name = "PORT", value = "3005" },
     { name = "SESSION_TTL_SECONDS", value = "3600" },
-    { name = "TRUSTED_SESSION_EXCHANGE_ENABLED", value = "false" },
+    { name = "TRUSTED_SESSION_EXCHANGE_ENABLED", value = tostring(var.trusted_session_exchange_enabled) },
+    { name = "TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON", value = var.trusted_session_exchange_key_policies_json },
     { name = "TRUSTED_SESSION_EXCHANGE_MAX_SKEW_SECONDS", value = "300" },
     { name = "TRUSTED_SESSION_EXCHANGE_NONCE_TTL_SECONDS", value = "600" },
   ]
 
-  auth_secrets = [
+  auth_secrets = concat([
     { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/auth/runtime"].arn}:password::" },
     { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/auth/runtime"].arn}:username::" },
-  ]
+    ], var.trusted_session_exchange_enabled ? [
+    { name = "TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON", valueFrom = aws_secretsmanager_secret.platform["auth-upstream-exchange"].arn },
+    ] : [], var.admin_control_enabled ? [
+    { name = "AUTH_ADMIN_CONTROL_API_KEYS_JSON", valueFrom = aws_secretsmanager_secret.platform["auth-admin-control"].arn },
+  ] : [])
 
   auth_container = {
     name                   = "auth"

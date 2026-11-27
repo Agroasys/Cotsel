@@ -92,6 +92,14 @@ env:
   EVIDENCE_PLAN_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-evidence-archive-plan
   ROOT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root || 'staging-platform' }}
   TF_VAR_gateway_desired_count: ${{ vars.COTSEL_STAGING_GATEWAY_DESIRED_COUNT || '0' }}
+  TF_VAR_dashboard_session_routes_enabled: ${{ vars.COTSEL_STAGING_DASHBOARD_SESSION_ROUTES_ENABLED || 'false' }}
+  TF_VAR_dashboard_origin: ${{ vars.COTSEL_STAGING_DASHBOARD_ORIGIN || '' }}
+  TF_VAR_backend_api_task_security_group_id: ${{ vars.COTSEL_STAGING_BACKEND_API_TASK_SECURITY_GROUP_ID || '' }}
+  TF_VAR_trusted_session_exchange_enabled: ${{ vars.COTSEL_STAGING_TRUSTED_SESSION_EXCHANGE_ENABLED || 'false' }}
+  TF_VAR_trusted_session_exchange_key_policies_json: ${{ vars.COTSEL_STAGING_TRUSTED_SESSION_EXCHANGE_KEY_POLICIES_JSON || '' }}
+  TF_VAR_admin_control_enabled: ${{ vars.COTSEL_STAGING_AUTH_ADMIN_CONTROL_ENABLED || 'false' }}
+  TF_VAR_admin_control_allowed_api_key_ids: ${{ vars.COTSEL_STAGING_AUTH_ADMIN_CONTROL_ALLOWED_API_KEY_IDS || '' }}
+  TF_VAR_gateway_enable_mutations: ${{ vars.COTSEL_STAGING_GATEWAY_ENABLE_MUTATIONS || 'false' }}
   TF_VAR_indexer_desired_count: ${{ vars.COTSEL_STAGING_INDEXER_DESIRED_COUNT || '0' }}
   TF_VAR_demo_disable_indexer_alerts: ${{ vars.COTSEL_STAGING_DEMO_DISABLE_INDEXER_ALERTS || 'false' }}
   STATE_BUCKET: agroasys-tfstate-655177116834
@@ -141,7 +149,7 @@ jobs:
           node infra/terraform/scripts/staging-foundation-selftest.mjs
 
       - name: Test saved-plan metadata and demo alerts
-        run: node infra/terraform/scripts/plan-metadata-selftest.mjs && node --test infra/terraform/scripts/gasless-execution-policy.test.mjs infra/terraform/scripts/demo-indexer-alerts.test.mjs infra/terraform/scripts/database-bootstrap-users.test.mjs infra/terraform/scripts/database-entitlement-scope.test.mjs infra/terraform/scripts/settlement-observability.test.mjs infra/terraform/scripts/reconciliation-evidence-wiring.test.mjs
+        run: node infra/terraform/scripts/plan-metadata-selftest.mjs && node --test infra/terraform/scripts/gasless-execution-policy.test.mjs infra/terraform/scripts/demo-indexer-alerts.test.mjs infra/terraform/scripts/database-bootstrap-users.test.mjs infra/terraform/scripts/database-entitlement-scope.test.mjs infra/terraform/scripts/settlement-observability.test.mjs infra/terraform/scripts/reconciliation-evidence-wiring.test.mjs infra/terraform/scripts/dashboard-auth-wiring.test.mjs
       - name: Test accepted and demo Base Sepolia selection validation
         run: node --test scripts/tests/base-sepolia-staging-contract.test.mjs scripts/tests/base-sepolia-demo-selection.test.mjs scripts/tests/pilot-launch-profile.test.mjs scripts/tests/pilot-launch-runtime.test.mjs scripts/tests/pilot-launch-profile-drift.test.mjs && node scripts/validate-pilot-launch-profile.mjs
 

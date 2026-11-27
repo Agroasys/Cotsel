@@ -1,5 +1,10 @@
 locals {
   gateway_origin_id = "${local.name_prefix}-gateway-vpc-origin"
+  dashboard_auth_session_paths = toset([
+    "/api/auth/v1/session",
+    "/api/auth/v1/session/refresh",
+    "/api/auth/v1/session/revoke",
+  ])
 }
 
 resource "aws_cloudfront_vpc_origin" "gateway" {
@@ -80,6 +85,72 @@ resource "aws_cloudfront_origin_request_policy" "gateway_hmac" {
   }
 }
 
+resource "aws_cloudfront_origin_request_policy" "dashboard_auth_session" {
+  name    = "${local.name_prefix}-dashboard-auth-session"
+  comment = "Forward only bearer-auth and CORS headers for the three dashboard session routes."
+
+  cookies_config {
+    cookie_behavior = "none"
+  }
+
+  headers_config {
+    header_behavior = "whitelist"
+
+    headers {
+      items = [
+        "Access-Control-Request-Headers",
+        "Access-Control-Request-Method",
+        "Authorization",
+        "Content-Type",
+        "Origin",
+        "X-Correlation-Id",
+        "X-Request-Id",
+      ]
+    }
+  }
+
+  query_strings_config {
+    query_string_behavior = "none"
+  }
+}
+
+resource "aws_cloudfront_origin_request_policy" "dashboard_gateway_browser" {
+  name    = "${local.name_prefix}-dashboard-gateway-browser"
+  comment = "Preserve signed gateway headers and forward browser bearer/CORS headers without caching."
+
+  cookies_config {
+    cookie_behavior = "none"
+  }
+
+  headers_config {
+    header_behavior = "whitelist"
+
+    headers {
+      items = [
+        "Access-Control-Request-Headers",
+        "Access-Control-Request-Method",
+        "Authorization",
+        "Content-Type",
+        "Idempotency-Key",
+        "Origin",
+        "X-Agroasys-Nonce",
+        "X-Agroasys-Signature",
+        "X-Agroasys-Timestamp",
+        "X-Api-Key",
+        "X-Correlation-Id",
+        "X-Nonce",
+        "X-Request-Id",
+        "X-Signature",
+        "X-Timestamp",
+      ]
+    }
+  }
+
+  query_strings_config {
+    query_string_behavior = "all"
+  }
+}
+
 resource "aws_cloudfront_distribution" "gateway" {
   aliases             = [var.public_gateway_domain_name]
   comment             = "Cotsel staging gateway edge for ${var.public_gateway_domain_name}"
@@ -113,6 +184,38 @@ resource "aws_cloudfront_distribution" "gateway" {
     origin_request_policy_id = aws_cloudfront_origin_request_policy.gateway_hmac.id
     target_origin_id         = local.gateway_origin_id
     viewer_protocol_policy   = "https-only"
+  }
+
+  dynamic "ordered_cache_behavior" {
+    for_each = var.dashboard_session_routes_enabled ? local.dashboard_auth_session_paths : toset([])
+
+    content {
+      path_pattern             = ordered_cache_behavior.value
+      allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods           = ["GET", "HEAD"]
+      compress                 = false
+      cache_policy_id          = aws_cloudfront_cache_policy.gateway_no_cache.id
+      origin_request_policy_id = aws_cloudfront_origin_request_policy.dashboard_auth_session.id
+      target_origin_id         = local.gateway_origin_id
+
+      viewer_protocol_policy = "https-only"
+    }
+  }
+
+  dynamic "ordered_cache_behavior" {
+    for_each = var.dashboard_origin == "" ? [] : ["/api/dashboard-gateway/v1/*"]
+
+    content {
+      path_pattern             = ordered_cache_behavior.value
+      allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods           = ["GET", "HEAD"]
+      compress                 = false
+      cache_policy_id          = aws_cloudfront_cache_policy.gateway_no_cache.id
+      origin_request_policy_id = aws_cloudfront_origin_request_policy.dashboard_gateway_browser.id
+      target_origin_id         = local.gateway_origin_id
+
+      viewer_protocol_policy = "https-only"
+    }
   }
 
   restrictions {
