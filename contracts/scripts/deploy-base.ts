@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import hre, { ethers } from 'hardhat';
 import { loadBaseDeploymentConfig } from './lib/baseDeploymentConfig';
+import { normalizeRuntimeBytecode, sha256Hex } from './lib/contractBytecode';
 import { getDeploymentSourceIdentity } from './lib/deploymentSourceIdentity';
 import {
   assertHardwareWalletDeploymentTransaction,
@@ -12,26 +12,6 @@ import {
   loadHardwareWalletDeployerConfig,
   waitForDeploymentReceipt,
 } from './lib/hardwareWalletContractDeployment';
-
-function sha256Hex(input: string): string {
-  return crypto.createHash('sha256').update(input).digest('hex');
-}
-
-type ImmutableReference = { start: number; length: number };
-
-function normalizeRuntimeBytecode(
-  bytecode: string,
-  immutableReferences: Record<string, ImmutableReference[]>,
-): string {
-  const normalized = bytecode.startsWith('0x') ? bytecode.slice(2) : bytecode;
-  const characters = normalized.split('');
-  for (const references of Object.values(immutableReferences)) {
-    for (const reference of references) {
-      characters.fill('0', reference.start * 2, (reference.start + reference.length) * 2);
-    }
-  }
-  return `0x${characters.join('')}`;
-}
 
 function sameAddress(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();

@@ -26,6 +26,40 @@ contract address. Existing trades and balances remain on the previous contract.
 - An independent reviewer approved the role inventory for the rehearsal window.
 - The source commit is clean and contains all generated artifacts.
 
+## Build a bundle for the existing demo escrow
+
+Use the bundle action to collect release evidence for the escrow selected by
+`integration/base-sepolia-demo-contract.json`. This action compiles and attests escrow from the
+reviewed current source. It compares the ABI, creation bytecode, and normalized runtime to the
+retained deployment evidence. It retains the original deployment and finalizer commits in
+`release-manifest.json`.
+
+After the reviewed `main` commit passes the exact-main release checks, dispatch the bundle action:
+
+```bash
+gh workflow run contract-deploy.yml -R Agroasys/Cotsel --ref main \
+  -f action=bundle -f commit_sha="$reviewed_main_sha"
+```
+
+Download `cotsel-contract-bundle-<commit>` from the successful run. Check the downloaded files and
+verify GitHub provenance against the exact reviewed source:
+
+```bash
+sha256sum --check --strict sha256sums.txt
+gh attestation verify AgroasysEscrow.tgz --repo Agroasys/Cotsel \
+  --bundle provenance.sigstore.json \
+  --cert-identity https://github.com/Agroasys/Cotsel/.github/workflows/contract-deploy.yml@refs/heads/main \
+  --source-ref refs/heads/main --source-digest "$reviewed_main_sha" \
+  --deny-self-hosted-runners
+```
+
+Retain the archive, provenance bundle, verification result, and receipt with the candidate.
+The archive contains the production escrow artifact and the current compiler input. The Escrow
+inventory entry uses compiler inputs and bytecode evidence with `sbom.required=false`.
+
+The bundle job runs without staging secrets, AWS credentials, a chain RPC endpoint, or explorer
+access. Deployment and current custody acceptance follow their existing gates.
+
 ## Prepare Env File
 
 From the repository root:
