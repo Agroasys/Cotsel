@@ -21,7 +21,7 @@
   "crossRepositoryManifest": {
     "path": "integration/release-manifest.json",
     "schemaVersion": "cotsel.release-manifest.v1",
-    "sha256": "9bcb1807fe6c994e0dac8a2d6236646e36b8059e2b764203492065b7bba20578"
+    "sha256": "1e154314dd444e40ac222153aa03de874e08104d420e6b5bef5eb1debd5b6326"
   },
   "artifacts": [
     {
@@ -268,7 +268,7 @@
       "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "reference": "example.invalid/agroasys-backend@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "sourceRepository": "Agroasys/agroasys-backend",
-      "sourceCommit": "b39692153efe186d580ab2a740a9c63d7ed416b2",
+      "sourceCommit": "eca43e856cbb437edfca35bbf23106484cf746d4",
       "producingWorkflow": ".github/workflows/release-image.yml",
       "producingRunId": "fixture-backend",
       "provenance": {
