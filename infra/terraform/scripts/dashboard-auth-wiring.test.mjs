@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const platform = join(here, '..', 'staging-platform');
 const read = (path) => readFileSync(join(platform, path), 'utf8');
-const variables = read('variables.tf');
+const variables = read('dashboard-auth-variables.tf');
 const edge = read('edge.tf');
 const alb = read('alb.tf');
 const network = read('network.tf');

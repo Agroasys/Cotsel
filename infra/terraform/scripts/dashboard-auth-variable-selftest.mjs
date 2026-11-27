@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-const source = readFileSync(new URL('../staging-platform/variables.tf', import.meta.url), 'utf8');
+const source = readFileSync(
+  new URL('../staging-platform/dashboard-auth-variables.tf', import.meta.url),
+  'utf8',
+);
 const names = [
   'dashboard_session_routes_enabled',
   'dashboard_origin',
