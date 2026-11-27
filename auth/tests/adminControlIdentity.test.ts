@@ -19,6 +19,52 @@ const validKeys = JSON.stringify([
 ]);
 
 describe('admin control identity configuration', () => {
+  test('rejects active human credentials that share a signing secret', () => {
+    const keys = JSON.parse(validKeys);
+    keys[1].secret = keys[0].secret;
+    expect(() =>
+      createAdminControlApiKeyLookup(
+        JSON.stringify(keys),
+        keys.map((key: { id: string }) => key.id),
+      ),
+    ).toThrow('distinct signing secrets');
+  });
+
+  test.each(['id', 'secret'] as const)(
+    'rejects %s reuse across exchange and admin credentials',
+    (field) => {
+      const keys = JSON.parse(validKeys);
+      const exchange = JSON.stringify([
+        { id: 'exchange-only', secret: 'exchange-secret', active: true },
+      ]);
+      keys[0][field] = field === 'id' ? 'exchange-only' : 'exchange-secret';
+      expect(() =>
+        createAdminControlApiKeyLookup(
+          JSON.stringify(keys),
+          keys.map((key: { id: string }) => key.id),
+          exchange,
+        ),
+      ).toThrow('separate from trusted session exchange');
+    },
+  );
+
+  test('accepts independently configured domains and retains inactive rotation records', () => {
+    const keys = JSON.parse(validKeys);
+    keys.push({
+      id: 'retired',
+      secret: keys[0].secret,
+      active: false,
+      humanPrincipalId: 'agroasys-user:operator-a',
+    });
+    const lookup = createAdminControlApiKeyLookup(
+      JSON.stringify(keys),
+      ['admin-control-a', 'admin-control-b'],
+      JSON.stringify([{ id: 'exchange', secret: 'exchange-secret', active: true }]),
+    );
+    expect(lookup('admin-control-a')).toBeDefined();
+    expect(lookup('retired')).toBeUndefined();
+  });
+
   test('returns only allowed credentials with authenticated human principals', () => {
     const lookup = createAdminControlApiKeyLookup(validKeys, [
       'admin-control-a',

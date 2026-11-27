@@ -101,6 +101,7 @@ async function bootstrap(): Promise<void> {
         lookupApiKey: createAdminControlApiKeyLookup(
           config.adminControlApiKeysJson,
           config.adminControlAllowedApiKeyIds,
+          config.trustedSessionExchangeApiKeysJson || '[]',
         ),
         consumeNonce: adminControlNonceStore.consume,
         onNonceStoreError: (correlationId, error) =>

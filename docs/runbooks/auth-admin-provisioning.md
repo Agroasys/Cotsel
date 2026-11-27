@@ -97,6 +97,11 @@ identity authority, not a display name or caller-supplied request field. Two
 credentials assigned to the same human still represent one approval principal.
 Each credential must be assigned to one human and must never be shared.
 
+Active admin-control credentials must use distinct signing secrets.
+Keep their key IDs and secrets separate from session-exchange credentials.
+The auth service rejects reused credentials before accepting requests.
+During rotation, an inactive record can retain its historical secret.
+
 Secrets must be stored in the production secret manager. They must not be
 stored in repo files, shell history, tickets, dashboards, or chat transcripts.
 

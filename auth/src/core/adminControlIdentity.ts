@@ -6,13 +6,27 @@ import { parseServiceApiKeys, type ServiceApiKey } from '@agroasys/shared-auth/s
 export function createAdminControlApiKeyLookup(
   rawKeys: string,
   allowedApiKeyIds: string[],
+  rawExchangeKeys = '[]',
 ): (apiKey: string) => ServiceApiKey | undefined {
   const keys = parseServiceApiKeys(rawKeys);
+  const exchangeKeys = parseServiceApiKeys(rawExchangeKeys);
   const keysById = new Map<string, ServiceApiKey>();
+  const activeSecrets = new Set<string>();
 
   for (const key of keys) {
     if (keysById.has(key.id)) {
       throw new Error(`AUTH_ADMIN_CONTROL_API_KEYS_JSON contains duplicate key ID ${key.id}`);
+    }
+    if (key.active) {
+      if (activeSecrets.has(key.secret)) {
+        throw new Error('Active admin-control credentials require distinct signing secrets');
+      }
+      activeSecrets.add(key.secret);
+      if (
+        exchangeKeys.some((exchange) => exchange.id === key.id || exchange.secret === key.secret)
+      ) {
+        throw new Error('Admin-control credentials must be separate from trusted session exchange');
+      }
     }
     keysById.set(key.id, key);
   }
