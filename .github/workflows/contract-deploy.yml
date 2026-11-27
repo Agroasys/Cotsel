@@ -4,15 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: Prepare an unsigned request or verify an externally broadcast deployment.
+        description: Build a contract bundle, prepare an unsigned request, or verify an existing deployment.
         required: true
         default: prepare
         type: choice
         options:
+          - bundle
           - prepare
           - verify
       commit_sha:
-        description: Exact reviewed main commit for the deployment request.
+        description: Exact reviewed main commit.
         required: true
         type: string
       deployment_tx_hash:
@@ -26,23 +27,137 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-
-env:
-  AWS_REGION: ap-south-1
-  SIGNER_AUDIT_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-contract-deploy
 
 concurrency:
-  group: contract-deployment-evidence-base-sepolia
+  group: ${{ inputs.action == 'bundle' && 'contract-bundle-base-sepolia' || 'contract-deployment-evidence-base-sepolia' }}
   cancel-in-progress: false
 
 jobs:
+  bundle:
+    name: contract/base-sepolia/bundle
+    if: inputs.action == 'bundle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Checkout the requested main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Verify immutable build selection
+        env:
+          EXPECTED_COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT_SHA"
+          test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
+        with:
+          version: 10.34.4
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.23.2
+          cache: pnpm
+
+      - name: Require exact-main release checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/sdk-source-gate.mjs
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile and package the verified escrow
+        run: |
+          set -euo pipefail
+          export CONTRACT_BUNDLE_OUT_DIR="$RUNNER_TEMP/contract-bundle"
+          pnpm --dir contracts run compile
+          pnpm --dir contracts exec hardhat test --no-compile scripts/tests/contractBundle.ts
+          test -z "$(git status --porcelain --untracked-files=all)"
+          pnpm --dir contracts exec hardhat run --no-compile scripts/build-contract-bundle.ts
+          tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
+            -czf AgroasysEscrow.tgz -C "$CONTRACT_BUNDLE_OUT_DIR" .
+
+      - name: Attest the exact archive
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: AgroasysEscrow.tgz
+
+      - name: Verify and retain provenance and release receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          identity=https://github.com/Agroasys/Cotsel/.github/workflows/contract-deploy.yml@refs/heads/main
+          cp "$PROVENANCE_BUNDLE" provenance.sigstore.json
+          gh attestation verify AgroasysEscrow.tgz --repo "$GITHUB_REPOSITORY" \
+            --bundle provenance.sigstore.json --cert-identity "$identity" --source-ref refs/heads/main \
+            --source-digest "$GITHUB_SHA" --deny-self-hosted-runners --format json \
+            > provenance-verification.json
+          sha256sum AgroasysEscrow.tgz provenance.sigstore.json provenance-verification.json \
+            > sha256sums.txt
+          jq -n \
+            --arg sourceCommit "$GITHUB_SHA" \
+            --arg producingRunId "$GITHUB_RUN_ID" \
+            --arg producingRunAttempt "$GITHUB_RUN_ATTEMPT" \
+            --arg producingWorkflow .github/workflows/contract-deploy.yml \
+            --arg certificateIdentity "$identity" \
+            --arg archiveSha256 "$(sha256sum AgroasysEscrow.tgz | cut -d ' ' -f1)" \
+            --arg provenanceSha256 "$(sha256sum provenance.sigstore.json | cut -d ' ' -f1)" \
+            --arg verificationSha256 "$(sha256sum provenance-verification.json | cut -d ' ' -f1)" \
+            --slurpfile manifest "$RUNNER_TEMP/contract-bundle/release-manifest.json" \
+            '{
+              sourceCommit: $sourceCommit,
+              producingRunId: $producingRunId,
+              producingRunAttempt: $producingRunAttempt,
+              producingWorkflow: $producingWorkflow,
+              certificateIdentity: $certificateIdentity,
+              archiveSha256: $archiveSha256,
+              provenanceSha256: $provenanceSha256,
+              verificationSha256: $verificationSha256,
+              sbom: $manifest[0].sbom
+            }' > release-receipt.json
+
+      - name: Retain the verified contract bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: cotsel-contract-bundle-${{ github.sha }}
+          path: |
+            AgroasysEscrow.tgz
+            provenance.sigstore.json
+            provenance-verification.json
+            release-receipt.json
+            sha256sums.txt
+          if-no-files-found: error
+          retention-days: 90
+
   evidence:
     name: contract/base-sepolia/${{ inputs.action }}
+    if: inputs.action == 'prepare' || inputs.action == 'verify'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: staging
+    permissions:
+      contents: read
+      id-token: write
     env:
+      AWS_REGION: ap-south-1
+      SIGNER_AUDIT_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-contract-deploy
       BASE_SEPOLIA_RPC_URL: ${{ secrets.BASE_SEPOLIA_RPC_URL }}
       BASESCAN_API_KEY: ${{ secrets.BASESCAN_API_KEY }}
       DEPLOYER_ADDRESS: ${{ vars.COTSEL_STAGING_DEPLOYER_ADDRESS }}
