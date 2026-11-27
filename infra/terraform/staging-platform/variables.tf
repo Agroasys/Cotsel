@@ -144,13 +144,16 @@ variable "trusted_session_exchange_key_policies_json" {
           length(keys(jsondecode(var.trusted_session_exchange_key_policies_json))) > 0 &&
           alltrue([
             for policy in values(jsondecode(var.trusted_session_exchange_key_policies_json)) :
-            contains(try(policy.roles, []), "admin")
+            length(policy.roles) > 0 &&
+            length(distinct(policy.roles)) == length(policy.roles) &&
+            alltrue([for role in policy.roles : contains(["buyer", "supplier", "admin"], role)]) &&
+            alltrue([for field in keys(policy) : contains(["roles", "orgId"], field)])
           ]),
           false,
         )
       )
     )
-    error_message = "Trusted session exchange requires a non-empty JSON map of key policies that authorize the admin role."
+    error_message = "Trusted session exchange requires a non-empty JSON map with distinct supported roles and known policy fields."
   }
 }
 
@@ -187,8 +190,14 @@ variable "gateway_enable_mutations" {
   default     = false
 
   validation {
-    condition     = !var.gateway_enable_mutations || var.trusted_session_exchange_enabled
-    error_message = "Gateway mutations require trusted session exchange to be explicitly enabled first."
+    condition = !var.gateway_enable_mutations || (
+      var.trusted_session_exchange_enabled &&
+      try(anytrue([
+        for policy in values(jsondecode(var.trusted_session_exchange_key_policies_json)) :
+        contains(policy.roles, "admin")
+      ]), false)
+    )
+    error_message = "Gateway mutations require explicitly enabled trusted exchange with an administrator policy."
   }
 }
 

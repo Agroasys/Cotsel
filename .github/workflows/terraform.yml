@@ -150,6 +150,8 @@ jobs:
 
       - name: Test saved-plan metadata and demo alerts
         run: node infra/terraform/scripts/plan-metadata-selftest.mjs && node --test infra/terraform/scripts/gasless-execution-policy.test.mjs infra/terraform/scripts/demo-indexer-alerts.test.mjs infra/terraform/scripts/database-bootstrap-users.test.mjs infra/terraform/scripts/database-entitlement-scope.test.mjs infra/terraform/scripts/settlement-observability.test.mjs infra/terraform/scripts/reconciliation-evidence-wiring.test.mjs infra/terraform/scripts/dashboard-auth-wiring.test.mjs
+      - name: Test dashboard activation inputs with Terraform
+        run: node infra/terraform/scripts/dashboard-auth-variable-selftest.mjs
       - name: Test accepted and demo Base Sepolia selection validation
         run: node --test scripts/tests/base-sepolia-staging-contract.test.mjs scripts/tests/base-sepolia-demo-selection.test.mjs scripts/tests/pilot-launch-profile.test.mjs scripts/tests/pilot-launch-runtime.test.mjs scripts/tests/pilot-launch-profile-drift.test.mjs && node scripts/validate-pilot-launch-profile.mjs
 
