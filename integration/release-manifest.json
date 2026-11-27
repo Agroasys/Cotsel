@@ -10,7 +10,7 @@
       "name": "agroasys-backend",
       "repository": "Agroasys/agroasys-backend",
       "ref": "develop",
-      "commit": "b39692153efe186d580ab2a740a9c63d7ed416b2"
+      "commit": "eca43e856cbb437edfca35bbf23106484cf746d4"
     },
     {
       "name": "platform.v1",

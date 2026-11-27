@@ -3,12 +3,12 @@
   "candidateId": "cotsel-2026-08-05-fixture",
   "manifest": {
     "path": "scripts/tests/fixtures/release-evidence/candidate-manifest.json",
-    "sha256": "e975964b57d42284356dff9a7b8b80aa8b1b2d0a02e4dd4a6baa18d816abc4ff"
+    "sha256": "4ea6574e2d7db74a636a938019c1917ad9aae8075ac7ca7320c49b88bd3ea440"
   },
   "environmentReport": {
     "path": "ci-reports/environment-report.json",
     "sha256": "66d51889f1ac4eeee3064c44ab784d5039216adf53c0b1ae073f1c61a5f4e2e1",
-    "manifestSha256": "e975964b57d42284356dff9a7b8b80aa8b1b2d0a02e4dd4a6baa18d816abc4ff",
+    "manifestSha256": "4ea6574e2d7db74a636a938019c1917ad9aae8075ac7ca7320c49b88bd3ea440",
     "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
   },
   "generatedAt": "2026-08-05T10:00:00.000Z",
@@ -31,6 +31,7 @@
         "artifactDigests": [
           "sha256:22cd26de47ff591a3e551f3d8b4467ee303a07e2f956e1e2616969fb4d50e9f1",
           "sha256:274daf8dc2606e18ec7de1d99838fb5f8604a43ba3b4f385af539b74ef6a6b83",
+          "sha256:2fd523307e360fbdc4b6a0aebf8ed3bc431015c2d7f4e1b9043f98e9c37fe70f",
           "sha256:415d975416f94fcd6a1474f482de8cb1c23b3f882a5f4df72319ffa9a67ef1c7",
           "sha256:58afac464e221d6a42751e7a269f06ecca841dd595692511aa41c25e66b77c24",
           "sha256:6e33d4b88a889b1a4b913bbf45710f34f9230ac1820c9b72e664ab8d2ed222ed",
@@ -39,7 +40,6 @@
           "sha256:a5df9814f45b9e10734227325219b3a31a9d24cc964a813766dbfa2f2ae1e572",
           "sha256:b7abbd1eafec7c7b391cadcb749a30ed3da2acf2cb2758f768b475b93e703ce4",
           "sha256:bbf9605cf06bd2cc16b989e8cf9c30df419e510f74954b313d72311dbf9b1925",
-          "sha256:c17d1ab0f3420628bb4448cdb4b4a9e68b39eb3cfe8b3bee5bdd909fc180c110",
           "sha256:c4855460e18ba344e6b1baf6dcef4d673c963e01ec6ca2f208eb774a959f3deb",
           "sha256:d3639ba71107e76ea1fc982e65b3ee7efe19ed1e0f2025413b0b74645a935ccd",
           "sha256:ee02dbffbf3763cccdd29719a5ce518c4e47ce4c7fe178ee8bb60078dd5bb857"
@@ -89,6 +89,7 @@
         "artifactDigests": [
           "sha256:22cd26de47ff591a3e551f3d8b4467ee303a07e2f956e1e2616969fb4d50e9f1",
           "sha256:274daf8dc2606e18ec7de1d99838fb5f8604a43ba3b4f385af539b74ef6a6b83",
+          "sha256:2fd523307e360fbdc4b6a0aebf8ed3bc431015c2d7f4e1b9043f98e9c37fe70f",
           "sha256:415d975416f94fcd6a1474f482de8cb1c23b3f882a5f4df72319ffa9a67ef1c7",
           "sha256:58afac464e221d6a42751e7a269f06ecca841dd595692511aa41c25e66b77c24",
           "sha256:6e33d4b88a889b1a4b913bbf45710f34f9230ac1820c9b72e664ab8d2ed222ed",
@@ -97,7 +98,6 @@
           "sha256:a5df9814f45b9e10734227325219b3a31a9d24cc964a813766dbfa2f2ae1e572",
           "sha256:b7abbd1eafec7c7b391cadcb749a30ed3da2acf2cb2758f768b475b93e703ce4",
           "sha256:bbf9605cf06bd2cc16b989e8cf9c30df419e510f74954b313d72311dbf9b1925",
-          "sha256:c17d1ab0f3420628bb4448cdb4b4a9e68b39eb3cfe8b3bee5bdd909fc180c110",
           "sha256:c4855460e18ba344e6b1baf6dcef4d673c963e01ec6ca2f208eb774a959f3deb",
           "sha256:d3639ba71107e76ea1fc982e65b3ee7efe19ed1e0f2025413b0b74645a935ccd",
           "sha256:ee02dbffbf3763cccdd29719a5ce518c4e47ce4c7fe178ee8bb60078dd5bb857"
