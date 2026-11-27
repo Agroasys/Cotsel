@@ -19,10 +19,16 @@ output "secret_arns" {
 output "gateway_alb" {
   description = "Private origin details behind the CloudFront VPC origin."
   value = {
-    arn              = aws_lb.gateway.arn
-    dns_name         = aws_lb.gateway.dns_name
-    target_group_arn = aws_lb_target_group.gateway.arn
+    arn                           = aws_lb.gateway.arn
+    dns_name                      = aws_lb.gateway.dns_name
+    target_group_arn              = aws_lb_target_group.gateway.arn
+    auth_session_target_group_arn = try(aws_lb_target_group.dashboard_auth_session[0].arn, null)
   }
+}
+
+output "gateway_task_security_group_id" {
+  description = "Cotsel gateway/auth task security group ID for the separately approved backend API private auth rule."
+  value       = aws_security_group.gateway.id
 }
 
 output "gateway_edge" {

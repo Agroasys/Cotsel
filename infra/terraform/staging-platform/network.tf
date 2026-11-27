@@ -38,6 +38,11 @@ locals {
   redis_primary_endpoint     = data.terraform_remote_state.data.outputs.redis_primary_endpoint
 }
 
+data "aws_security_group" "backend_api_task" {
+  count = var.backend_api_task_security_group_id == "" ? 0 : 1
+  id    = var.backend_api_task_security_group_id
+}
+
 resource "aws_security_group" "gateway" {
   name = "${local.name_prefix}-gateway"
   # AWS security-group descriptions are immutable. Keep this aligned with the
@@ -93,6 +98,46 @@ resource "aws_vpc_security_group_ingress_rule" "gateway_from_alb" {
   from_port                    = 3600
   to_port                      = 3600
   ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "alb_to_auth_session" {
+  count = var.dashboard_session_routes_enabled ? 1 : 0
+
+  security_group_id            = aws_security_group.alb.id
+  description                  = "Forward the three approved dashboard session routes to Cotsel auth."
+  referenced_security_group_id = aws_security_group.gateway.id
+  from_port                    = 3005
+  to_port                      = 3005
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "auth_session_from_alb" {
+  count = var.dashboard_session_routes_enabled ? 1 : 0
+
+  security_group_id            = aws_security_group.gateway.id
+  description                  = "Dashboard session routes from the protected internal ALB only."
+  referenced_security_group_id = aws_security_group.alb.id
+  from_port                    = 3005
+  to_port                      = 3005
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "auth_session_from_backend_api" {
+  count = (var.trusted_session_exchange_enabled || var.admin_control_enabled) ? 1 : 0
+
+  security_group_id            = aws_security_group.gateway.id
+  description                  = "Private trusted session exchange from the dedicated backend API task group."
+  referenced_security_group_id = var.backend_api_task_security_group_id
+  from_port                    = 3005
+  to_port                      = 3005
+  ip_protocol                  = "tcp"
+
+  lifecycle {
+    precondition {
+      condition     = data.aws_security_group.backend_api_task[0].vpc_id == local.vpc_id
+      error_message = "backend_api_task_security_group_id must belong to the Cotsel staging VPC."
+    }
+  }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "services_from_gateway" {

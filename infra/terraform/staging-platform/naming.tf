@@ -38,7 +38,7 @@ locals {
     [for owner in local.database_reader_owners : "database/${owner}/reader"],
   ))
 
-  integration_secret_names = toset([
+  integration_secret_names = toset(concat([
     "auth-upstream-exchange",
     "gateway-settlement-callback",
     "gateway-settlement-ingress",
@@ -50,7 +50,9 @@ locals {
     "rpc-base-sepolia-fallback",
     "rpc-base-sepolia-primary",
     "treasury-provider-callback",
-  ])
+    ], var.admin_control_enabled ? [
+    "auth-admin-control",
+  ] : []))
 
   secret_names = setunion(local.database_secret_names, local.integration_secret_names)
 

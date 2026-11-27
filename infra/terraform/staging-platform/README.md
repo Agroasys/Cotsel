@@ -32,6 +32,81 @@ existing Agroasys staging boundary. It does not deploy a release candidate.
   revision, remove the `removed` block, the one-time gateway exemption in
   `check-destructive-changes.mjs`, and its positive fixture and self-test.
 
+## Dashboard auth wiring
+
+Dashboard session routes and privileged auth controls stay disabled by default.
+The session-route input permits only the existing `cotsel.agroasys.com` dashboard origin.
+The public gateway API origin remains `cotsel.sys.agroasys.com`.
+
+When `dashboard_session_routes_enabled=true`, the private ALB and CloudFront edge
+route only these paths to the auth container on TCP 3005:
+
+- `GET` and CORS `OPTIONS` `/api/auth/v1/session`
+- `POST` and CORS `OPTIONS` `/api/auth/v1/session/refresh`
+- `POST` and CORS `OPTIONS` `/api/auth/v1/session/revoke`
+
+CloudFront requires its seven-method behavior set. ALB rules still match the
+exact path and method pairs above. All three behaviors use the no-cache policy.
+The auth-session policy forwards only bearer, CORS, content-type, and request
+identifiers. When `dashboard_origin` is configured, a separate no-cache behavior
+for `/api/dashboard-gateway/v1/*` forwards browser bearer/CORS headers and all
+existing HMAC, idempotency, and query inputs. This keeps signed ingress and
+callback requests intact. The service-exchange route and all `/admin/` routes
+remain absent from public auth listener rules and CloudFront auth behaviors.
+
+Trusted session exchange and admin control have separate flags, secret inputs,
+and key policy/allowlist inputs. Both use the backend API-only task security
+group for private TCP 3005 access. The exchange credential and policy cannot
+authorize admin control. Admin control requires two distinct active keys tied
+to two verified human principals and the Cotsel-local two-person grant controls.
+Terraform creates the admin-control secret identity and grants its execution-role
+read scope only when admin control is explicitly enabled. An owner must provision
+secret values through the approved secret process before enabling either feature.
+
+Deployment order for a reviewed private connection is:
+
+1. Plan and apply the backend API-only security group and its private egress
+   reference to `gateway_task_security_group_id` from this root.
+2. Supply the backend `api_task_security_group_id` as
+   `backend_api_task_security_group_id` here. Plan and apply the matching Cotsel
+   ingress rule only after checking the exact SG IDs and same VPC.
+3. Provision distinct credentials through the approved secret process. Keep
+   exchange and admin controls disabled until separate identity and policy
+   review is complete.
+4. Review the resulting saved plans and exact feature values independently.
+
+The CloudFront dashboard-session route can be planned separately. It does not
+enable the private service exchange, admin controls, or gateway mutations.
+
+Gateway mutations default to false. The Terraform workflow reads the non-secret
+`COTSEL_STAGING_GATEWAY_ENABLE_MUTATIONS` repository variable and defaults it to
+false. Terraform rejects `true` unless trusted session exchange is already
+explicitly enabled with a backend API task group and non-empty valid key policy.
+The mutation input does not enable trusted exchange or admin control.
+
+Enable mutations only through a separate reviewed saved plan during an approved
+maintenance window:
+
+1. Provision the trusted exchange credential through the approved secret
+   process. Review its key policy and API-only network path.
+2. Use a separate saved plan to enable trusted exchange while mutations and
+   admin control remain false. Apply that exact plan through the protected
+   workflow. Then verify the private exchange path and task health.
+3. Dispatch `.github/workflows/terraform.yml` from `main` with `action=plan` and
+   `root=staging-platform`. Change only the reviewed mutation variable.
+4. Inspect the saved plan. It must retain the already-enabled exchange and
+   existing private route. Reject changes to exchange, admin control, public
+   exchange/admin routes, broad security-group rules, or unrelated resources.
+5. Obtain the required protected `staging` environment approval during the
+   scheduled maintenance window. Apply only the matching successful plan using
+   its `plan_run_id` and non-null `plan_version_id`.
+6. Keep admin control independently disabled or enable it only under its own
+   verified two-person identity, secret, grant, and saved-plan review.
+
+The workflow verifies that apply uses the successful `main` plan run and exact
+commit. It applies that saved plan without rebuilding it. Same-actor plan and
+apply require the existing owner break-glass path; do not bypass that check.
+
 ## Secret handling
 
 Terraform creates named Secrets Manager resources but never a secret version.

@@ -23,7 +23,9 @@ function terraformValue(name) {
 }
 
 function integrationSecretNames() {
-  const block = naming.match(/integration_secret_names = toset\(\[([\s\S]*?)\]\)/)?.[1] ?? '';
+  // Required pilot secrets must remain in the unconditional first list.
+  const block =
+    naming.match(/integration_secret_names = toset\((?:concat\()?\[([\s\S]*?)\]/)?.[1] ?? '';
   return new Set([...block.matchAll(/"([a-z0-9-]+)"/g)].map((match) => match[1]));
 }
 
