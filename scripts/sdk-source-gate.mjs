@@ -25,7 +25,7 @@ function run() {
     process.env.GITHUB_REF !== 'refs/heads/main' ||
     !/^[a-f0-9]{40}$/u.test(process.env.GITHUB_SHA ?? '')
   ) {
-    throw new Error('SDK publication requires an exact main commit');
+    throw new Error('Release artifact production requires an exact main commit');
   }
   const pages = JSON.parse(
     execFileSync(
